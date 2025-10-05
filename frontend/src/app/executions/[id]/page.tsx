@@ -1,0 +1,115 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import ExecutionDetail from '@/components/executions/ExecutionDetail';
+import ExecutionLogs from '@/components/executions/ExecutionLogs';
+import { apiClient } from '@/lib/api-client';
+import type { Execution } from '@/types/api';
+
+export default function ExecutionPage() {
+  const params = useParams();
+  const router = useRouter();
+  const executionId = Number(params.id);
+
+  const [execution, setExecution] = useState<Execution | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [cancelling, setCancelling] = useState(false);
+
+  useEffect(() => {
+    loadExecution();
+  }, [executionId]);
+
+  const loadExecution = async () => {
+    setLoading(true);
+    try {
+      const response = await apiClient.get(`/api/v1/executions/${executionId}`);
+      if (response.data) {
+        setExecution(response.data.execution);
+      }
+    } catch (error) {
+      console.error('Failed to load execution:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!execution || execution.status !== 'running') return;
+
+    setCancelling(true);
+    try {
+      const response = await apiClient.post(`/api/v1/executions/${executionId}/cancel`, {});
+      if (response.data) {
+        setExecution(response.data.execution);
+      }
+    } catch (error) {
+      console.error('Failed to cancel execution:', error);
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <ProtectedRoute>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
+  if (!execution) {
+    return (
+      <ProtectedRoute>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-gray-500">Execution not found</p>
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="mt-4 text-blue-600 hover:text-blue-700"
+            >
+              Go to Dashboard
+            </button>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
+  return (
+    <ProtectedRoute>
+      <div className="max-w-7xl mx-auto p-6">
+        {/* Actions Bar */}
+        <div className="mb-6 flex items-center justify-between">
+          <button
+            onClick={() => router.back()}
+            className="text-gray-600 hover:text-gray-900 flex items-center gap-2"
+          >
+            ← Back
+          </button>
+
+          {execution.status === 'running' && (
+            <button
+              onClick={handleCancel}
+              disabled={cancelling}
+              className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50"
+            >
+              {cancelling ? 'Cancelling...' : 'Cancel Execution'}
+            </button>
+          )}
+        </div>
+
+        {/* Execution Detail */}
+        <ExecutionDetail execution={execution} />
+
+        {/* Live Logs */}
+        <div className="mt-6">
+          <ExecutionLogs executionId={executionId} />
+        </div>
+      </div>
+    </ProtectedRoute>
+  );
+}
