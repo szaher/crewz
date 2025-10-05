@@ -47,13 +47,9 @@ export default function RegisterForm() {
       }
 
       if (response.data) {
-        // Store auth and tenant data
-        setAuth(response.data.user, response.data.access_token);
-        setTenant(response.data.tenant);
-        apiClient.setToken(response.data.access_token);
-
-        // Redirect to dashboard
-        router.push('/dashboard');
+        // Registration successful - redirect to login
+        // Note: Backend doesn't auto-login, user must log in separately
+        router.push('/login?registered=true');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');

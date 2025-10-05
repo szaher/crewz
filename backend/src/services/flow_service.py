@@ -29,16 +29,17 @@ class FlowService:
         Raises:
             HTTPException: If validation fails
         """
-        # Validate flow structure
-        validation_result = self.validator.validate_flow(
-            nodes=data.nodes, edges=data.edges
-        )
-
-        if not validation_result["valid"]:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid flow: {validation_result['errors']}",
+        # Only validate if flow has nodes (allow empty drafts)
+        if data.nodes:
+            validation_result = self.validator.validate_flow(
+                nodes=data.nodes, edges=data.edges
             )
+
+            if not validation_result["valid"]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid flow: {validation_result['errors']}",
+                )
 
         # Convert Pydantic models to dicts for JSON storage
         nodes_dict = [node.dict() for node in data.nodes]
@@ -107,6 +108,9 @@ class FlowService:
         # Apply filters
         if status:
             query = query.filter(Flow.status == status)
+        else:
+            # By default, exclude archived flows
+            query = query.filter(Flow.status != "archived")
 
         if tags:
             # Filter flows that have any of the specified tags

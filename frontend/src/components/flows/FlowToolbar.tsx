@@ -10,9 +10,10 @@ interface FlowToolbarProps {
   flowId?: number;
   onSave?: () => void;
   onExecute?: () => void;
+  onDiscard?: () => void;
 }
 
-export default function FlowToolbar({ flowId, onSave, onExecute }: FlowToolbarProps) {
+export default function FlowToolbar({ flowId, onSave, onExecute, onDiscard }: FlowToolbarProps) {
   const router = useRouter();
   const { currentFlow, updateFlow } = useFlowStore();
   const [saving, setSaving] = useState(false);
@@ -106,6 +107,18 @@ export default function FlowToolbar({ flowId, onSave, onExecute }: FlowToolbarPr
       </div>
 
       <div className="flex items-center gap-2">
+        <button
+          onClick={() => {
+            if (confirm('Are you sure you want to discard all changes? This cannot be undone.')) {
+              onDiscard?.();
+              router.push('/flows');
+            }
+          }}
+          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+        >
+          Discard
+        </button>
+
         <button
           onClick={handleValidate}
           className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"

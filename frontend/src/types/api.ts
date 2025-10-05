@@ -161,17 +161,29 @@ export interface LLMConfig {
 
 export interface Agent {
   id: number;
-  tenant_id: number;
   name: string;
   role: string;
   goal: string;
   backstory: string;
-  llm_config: LLMConfig;
-  tools: number[];
+
+  // LLM configuration
+  llm_provider_id: number;
+  temperature: number;
+  max_tokens?: number;
+
+  // Agent behavior
   allow_delegation: boolean;
   verbose: boolean;
-  max_iterations?: number;
-  is_active: boolean;
+  cache: boolean;
+  max_iter: number;
+  max_rpm?: number;
+  max_execution_time?: number;
+
+  // Advanced features
+  allow_code_execution: boolean;
+  respect_context_window: boolean;
+  max_retry_limit: number;
+
   created_at: string;
   updated_at: string;
 }
@@ -181,11 +193,27 @@ export interface AgentCreate {
   role: string;
   goal: string;
   backstory: string;
-  llm_config: LLMConfig;
-  tools?: number[];
+
+  // LLM configuration
+  llm_provider_id: number;
+  temperature?: number;
+  max_tokens?: number;
+
+  // Agent behavior
   allow_delegation?: boolean;
   verbose?: boolean;
-  max_iterations?: number;
+  cache?: boolean;
+  max_iter?: number;
+  max_rpm?: number;
+  max_execution_time?: number;
+
+  // Advanced features
+  allow_code_execution?: boolean;
+  respect_context_window?: boolean;
+  max_retry_limit?: number;
+
+  // Tools
+  tool_ids?: number[];
 }
 
 export interface AgentUpdate {
@@ -193,12 +221,27 @@ export interface AgentUpdate {
   role?: string;
   goal?: string;
   backstory?: string;
-  llm_config?: LLMConfig;
-  tools?: number[];
+
+  // LLM configuration
+  llm_provider_id?: number;
+  temperature?: number;
+  max_tokens?: number;
+
+  // Agent behavior
   allow_delegation?: boolean;
   verbose?: boolean;
-  max_iterations?: number;
-  is_active?: boolean;
+  cache?: boolean;
+  max_iter?: number;
+  max_rpm?: number;
+  max_execution_time?: number;
+
+  // Advanced features
+  allow_code_execution?: boolean;
+  respect_context_window?: boolean;
+  max_retry_limit?: number;
+
+  // Tools
+  tool_ids?: number[];
 }
 
 export interface AgentListResponse {

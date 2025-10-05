@@ -15,6 +15,39 @@ from ...api.middleware.auth import require_auth
 router = APIRouter()
 
 
+@router.get("", response_model=list)
+async def list_executions(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    List all executions for the current tenant.
+
+    Returns a list of execution records with pagination.
+    """
+    from ...models.execution import Execution
+
+    executions = (
+        db.query(Execution)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    return [
+        {
+            "id": e.id,
+            "flow_id": e.flow_id,
+            "status": e.status.value,
+            "started_at": e.started_at.isoformat() if e.started_at else None,
+            "completed_at": e.completed_at.isoformat() if e.completed_at else None,
+        }
+        for e in executions
+    ]
+
+
 @router.get("/{execution_id}", response_model=ExecutionResponse)
 async def get_execution(
     execution_id: int,

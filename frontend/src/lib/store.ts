@@ -115,9 +115,25 @@ interface Agent {
   role: string;
   goal: string;
   backstory: string;
-  llm_config: Record<string, any>;
-  tools: number[];
-  is_active: boolean;
+
+  // LLM configuration
+  llm_provider_id: number;
+  temperature: number;
+  max_tokens?: number;
+
+  // Agent behavior
+  allow_delegation: boolean;
+  verbose: boolean;
+  cache: boolean;
+  max_iter: number;
+  max_rpm?: number;
+  max_execution_time?: number;
+
+  // Advanced features
+  allow_code_execution: boolean;
+  respect_context_window: boolean;
+  max_retry_limit: number;
+
   created_at: string;
   updated_at: string;
 }

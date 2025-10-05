@@ -116,12 +116,12 @@
 ### LLM Provider Abstraction
 - [x] T047 Implement LLMService in `backend/src/services/llm_service.py` (LiteLLM wrapper, provider failover)
 - [x] T048 Implement credential encryption/decryption in `backend/src/utils/encryption.py` (AES-256-GCM)
-- [ ] T049 [P] Unit test for LLMService in `backend/tests/unit/test_llm_service.py`
+- [x] T049 [P] Unit test for LLMService in `backend/tests/unit/test_llm_service.py`
 
 ### Flow Management
 - [x] T050 Implement FlowService in `backend/src/services/flow_service.py` (CRUD, validation, DAG check)
 - [x] T051 Implement flow validation in `backend/src/services/flow_validator.py` (schema validation, cycle detection)
-- [ ] T052 [P] Unit test for flow DAG validation in `backend/tests/unit/test_flow_validator.py`
+- [x] T052 [P] Unit test for flow DAG validation in `backend/tests/unit/test_flow_validator.py`
 
 ### Agent & Crew Management
 - [x] T053 Implement AgentService in `backend/src/services/agent_service.py` (CRUD, versioning)
@@ -133,13 +133,13 @@
 - [x] T057 Implement ToolService in `backend/src/services/tool_service.py` (CRUD, schema validation)
 - [x] T058 Implement DockerService in `backend/src/services/docker_service.py` (container lifecycle, rootless exec)
 - [x] T059 Implement ToolAdapter in `backend/src/crewai/tool_adapter.py` (DB tool → CrewAI Tool)
-- [ ] T060 [P] Unit test for DockerService container isolation in `backend/tests/unit/test_docker_service.py`
+- [x] T060 [P] Unit test for DockerService container isolation in `backend/tests/unit/test_docker_service.py`
 
 ### Flow Execution Engine
 - [x] T061 Implement ExecutionService in `backend/src/services/execution_service.py` (queue, start, monitor, cancel)
 - [x] T062 Implement FlowExecutor in `backend/src/crewai/flow_executor.py` (topological sort, node execution)
 - [x] T063 Implement execution event publishing to Redis in `backend/src/services/execution_events.py`
-- [ ] T064 [P] Unit test for flow executor topological sort in `backend/tests/unit/test_flow_executor.py`
+- [x] T064 [P] Unit test for flow executor topological sort in `backend/tests/unit/test_flow_executor.py`
 
 ### Chat Service
 - [x] T065 Implement ChatService in `backend/src/services/chat_service.py` (sessions, messages, crew interaction)

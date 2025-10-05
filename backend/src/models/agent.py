@@ -38,6 +38,15 @@ class Agent(BaseModel):
     # Agent behavior
     allow_delegation = Column(Boolean, nullable=False, default=True)
     verbose = Column(Boolean, nullable=False, default=False)
+    cache = Column(Boolean, nullable=False, default=True)
+    max_iter = Column(Integer, nullable=False, default=15)
+    max_rpm = Column(Integer, nullable=True)
+    max_execution_time = Column(Integer, nullable=True)
+
+    # Advanced features
+    allow_code_execution = Column(Boolean, nullable=False, default=False)
+    respect_context_window = Column(Boolean, nullable=False, default=True)
+    max_retry_limit = Column(Integer, nullable=False, default=2)
 
     # Relationships
     llm_provider = relationship("LLMProvider", back_populates="agents")

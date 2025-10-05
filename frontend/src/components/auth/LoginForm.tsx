@@ -31,8 +31,16 @@ export default function LoginForm() {
       }
 
       if (response.data) {
+        // Backend returns user fields directly, not nested in .user
+        const user = {
+          id: response.data.user_id,
+          tenant_id: response.data.tenant_id,
+          email: formData.email,
+          role: response.data.role,
+        };
+
         // Store auth data
-        setAuth(response.data.user, response.data.access_token);
+        setAuth(user, response.data.access_token);
         apiClient.setToken(response.data.access_token);
 
         // Redirect to dashboard

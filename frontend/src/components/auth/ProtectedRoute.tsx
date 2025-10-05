@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/lib/store';
 
@@ -13,8 +13,28 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
   const router = useRouter();
   const pathname = usePathname();
   const { isAuthenticated, user } = useAuthStore();
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Wait for Zustand to hydrate from localStorage
+  useEffect(() => {
+    const unsubscribe = useAuthStore.persist.onFinishHydration(() => {
+      setIsHydrated(true);
+    });
+
+    // Check if already hydrated
+    if (useAuthStore.persist.hasHydrated()) {
+      setIsHydrated(true);
+    }
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
+    // Only check auth after hydration is complete
+    if (!isHydrated) return;
+
     // Redirect to login if not authenticated
     if (!isAuthenticated) {
       router.push(`/login?redirect=${encodeURIComponent(pathname)}`);
@@ -31,10 +51,10 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
         router.push('/dashboard?error=unauthorized');
       }
     }
-  }, [isAuthenticated, user, requiredRole, router, pathname]);
+  }, [isHydrated, isAuthenticated, user, requiredRole, router, pathname]);
 
-  // Don't render children until auth check is complete
-  if (!isAuthenticated) {
+  // Show loading while hydrating or checking auth
+  if (!isHydrated || !isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>

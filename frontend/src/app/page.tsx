@@ -1,20 +1,40 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/store';
 
 export default function HomePage() {
   const router = useRouter();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Wait for Zustand to hydrate from localStorage
+  useEffect(() => {
+    const unsubscribe = useAuthStore.persist.onFinishHydration(() => {
+      setIsHydrated(true);
+    });
+
+    // Check if already hydrated
+    if (useAuthStore.persist.hasHydrated()) {
+      setIsHydrated(true);
+    }
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
+    // Only redirect after hydration is complete
+    if (!isHydrated) return;
+
     if (isAuthenticated) {
       router.push('/dashboard');
     } else {
       router.push('/login');
     }
-  }, [isAuthenticated, router]);
+  }, [isHydrated, isAuthenticated, router]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">

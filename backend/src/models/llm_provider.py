@@ -1,6 +1,6 @@
 """LLM provider model for multi-provider abstraction."""
 
-from sqlalchemy import Column, String, JSON, Boolean, Enum
+from sqlalchemy import Column, String, JSON, Boolean, Enum, Integer, ForeignKey
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 import enum
@@ -25,6 +25,7 @@ class LLMProvider(BaseModel):
 
     __tablename__ = "llm_providers"
 
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     name = Column(String(255), nullable=False)
     provider_type = Column(Enum(LLMProviderType), nullable=False)
 
