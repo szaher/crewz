@@ -33,7 +33,7 @@ class Execution(BaseModel):
     __tablename__ = "executions"
 
     execution_type = Column(Enum(ExecutionType), nullable=False)
-    status = Column(ExecutionStatus, nullable=False, default=ExecutionStatus.PENDING)
+    status = Column(Enum(ExecutionStatus), nullable=False, default=ExecutionStatus.PENDING)
 
     # References
     flow_id = Column(Integer, ForeignKey("flows.id"), nullable=True, index=True)

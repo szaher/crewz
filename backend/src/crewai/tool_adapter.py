@@ -1,7 +1,7 @@
 """Adapter for converting database tools to CrewAI tools."""
 
 from typing import Any, Callable
-from crewai.tools import Tool as CrewAITool
+from crewai.tools import BaseTool as CrewAITool, tool
 
 from ..models import Tool
 from ..services.docker_service import DockerService
@@ -30,11 +30,8 @@ class ToolAdapter:
         elif tool.tool_type == "custom":
             # Custom Python code tool
             func = self._create_custom_tool_func(tool.code)
-            return CrewAITool(
-                name=tool.name,
-                description=tool.description,
-                func=func,
-            )
+            # Use @tool decorator for newer crewai versions
+            return tool(name=tool.name, description=tool.description)(func)
 
         elif tool.tool_type == "docker":
             # Docker container tool
@@ -46,11 +43,8 @@ class ToolAdapter:
                     docker_command=tool.docker_command,
                 )
 
-            return CrewAITool(
-                name=tool.name,
-                description=tool.description,
-                func=docker_func,
-            )
+            # Use @tool decorator for newer crewai versions
+            return tool(name=tool.name, description=tool.description)(docker_func)
 
         else:
             raise ValueError(f"Unknown tool type: {tool.tool_type}")

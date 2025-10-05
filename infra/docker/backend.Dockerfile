@@ -41,8 +41,10 @@ RUN pip install --upgrade pip && \
 # Copy application code
 COPY backend/ .
 
-# Change ownership
-RUN chown -R appuser:appuser /app
+# Change ownership and create home directory
+RUN chown -R appuser:appuser /app && \
+    mkdir -p /home/appuser && \
+    chown -R appuser:appuser /home/appuser
 
 # Switch to app user
 USER appuser
@@ -67,8 +69,10 @@ RUN pip install --upgrade pip && \
 # Copy application code
 COPY backend/ .
 
-# Change ownership
-RUN chown -R appuser:appuser /app
+# Change ownership and create home directory
+RUN chown -R appuser:appuser /app && \
+    mkdir -p /home/appuser && \
+    chown -R appuser:appuser /home/appuser
 
 # Switch to app user
 USER appuser

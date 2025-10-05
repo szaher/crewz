@@ -1,6 +1,6 @@
 """Flow model for visual workflow orchestration."""
 
-from sqlalchemy import Column, String, Text, JSON, Enum
+from sqlalchemy import Column, String, Text, JSON, Enum, Integer, Boolean
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 import enum
