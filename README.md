@@ -1,0 +1,2 @@
+# Crewzx
+Crewzx is a project to enable users to chat with LLMs using crewai crews and flows. the project aims to create a nice drag and drop frontend with an elastic backend that can be deployed on kubernetes.

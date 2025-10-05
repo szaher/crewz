@@ -47,7 +47,27 @@
 ## Constitution Check
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+**Principle I: Visual & Composable**
+- [ ] Does this feature support graphical UI editing without code changes?
+- [ ] Are components drag-and-drop or schema-driven?
+- [ ] Is composition intuitive for non-technical users?
+
+**Principle II: Seamless & Transparent UX**
+- [ ] Are agent reasoning steps visible to users?
+- [ ] Do tool invocations show structured inputs/outputs in real-time?
+- [ ] Is role distinction clear (Agent vs Crew vs User)?
+
+**Principle III: Modular & Extensible Architecture**
+- [ ] Can new tools be added in under 30 minutes?
+- [ ] Are frontend/backend decoupled with well-defined APIs?
+- [ ] Are extension points documented with examples?
+
+**Principle IV: Spec-First Development**
+- [ ] Are schemas defined in `/specs` before implementation?
+- [ ] Are API contracts documented (OpenAPI/GraphQL)?
+- [ ] Is documentation updated before code merge?
+
+*If any checks fail, document justification in Complexity Tracking below.*
 
 ## Project Structure
 
@@ -97,12 +117,28 @@ frontend/
 │   └── services/
 └── tests/
 
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
+# [REMOVE IF UNUSED] Option 3: CrewAI UI Project (when "flows/crews" or "CrewAI" detected)
+/frontend
+├── src/
+│   ├── components/
+│   │   ├── flows/         # Flow editor components
+│   │   ├── crews/         # Crew manager components
+│   │   ├── chat/          # Chat interface components
+│   │   └── tools/         # Tool integration UI
+│   ├── pages/
+│   └── lib/
+└── tests/
 
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+/backend
+├── src/
+│   ├── api/               # REST/GraphQL endpoints
+│   ├── crewai/            # CrewAI SDK integration
+│   ├── models/            # Data models
+│   └── services/          # Business logic
+└── tests/
+
+/specs                     # OpenAPI/GraphQL schemas, flow/crew schemas
+/docs                      # Architecture, guides, flow examples
 ```
 
 **Structure Decision**: [Document the selected structure and reference the real

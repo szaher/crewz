@@ -1,0 +1,1080 @@
+openapi: 3.0.3
+info:
+  title: Dynamic CrewAI Orchestration Platform API
+  version: 1.0.0
+  description: |
+    Multi-tenant platform for creating, managing, and executing AI crew workflows.
+
+    **Authentication**: All endpoints (except /auth/register and /auth/login) require JWT Bearer token.
+
+    **Multi-Tenancy**: Tenant context is extracted from JWT claims. All data is tenant-isolated.
+
+    **Rate Limiting**: Per-tenant rate limits enforced. See tenant quotas for details.
+  contact:
+    name: API Support
+    email: api@crewai-platform.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development
+  - url: https://api.crewai-platform.com/api/v1
+    description: Production
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Authentication
+    description: User authentication and tenant registration
+  - name: Flows
+    description: Flow management and execution
+  - name: Agents
+    description: Agent and crew management
+  - name: Tools
+    description: Tool registration and validation
+  - name: Executions
+    description: Flow execution monitoring
+  - name: Chat
+    description: Chat interface with crews
+  - name: LLM Providers
+    description: LLM provider configuration
+  - name: Users
+    description: User management (admin only)
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # Auth schemas
+    RegisterRequest:
+      type: object
+      required: [email, password, tenant_name, tenant_slug]
+      properties:
+        email:
+          type: string
+          format: email
+          example: admin@company.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: SecurePass123!
+        tenant_name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: Acme Corporation
+        tenant_slug:
+          type: string
+          pattern: '^[a-z0-9-]+$'
+          minLength: 3
+          maxLength: 100
+          example: acme-corp
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    AuthResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        refresh_token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        user:
+          $ref: '#/components/schemas/User'
+        tenant:
+          $ref: '#/components/schemas/Tenant'
+
+    # Core entities
+    Tenant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        status:
+          type: string
+          enum: [active, suspended, deleted]
+        quotas:
+          $ref: '#/components/schemas/ResourceQuota'
+        created_at:
+          type: string
+          format: date-time
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, editor, viewer, executor]
+        status:
+          type: string
+          enum: [active, invited, disabled]
+        created_at:
+          type: string
+          format: date-time
+        last_login:
+          type: string
+          format: date-time
+
+    ResourceQuota:
+      type: object
+      properties:
+        max_flows:
+          type: integer
+          example: 100
+        max_executions_per_day:
+          type: integer
+          example: 1000
+        max_storage_gb:
+          type: integer
+          example: 10
+        max_llm_tokens_per_day:
+          type: integer
+          example: 1000000
+
+    Flow:
+      type: object
+      required: [name, nodes, edges]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/FlowNode'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/FlowEdge'
+        input_schema:
+          type: object
+          description: JSON Schema for flow inputs
+        output_schema:
+          type: object
+          description: JSON Schema for flow outputs
+        version:
+          type: integer
+        status:
+          type: string
+          enum: [draft, published, archived]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    FlowNode:
+      type: object
+      required: [id, type, position, data]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [agent, tool, llm, condition, input, output]
+        position:
+          type: object
+          properties:
+            x:
+              type: number
+            y:
+              type: number
+        data:
+          type: object
+          description: Type-specific node configuration
+
+    FlowEdge:
+      type: object
+      required: [id, source, target]
+      properties:
+        id:
+          type: string
+          format: uuid
+        source:
+          type: string
+          format: uuid
+        target:
+          type: string
+          format: uuid
+        sourceHandle:
+          type: string
+        targetHandle:
+          type: string
+
+    Agent:
+      type: object
+      required: [name, system_prompt, llm_provider_id]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        system_prompt:
+          type: string
+        llm_provider_id:
+          type: string
+          format: uuid
+        config:
+          type: object
+          description: CrewAI agent configuration
+        version:
+          type: integer
+        status:
+          type: string
+          enum: [draft, active, archived]
+        created_at:
+          type: string
+          format: date-time
+
+    Crew:
+      type: object
+      required: [name, agent_ids, collaboration_pattern]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        agent_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+        collaboration_pattern:
+          type: string
+          enum: [sequential, hierarchical]
+        config:
+          type: object
+        status:
+          type: string
+          enum: [draft, active, archived]
+
+    Tool:
+      type: object
+      required: [name, description, input_schema, output_schema, execution_config]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        input_schema:
+          type: object
+          description: JSON Schema for tool inputs
+        output_schema:
+          type: object
+          description: JSON Schema for tool outputs
+        execution_config:
+          type: object
+          properties:
+            docker_image:
+              type: string
+            entrypoint:
+              type: array
+              items:
+                type: string
+            env:
+              type: object
+              additionalProperties:
+                type: string
+            timeout_seconds:
+              type: integer
+              maximum: 3600
+        status:
+          type: string
+          enum: [active, disabled]
+
+    Execution:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        flow_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [queued, running, succeeded, failed, cancelled, timeout]
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+        inputs:
+          type: object
+        outputs:
+          type: object
+        error_message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    LLMProvider:
+      type: object
+      required: [name, provider_type, api_credentials]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        provider_type:
+          type: string
+          enum: [openai, anthropic, ollama, vllm, custom]
+        config:
+          type: object
+          properties:
+            base_url:
+              type: string
+            model:
+              type: string
+            temperature:
+              type: number
+            max_tokens:
+              type: integer
+        is_active:
+          type: boolean
+
+    ChatSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        crew_id:
+          type: string
+          format: uuid
+        attached_flow_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+
+    ChatMessage:
+      type: object
+      required: [content]
+      properties:
+        role:
+          type: string
+          enum: [user, assistant, system]
+        content:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+
+    PaginationInfo:
+      type: object
+      properties:
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        has_next:
+          type: boolean
+        has_prev:
+          type: boolean
+
+paths:
+  # Authentication endpoints
+  /auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register new tenant and admin user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Tenant and user created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Invalid request (email exists, invalid slug, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: User login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Refresh access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+        '401':
+          description: Invalid refresh token
+
+  # Flow endpoints
+  /flows:
+    get:
+      tags: [Flows]
+      summary: List flows for current tenant
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, published, archived]
+      responses:
+        '200':
+          description: List of flows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  flows:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Flow'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationInfo'
+
+    post:
+      tags: [Flows]
+      summary: Create new flow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Flow'
+      responses:
+        '201':
+          description: Flow created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Flow'
+        '400':
+          description: Invalid flow definition
+
+  /flows/{flow_id}:
+    parameters:
+      - name: flow_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      tags: [Flows]
+      summary: Get flow details
+      responses:
+        '200':
+          description: Flow details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Flow'
+        '404':
+          description: Flow not found
+
+    put:
+      tags: [Flows]
+      summary: Update flow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Flow'
+      responses:
+        '200':
+          description: Flow updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Flow'
+
+    delete:
+      tags: [Flows]
+      summary: Delete flow (soft delete)
+      responses:
+        '204':
+          description: Flow deleted
+
+  /flows/{flow_id}/execute:
+    post:
+      tags: [Flows]
+      summary: Execute flow
+      parameters:
+        - name: flow_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                inputs:
+                  type: object
+                config:
+                  type: object
+      responses:
+        '202':
+          description: Execution started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  execution_id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [queued]
+
+  # Execution endpoints
+  /executions/{execution_id}:
+    get:
+      tags: [Executions]
+      summary: Get execution status and logs
+      parameters:
+        - name: execution_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Execution details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Execution'
+
+  /executions/{execution_id}/stream:
+    get:
+      tags: [Executions]
+      summary: SSE stream for real-time execution updates
+      parameters:
+        - name: execution_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /executions/{execution_id}/cancel:
+    post:
+      tags: [Executions]
+      summary: Cancel running execution
+      parameters:
+        - name: execution_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Execution cancelled
+        '400':
+          description: Execution not cancellable (already completed)
+
+  # Agent endpoints
+  /agents:
+    get:
+      tags: [Agents]
+      summary: List agents
+      responses:
+        '200':
+          description: List of agents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Agent'
+
+    post:
+      tags: [Agents]
+      summary: Create agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Agent'
+      responses:
+        '201':
+          description: Agent created
+
+  /agents/{agent_id}:
+    parameters:
+      - name: agent_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      tags: [Agents]
+      summary: Get agent details
+      responses:
+        '200':
+          description: Agent details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+
+    put:
+      tags: [Agents]
+      summary: Update agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Agent'
+      responses:
+        '200':
+          description: Agent updated
+
+    delete:
+      tags: [Agents]
+      summary: Delete agent
+      responses:
+        '204':
+          description: Agent deleted
+
+  # Crew endpoints
+  /crews:
+    get:
+      tags: [Agents]
+      summary: List crews
+      responses:
+        '200':
+          description: List of crews
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  crews:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Crew'
+
+    post:
+      tags: [Agents]
+      summary: Create crew
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Crew'
+      responses:
+        '201':
+          description: Crew created
+
+  /crews/{crew_id}:
+    parameters:
+      - name: crew_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      tags: [Agents]
+      summary: Get crew details
+      responses:
+        '200':
+          description: Crew details
+
+    put:
+      tags: [Agents]
+      summary: Update crew
+      responses:
+        '200':
+          description: Crew updated
+
+    delete:
+      tags: [Agents]
+      summary: Delete crew
+      responses:
+        '204':
+          description: Crew deleted
+
+  /crews/{crew_id}/test:
+    post:
+      tags: [Agents]
+      summary: Test crew with sample input
+      parameters:
+        - name: crew_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                input:
+                  type: object
+      responses:
+        '200':
+          description: Test execution result
+
+  # Tool endpoints
+  /tools:
+    get:
+      tags: [Tools]
+      summary: List tools
+      responses:
+        '200':
+          description: List of tools
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tools:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Tool'
+
+    post:
+      tags: [Tools]
+      summary: Register tool
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Tool'
+      responses:
+        '201':
+          description: Tool registered
+
+  /tools/{tool_id}:
+    parameters:
+      - name: tool_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      tags: [Tools]
+      summary: Get tool details
+      responses:
+        '200':
+          description: Tool details
+
+    put:
+      tags: [Tools]
+      summary: Update tool
+      responses:
+        '200':
+          description: Tool updated
+
+    delete:
+      tags: [Tools]
+      summary: Delete tool
+      responses:
+        '204':
+          description: Tool deleted
+
+  /tools/{tool_id}/validate:
+    post:
+      tags: [Tools]
+      summary: Validate tool schema and credentials
+      parameters:
+        - name: tool_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Validation successful
+        '400':
+          description: Validation failed
+
+  # Chat endpoints
+  /chat/sessions:
+    get:
+      tags: [Chat]
+      summary: List chat sessions
+      responses:
+        '200':
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChatSession'
+
+    post:
+      tags: [Chat]
+      summary: Create chat session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                crew_id:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Session created
+
+  /chat/sessions/{session_id}/messages:
+    post:
+      tags: [Chat]
+      summary: Send message to crew
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+                attached_flow_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message_id:
+                    type: string
+
+  # LLM Provider endpoints
+  /llm-providers:
+    get:
+      tags: [LLM Providers]
+      summary: List LLM providers
+      responses:
+        '200':
+          description: List of providers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  providers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LLMProvider'
+
+    post:
+      tags: [LLM Providers]
+      summary: Configure LLM provider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LLMProvider'
+      responses:
+        '201':
+          description: Provider configured
+
+  /llm-providers/{provider_id}:
+    parameters:
+      - name: provider_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      tags: [LLM Providers]
+      summary: Get provider details
+      responses:
+        '200':
+          description: Provider details
+
+    put:
+      tags: [LLM Providers]
+      summary: Update provider
+      responses:
+        '200':
+          description: Provider updated
+
+    delete:
+      tags: [LLM Providers]
+      summary: Delete provider
+      responses:
+        '204':
+          description: Provider deleted
