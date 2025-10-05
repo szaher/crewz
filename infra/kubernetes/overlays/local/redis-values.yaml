@@ -1,0 +1,61 @@
+# Bitnami Redis Helm Chart Values for Local Development (KinD)
+# Reference: https://github.com/bitnami/charts/tree/main/bitnami/redis
+
+# Architecture - standalone for local dev
+architecture: standalone
+
+# Authentication
+auth:
+  enabled: true
+  password: "dev_password"
+
+# Master configuration
+master:
+  # Resource limits for local development
+  resources:
+    limits:
+      cpu: 1
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi
+
+  # Persistence configuration
+  persistence:
+    enabled: true
+    storageClass: "standard"  # KinD local-path-provisioner
+    size: 5Gi
+    accessModes:
+      - ReadWriteOnce
+
+  # Redis configuration
+  configuration: |
+    # Memory management
+    maxmemory 1gb
+    maxmemory-policy allkeys-lru
+
+    # Persistence
+    save 900 1
+    save 300 10
+    save 60 10000
+
+    # Pub/Sub
+    notify-keyspace-events Ex
+
+    # Performance
+    tcp-keepalive 300
+    timeout 0
+
+# Replica configuration (disabled for standalone)
+replica:
+  replicaCount: 0
+
+# Sentinel configuration (disabled for standalone)
+sentinel:
+  enabled: false
+
+# Metrics (Prometheus integration)
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: false  # Enable in production with Prometheus operator

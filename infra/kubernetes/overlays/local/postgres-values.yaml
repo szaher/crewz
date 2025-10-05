@@ -1,0 +1,68 @@
+# Bitnami PostgreSQL Helm Chart Values for Local Development (KinD)
+# Reference: https://github.com/bitnami/charts/tree/main/bitnami/postgresql
+
+global:
+  postgresql:
+    auth:
+      # Admin password for postgres user
+      postgresPassword: "dev_password"
+      # Application database
+      database: "crewai_platform"
+      # Application user
+      username: "crewai"
+      password: "dev_password"
+
+# Primary configuration
+primary:
+  # Resource limits for local development
+  resources:
+    limits:
+      cpu: 2
+      memory: 4Gi
+    requests:
+      cpu: 1
+      memory: 2Gi
+
+  # Persistence configuration
+  persistence:
+    enabled: true
+    storageClass: "standard"  # KinD local-path-provisioner
+    size: 10Gi
+    accessModes:
+      - ReadWriteOnce
+
+  # PostgreSQL configuration
+  extendedConfiguration: |
+    # Multi-tenant optimizations
+    max_connections = 200
+    shared_buffers = 1GB
+    effective_cache_size = 3GB
+    maintenance_work_mem = 256MB
+    checkpoint_completion_target = 0.9
+    wal_buffers = 16MB
+    default_statistics_target = 100
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+    work_mem = 5242kB
+    min_wal_size = 1GB
+    max_wal_size = 4GB
+
+  # Init scripts for tenant schema template
+  initdb:
+    scripts:
+      init-tenant-template.sql: |
+        -- Create template schema for tenant isolation
+        CREATE SCHEMA IF NOT EXISTS tenant_template;
+
+        -- Grant permissions
+        GRANT ALL ON SCHEMA tenant_template TO crewai;
+
+# Metrics (Prometheus integration)
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: false  # Enable in production with Prometheus operator
+
+# Backup configuration (disabled for local dev)
+backup:
+  enabled: false

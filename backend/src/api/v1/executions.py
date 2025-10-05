@@ -1,0 +1,106 @@
+"""Execution API endpoints."""
+
+import json
+import asyncio
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
+import redis
+
+from ...db.postgres import get_db
+from ...schemas.executions import ExecutionResponse
+from ...services.execution_service import ExecutionService
+from ...api.middleware.auth import require_auth
+
+router = APIRouter()
+
+
+@router.get("/{execution_id}", response_model=ExecutionResponse)
+async def get_execution(
+    execution_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Get execution status and results.
+
+    Returns current execution state, input/output data, and any errors.
+    """
+    execution_service = ExecutionService(db, None, None)  # TODO: inject dependencies
+    execution = await execution_service.get_execution(execution_id)
+    return ExecutionResponse.from_orm(execution)
+
+
+@router.get("/{execution_id}/stream")
+async def stream_execution(
+    execution_id: int,
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Stream execution events via Server-Sent Events (SSE).
+
+    Subscribe to real-time execution progress updates.
+
+    Event types:
+    - execution_started
+    - node_started
+    - node_completed
+    - node_failed
+    - execution_completed
+    - execution_failed
+    """
+    import os
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+    redis_client = redis.from_url(redis_url, decode_responses=True)
+
+    async def event_generator():
+        """Generate SSE events from Redis Pub/Sub."""
+        pubsub = redis_client.pubsub()
+        channel = f"executions:{execution_id}"
+        pubsub.subscribe(channel)
+
+        try:
+            # Send initial connection event
+            yield f"data: {json.dumps({'type': 'connected', 'execution_id': execution_id})}\n\n"
+
+            # Listen for events
+            for message in pubsub.listen():
+                if message['type'] == 'message':
+                    # Forward event to client
+                    yield f"data: {message['data']}\n\n"
+
+                    # Check if execution is complete
+                    event = json.loads(message['data'])
+                    if event['type'] in ['execution_completed', 'execution_failed', 'execution_cancelled']:
+                        break
+
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+        finally:
+            pubsub.unsubscribe(channel)
+            pubsub.close()
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+@router.post("/{execution_id}/cancel", response_model=ExecutionResponse)
+async def cancel_execution(
+    execution_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Cancel a running execution.
+
+    Only pending or running executions can be cancelled.
+    """
+    execution_service = ExecutionService(db, None, None)  # TODO: inject dependencies
+    execution = await execution_service.cancel_execution(execution_id)
+    return ExecutionResponse.from_orm(execution)

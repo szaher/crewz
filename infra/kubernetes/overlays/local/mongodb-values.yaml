@@ -1,0 +1,79 @@
+# Bitnami MongoDB Helm Chart Values for Local Development (KinD)
+# Reference: https://github.com/bitnami/charts/tree/main/bitnami/mongodb
+
+# Authentication
+auth:
+  enabled: true
+  rootUser: "root"
+  rootPassword: "dev_password"
+  # Application credentials
+  usernames:
+    - "crewai"
+  passwords:
+    - "dev_password"
+  databases:
+    - "crewai_logs"
+
+# Architecture - standalone for local dev, replica set for production
+architecture: standalone
+
+# Resource limits for local development
+resources:
+  limits:
+    cpu: 2
+    memory: 4Gi
+  requests:
+    cpu: 1
+    memory: 2Gi
+
+# Persistence configuration
+persistence:
+  enabled: true
+  storageClass: "standard"  # KinD local-path-provisioner
+  size: 20Gi
+  accessModes:
+    - ReadWriteOnce
+
+# MongoDB configuration
+configuration: |
+  # Storage engine
+  storage:
+    dbPath: /bitnami/mongodb/data/db
+    journal:
+      enabled: true
+    engine: wiredTiger
+    wiredTiger:
+      engineConfig:
+        cacheSizeGB: 2
+
+  # Network interfaces
+  net:
+    port: 27017
+    bindIp: 0.0.0.0
+
+  # Security
+  security:
+    authorization: enabled
+
+  # Operational settings
+  operationProfiling:
+    mode: slowOp
+    slowOpThresholdMs: 100
+
+  # Replication (disabled for standalone)
+  # replication:
+  #   replSetName: rs0
+
+# Metrics (Prometheus integration)
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: false  # Enable in production with Prometheus operator
+
+# Arbiter (not needed for standalone)
+arbiter:
+  enabled: false
+
+# Hidden nodes (not needed for standalone)
+hidden:
+  enabled: false
