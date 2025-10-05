@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL - Primary database for tenant schemas, users, flows, executions
   postgres:
@@ -55,8 +53,9 @@ services:
   # Backend API - FastAPI application
   backend:
     build:
-      context: ./backend
-      dockerfile: ../infra/docker/backend.Dockerfile
+      context: .
+      dockerfile: infra/docker/backend.Dockerfile
+      target: development
     container_name: crewai-backend
     environment:
       - DATABASE_URL=postgresql://crewai:dev_password@postgres:5432/crewai_platform
@@ -82,8 +81,8 @@ services:
   # Frontend - Next.js application
   frontend:
     build:
-      context: ./frontend
-      dockerfile: ../infra/docker/frontend.Dockerfile
+      context: .
+      dockerfile: infra/docker/frontend.Dockerfile
     container_name: crewai-frontend
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000

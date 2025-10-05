@@ -143,7 +143,7 @@
 
 ### Chat Service
 - [x] T065 Implement ChatService in `backend/src/services/chat_service.py` (sessions, messages, crew interaction)
-- [x] T066 Implement chat message streaming via Socket.IO in `backend/src/services/chat_stream.py`
+- [ ] T066 Implement chat message streaming via Socket.IO in `backend/src/services/chat_stream.py`
 
 ### API Endpoints - Authentication
 - [x] T067 Implement POST /api/v1/auth/register in `backend/src/api/v1/auth.py`
@@ -179,8 +179,8 @@
 - [x] T087 Implement POST /api/v1/chat/sessions/{session_id}/messages in `backend/src/api/v1/chat.py`
 
 ### API Endpoints - LLM Providers
-- [x] T088 Implement GET/POST /api/v1/llm-providers in `backend/src/api/v1/llm_providers.py`
-- [x] T089 Implement GET/PUT/DELETE /api/v1/llm-providers/{provider_id} in `backend/src/api/v1/llm_providers.py`
+- [ ] T088 Implement GET/POST /api/v1/llm-providers in `backend/src/api/v1/llm_providers.py`
+- [ ] T089 Implement GET/PUT/DELETE /api/v1/llm-providers/{provider_id} in `backend/src/api/v1/llm_providers.py`
 
 ---
 
@@ -203,10 +203,10 @@
 - [x] T099 Create FlowCanvas component in `frontend/src/components/flows/FlowCanvas.tsx` (React Flow integration)
 - [x] T100 Create NodePalette component in `frontend/src/components/flows/NodePalette.tsx` (drag-drop node types)
 - [x] T101 Create PropertyPanel component in `frontend/src/components/flows/PropertyPanel.tsx` (node config sidebar)
-- [x] T102 [P] Create custom AgentNode in `frontend/src/components/flows/nodes/AgentNode.tsx`
-- [x] T103 [P] Create custom ToolNode in `frontend/src/components/flows/nodes/ToolNode.tsx`
-- [x] T104 [P] Create custom LLMNode in `frontend/src/components/flows/nodes/LLMNode.tsx`
-- [x] T105 [P] Create custom ConditionNode in `frontend/src/components/flows/nodes/ConditionNode.tsx`
+- [ ] T102 [P] Create custom AgentNode in `frontend/src/components/flows/nodes/AgentNode.tsx`
+- [ ] T103 [P] Create custom ToolNode in `frontend/src/components/flows/nodes/ToolNode.tsx`
+- [ ] T104 [P] Create custom LLMNode in `frontend/src/components/flows/nodes/LLMNode.tsx`
+- [ ] T105 [P] Create custom ConditionNode in `frontend/src/components/flows/nodes/ConditionNode.tsx`
 - [x] T106 Create flow editor page in `frontend/src/pages/flows/[flow_id]/edit.tsx`
 
 ### Crew Builder Components

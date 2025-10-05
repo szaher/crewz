@@ -1,0 +1,84 @@
+'use client';
+
+import { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+
+interface Toast {
+  id: string;
+  message: string;
+  type: 'success' | 'error' | 'info' | 'warning';
+}
+
+interface ToastContextType {
+  showToast: (message: string, type?: Toast['type']) => void;
+}
+
+const ToastContext = createContext<ToastContextType | undefined>(undefined);
+
+export function ToastProvider({ children }: { children: ReactNode }) {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const showToast = useCallback((message: string, type: Toast['type'] = 'info') => {
+    const id = Math.random().toString(36).substr(2, 9);
+    setToasts((prev) => [...prev, { id, message, type }]);
+
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 5000);
+  }, []);
+
+  const removeToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const getToastStyles = (type: Toast['type']) => {
+    switch (type) {
+      case 'success': return 'bg-green-50 text-green-800 border-green-200';
+      case 'error': return 'bg-red-50 text-red-800 border-red-200';
+      case 'warning': return 'bg-yellow-50 text-yellow-800 border-yellow-200';
+      default: return 'bg-blue-50 text-blue-800 border-blue-200';
+    }
+  };
+
+  const getToastIcon = (type: Toast['type']) => {
+    switch (type) {
+      case 'success': return '✅';
+      case 'error': return '❌';
+      case 'warning': return '⚠️';
+      default: return 'ℹ️';
+    }
+  };
+
+  return (
+    <ToastContext.Provider value={{ showToast }}>
+      {children}
+
+      {/* Toast Container */}
+      <div className="fixed top-4 right-4 z-50 space-y-2">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`flex items-center gap-3 px-4 py-3 rounded-lg border shadow-lg animate-slide-in ${getToastStyles(toast.type)}`}
+          >
+            <span className="text-lg">{getToastIcon(toast.type)}</span>
+            <p className="text-sm font-medium">{toast.message}</p>
+            <button
+              onClick={() => removeToast(toast.id)}
+              className="ml-2 text-gray-500 hover:text-gray-700"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+    </ToastContext.Provider>
+  );
+}
+
+export function useToast() {
+  const context = useContext(ToastContext);
+  if (!context) {
+    throw new Error('useToast must be used within ToastProvider');
+  }
+  return context;
+}
