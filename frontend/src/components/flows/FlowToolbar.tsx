@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useFlowStore } from '@/lib/store';
 import { apiClient } from '@/lib/api-client';
 import type { FlowUpdate } from '@/types/api';
+import FlowNameEditor from './FlowNameEditor';
 
 interface FlowToolbarProps {
   flowId?: number;
@@ -93,12 +94,26 @@ export default function FlowToolbar({ flowId, onSave, onExecute, onDiscard }: Fl
     }
   };
 
+  const handleNameUpdate = (newName: string) => {
+    if (currentFlow) {
+      updateFlow({ ...currentFlow, name: newName });
+    }
+  };
+
   return (
     <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
       <div className="flex items-center gap-4">
-        <h2 className="text-lg font-semibold text-gray-900">
-          {currentFlow?.name || 'Untitled Flow'}
-        </h2>
+        {currentFlow && flowId ? (
+          <FlowNameEditor
+            flowId={flowId}
+            initialName={currentFlow.name}
+            onUpdate={handleNameUpdate}
+          />
+        ) : (
+          <h2 className="text-lg font-semibold text-gray-900">
+            {currentFlow?.name || 'Untitled Flow'}
+          </h2>
+        )}
         {currentFlow?.status && (
           <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
             {currentFlow.status}

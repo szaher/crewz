@@ -21,6 +21,7 @@ export default function Navigation() {
     { name: 'Flows', path: '/flows', icon: '🔀' },
     { name: 'Crews', path: '/crews', icon: '👥' },
     { name: 'Tools', path: '/tools', icon: '🔧' },
+    { name: 'Observability', path: '/observability', icon: '📈' },
     { name: 'Chat', path: '/chat', icon: '💬' },
   ];
 

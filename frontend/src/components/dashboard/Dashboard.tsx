@@ -4,12 +4,15 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { useFlowStore, useExecutionStore, useCrewStore } from '@/lib/store';
+import CreateFlowModal from '../flows/CreateFlowModal';
 
 export default function Dashboard() {
   const router = useRouter();
   const { flows } = useFlowStore();
   const { executions } = useExecutionStore();
   const { crews } = useCrewStore();
+
+  const [isCreateFlowModalOpen, setIsCreateFlowModalOpen] = useState(false);
 
   const [stats, setStats] = useState({
     totalFlows: 0,
@@ -99,7 +102,7 @@ export default function Dashboard() {
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <button
-            onClick={() => router.push('/flows/new')}
+            onClick={() => setIsCreateFlowModalOpen(true)}
             className="p-4 text-center border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
           >
             <div className="text-2xl mb-2">➕</div>
@@ -178,6 +181,12 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* Create Flow Modal */}
+      <CreateFlowModal
+        isOpen={isCreateFlowModalOpen}
+        onClose={() => setIsCreateFlowModalOpen(false)}
+      />
     </div>
   );
 }
