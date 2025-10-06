@@ -118,7 +118,7 @@ jobs:
         CLICKHOUSE_PASSWORD: test_password
         CLICKHOUSE_DATABASE: crewai_test
         JWT_SECRET: test-secret-key-at-least-32-chars-long
-        ENCRYPTION_KEY: test-encryption-key-32-bytes-long!!
+        ENCRYPTION_KEY: QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=
       run: |
         cd backend
         pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=term || echo "Unit tests completed"
@@ -134,7 +134,7 @@ jobs:
         CLICKHOUSE_PASSWORD: test_password
         CLICKHOUSE_DATABASE: crewai_test
         JWT_SECRET: test-secret-key-at-least-32-chars-long
-        ENCRYPTION_KEY: test-encryption-key-32-bytes-long!!
+        ENCRYPTION_KEY: QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=
       run: |
         cd backend
         pytest tests/integration/ -v --cov=src --cov-append --cov-report=xml --cov-report=term || echo "Integration tests completed"

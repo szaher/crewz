@@ -152,7 +152,7 @@ jobs:
         MONGODB_URL: mongodb://crewai_test:test_password@localhost:27017/crewai_test
         REDIS_URL: redis://localhost:6379/0
         JWT_SECRET: test-secret-key-at-least-32-chars-long
-        ENCRYPTION_KEY: test-encryption-key-32-bytes-long!!
+        ENCRYPTION_KEY: QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=
       run: |
         cd backend
         alembic upgrade head || echo "Migrations skipped"
