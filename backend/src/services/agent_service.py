@@ -6,6 +6,7 @@ from fastapi import HTTPException, status
 
 from ..models import Agent, Tool
 from ..schemas.agents import AgentCreate, AgentUpdate, AgentResponse, AgentListResponse
+from .versioning_service import VersioningService
 
 
 class AgentService:
@@ -13,6 +14,7 @@ class AgentService:
 
     def __init__(self, db: Session):
         self.db = db
+        self.versioning = VersioningService(db)
 
     async def create_agent(self, data: AgentCreate) -> Agent:
         """
@@ -34,6 +36,13 @@ class AgentService:
             max_tokens=data.max_tokens,
             allow_delegation=data.allow_delegation,
             verbose=data.verbose,
+            cache=data.cache,
+            max_iter=data.max_iter,
+            max_rpm=data.max_rpm,
+            max_execution_time=data.max_execution_time,
+            allow_code_execution=data.allow_code_execution,
+            respect_context_window=data.respect_context_window,
+            max_retry_limit=data.max_retry_limit,
         )
 
         self.db.add(agent)
@@ -46,6 +55,15 @@ class AgentService:
 
         self.db.commit()
         self.db.refresh(agent)
+
+        # Create initial version
+        config = self.versioning.config_to_dict(agent)
+        self.versioning.create_agent_version(
+            agent_id=agent.id,
+            configuration=config,
+            action="create",
+            change_description="Initial agent creation"
+        )
 
         return agent
 
@@ -101,6 +119,20 @@ class AgentService:
             agent.allow_delegation = data.allow_delegation
         if data.verbose is not None:
             agent.verbose = data.verbose
+        if data.cache is not None:
+            agent.cache = data.cache
+        if data.max_iter is not None:
+            agent.max_iter = data.max_iter
+        if data.max_rpm is not None:
+            agent.max_rpm = data.max_rpm
+        if data.max_execution_time is not None:
+            agent.max_execution_time = data.max_execution_time
+        if data.allow_code_execution is not None:
+            agent.allow_code_execution = data.allow_code_execution
+        if data.respect_context_window is not None:
+            agent.respect_context_window = data.respect_context_window
+        if data.max_retry_limit is not None:
+            agent.max_retry_limit = data.max_retry_limit
 
         # Update tools
         if data.tool_ids is not None:
@@ -109,6 +141,15 @@ class AgentService:
 
         self.db.commit()
         self.db.refresh(agent)
+
+        # Create version for update
+        config = self.versioning.config_to_dict(agent)
+        self.versioning.create_agent_version(
+            agent_id=agent.id,
+            configuration=config,
+            action="update",
+            change_description="Agent configuration updated"
+        )
 
         return agent
 

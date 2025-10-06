@@ -50,6 +50,27 @@ services:
       timeout: 5s
       retries: 5
 
+  # ClickHouse - Analytics database for feedback and metrics
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.8-alpine
+    container_name: crewai-clickhouse
+    environment:
+      CLICKHOUSE_DB: crewai_analytics
+      CLICKHOUSE_USER: crewai
+      CLICKHOUSE_PASSWORD: dev_password
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ports:
+      - "8123:8123"  # HTTP interface
+      - "9000:9000"  # Native protocol
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./backend/scripts/clickhouse-init.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Backend API - FastAPI application
   backend:
     build:
@@ -61,6 +82,11 @@ services:
       - DATABASE_URL=postgresql://crewai:dev_password@postgres:5432/crewai_platform
       - MONGODB_URL=mongodb://crewai:dev_password@mongodb:27017/
       - REDIS_URL=redis://redis:6379/0
+      - CLICKHOUSE_HOST=clickhouse
+      - CLICKHOUSE_PORT=9000
+      - CLICKHOUSE_USER=crewai
+      - CLICKHOUSE_PASSWORD=dev_password
+      - CLICKHOUSE_DATABASE=crewai_analytics
       - JWT_SECRET=dev_secret_change_in_production
       - FRONTEND_URL=http://localhost:3000
       - ENVIRONMENT=development
@@ -75,6 +101,8 @@ services:
       mongodb:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      clickhouse:
         condition: service_healthy
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 
@@ -105,6 +133,8 @@ volumes:
   mongodb_data:
     driver: local
   redis_data:
+    driver: local
+  clickhouse_data:
     driver: local
 
 networks:

@@ -252,26 +252,26 @@
 ## Phase 3.5: Integration, Testing & Polish (T131-T165)
 
 ### Integration Tests (End-to-End)
-- [ ] T131 [P] E2E test for Scenario 1: User Registration → Flow Creation in `frontend/tests/e2e/scenario1-registration-flow.spec.ts`
-- [ ] T132 [P] E2E test for Scenario 2: Agent Creation → Crew → Chat in `frontend/tests/e2e/scenario2-agent-crew-chat.spec.ts`
-- [ ] T133 [P] E2E test for Scenario 3: Tool Registration → Flow Execution in `frontend/tests/e2e/scenario3-tool-execution.spec.ts`
-- [ ] T134 [P] E2E test for Scenario 4: Multi-User Collaboration in `frontend/tests/e2e/scenario4-collaboration.spec.ts`
-- [ ] T135 [P] E2E test for Scenario 5: Execution Monitoring & Cancellation in `frontend/tests/e2e/scenario5-monitoring.spec.ts`
+- [x] T131 [P] E2E test for Scenario 1: User Registration → Flow Creation in `frontend/tests/e2e/scenario1-registration-flow.spec.ts`
+- [x] T132 [P] E2E test for Scenario 2: Agent Creation → Crew → Chat in `frontend/tests/e2e/scenario2-agent-crew-chat.spec.ts`
+- [x] T133 [P] E2E test for Scenario 3: Tool Registration → Flow Execution in `frontend/tests/e2e/scenario3-tool-execution.spec.ts`
+- [x] T134 [P] E2E test for Scenario 4: Multi-User Collaboration in `frontend/tests/e2e/scenario4-collaboration.spec.ts`
+- [x] T135 [P] E2E test for Scenario 5: Execution Monitoring & Cancellation in `frontend/tests/e2e/scenario5-monitoring.spec.ts`
 
 ### Backend Integration Tests
-- [ ] T136 [P] Integration test for multi-tenant schema isolation in `backend/tests/integration/test_multi_tenancy.py`
-- [ ] T137 [P] Integration test for flow execution with Docker-in-Docker in `backend/tests/integration/test_flow_execution.py`
-- [ ] T138 [P] Integration test for LLM provider failover in `backend/tests/integration/test_llm_failover.py`
-- [ ] T139 [P] Integration test for chat streaming in `backend/tests/integration/test_chat_streaming.py`
+- [x] T136 [P] Integration test for multi-tenant schema isolation in `backend/tests/integration/test_multi_tenancy.py`
+- [x] T137 [P] Integration test for flow execution with Docker-in-Docker in `backend/tests/integration/test_flow_execution.py`
+- [x] T138 [P] Integration test for LLM provider failover in `backend/tests/integration/test_llm_failover.py`
+- [x] T139 [P] Integration test for chat streaming in `backend/tests/integration/test_chat_streaming.py`
 
 ### Kubernetes Deployment
-- [ ] T140 Create backend Kubernetes deployment in `infra/kubernetes/base/backend-deployment.yaml`
-- [ ] T141 Create frontend Kubernetes deployment in `infra/kubernetes/base/frontend-deployment.yaml`
-- [ ] T142 Create PostgreSQL StatefulSet in `infra/kubernetes/base/postgres-statefulset.yaml`
-- [ ] T143 Create MongoDB StatefulSet in `infra/kubernetes/base/mongodb-statefulset.yaml`
-- [ ] T144 Create Docker-in-Docker deployment in `infra/kubernetes/base/docker-dind-deployment.yaml` (with Sysbox runtime)
-- [ ] T145 Create services and ingress in `infra/kubernetes/base/services.yaml`
-- [ ] T146 Create Kustomization files for local/staging/prod overlays
+- [x] T140 Create backend Kubernetes deployment in `infra/kubernetes/base/backend-deployment.yaml`
+- [x] T141 Create frontend Kubernetes deployment in `infra/kubernetes/base/frontend-deployment.yaml`
+- [x] T142 Create PostgreSQL StatefulSet in `infra/kubernetes/base/postgres-statefulset.yaml`
+- [x] T143 Create MongoDB StatefulSet in `infra/kubernetes/base/mongodb-statefulset.yaml`
+- [x] T144 Create Docker-in-Docker deployment in `infra/kubernetes/base/docker-dind-deployment.yaml` (with Sysbox runtime)
+- [x] T145 Create services and ingress in `infra/kubernetes/base/services.yaml`
+- [x] T146 Create Kustomization files for local/staging/prod overlays
 
 ### Observability
 - [ ] T147 Configure OpenTelemetry in `backend/src/utils/observability.py` (tracing, metrics)

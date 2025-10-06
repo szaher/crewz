@@ -1,0 +1,62 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: crewai-local
+
+bases:
+- ../../base
+
+namePrefix: local-
+
+commonLabels:
+  environment: local
+
+# Patches for local development
+patchesStrategicMerge:
+- backend-patch.yaml
+- frontend-patch.yaml
+
+# Override replicas for local
+replicas:
+- name: backend
+  count: 1
+- name: frontend
+  count: 1
+- name: docker-dind
+  count: 1
+
+# Local secrets (for development only - NOT for production!)
+secretGenerator:
+- name: db-credentials
+  behavior: replace
+  literals:
+  - postgres-user=crewai_dev
+  - postgres-password=dev_password_123
+  - postgres-url=postgresql://crewai_dev:dev_password_123@postgres:5432/crewai_platform
+  - mongodb-user=crewai_dev
+  - mongodb-password=dev_password_123
+  - mongodb-url=mongodb://crewai_dev:dev_password_123@mongodb:27017/crewai_platform
+  - redis-url=redis://redis:6379/0
+- name: app-secrets
+  behavior: replace
+  literals:
+  - jwt-secret=local-jwt-secret-key-not-for-production
+  - encryption-key=local-encryption-key-32-bytes-long
+
+# Use local images
+images:
+- name: crewai-backend
+  newName: crewai-backend
+  newTag: local
+- name: crewai-frontend
+  newName: crewai-frontend
+  newTag: local
+
+# Local-specific config
+configMapGenerator:
+- name: app-config
+  behavior: merge
+  literals:
+  - ENVIRONMENT=local
+  - LOG_LEVEL=DEBUG
+  - ENABLE_DEBUG_TOOLBAR=true

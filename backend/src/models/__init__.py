@@ -9,6 +9,9 @@ from .tool import Tool
 from .execution import Execution
 from .chat_session import ChatSession
 from .llm_provider import LLMProvider
+from .agent_version import AgentVersion
+from .provider_version import ProviderVersion
+from .feedback import Feedback
 
 __all__ = [
     "Tenant",
@@ -20,4 +23,7 @@ __all__ = [
     "Execution",
     "ChatSession",
     "LLMProvider",
+    "AgentVersion",
+    "ProviderVersion",
+    "Feedback",
 ]

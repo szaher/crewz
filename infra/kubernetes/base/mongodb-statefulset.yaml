@@ -1,0 +1,262 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongodb
+  labels:
+    app: mongodb
+    component: database
+spec:
+  serviceName: mongodb
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb
+  template:
+    metadata:
+      labels:
+        app: mongodb
+        component: database
+    spec:
+      containers:
+      - name: mongodb
+        image: mongo:6
+        ports:
+        - name: mongodb
+          containerPort: 27017
+          protocol: TCP
+        env:
+        - name: MONGO_INITDB_ROOT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: mongodb-user
+        - name: MONGO_INITDB_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: mongodb-password
+        - name: MONGO_INITDB_DATABASE
+          value: "crewai_platform"
+
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "2Gi"
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+
+        volumeMounts:
+        - name: data
+          mountPath: /data/db
+        - name: config
+          mountPath: /etc/mongod.conf
+          subPath: mongod.conf
+
+        livenessProbe:
+          exec:
+            command:
+            - mongo
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+
+        readinessProbe:
+          exec:
+            command:
+            - mongo
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+      volumes:
+      - name: config
+        configMap:
+          name: mongodb-config
+
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      labels:
+        app: mongodb
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: "standard"
+      resources:
+        requests:
+          storage: 200Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  labels:
+    app: mongodb
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - name: mongodb
+    port: 27017
+    targetPort: mongodb
+    protocol: TCP
+  selector:
+    app: mongodb
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mongodb-config
+  labels:
+    app: mongodb
+data:
+  mongod.conf: |
+    # MongoDB Configuration
+    net:
+      port: 27017
+      bindIp: 0.0.0.0
+      maxIncomingConnections: 1000
+
+    storage:
+      dbPath: /data/db
+      journal:
+        enabled: true
+      wiredTiger:
+        engineConfig:
+          cacheSizeGB: 4
+          journalCompressor: snappy
+        collectionConfig:
+          blockCompressor: snappy
+        indexConfig:
+          prefixCompression: true
+
+    systemLog:
+      destination: file
+      path: /var/log/mongodb/mongod.log
+      logAppend: true
+      verbosity: 0
+
+    operationProfiling:
+      mode: slowOp
+      slowOpThresholdMs: 100
+
+    replication:
+      replSetName: rs0
+
+    security:
+      authorization: enabled
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mongodb-init
+  labels:
+    app: mongodb
+spec:
+  template:
+    spec:
+      containers:
+      - name: init
+        image: mongo:6
+        command:
+        - /bin/sh
+        - -c
+        - |
+          until mongo --host mongodb --username $MONGO_INITDB_ROOT_USERNAME --password $MONGO_INITDB_ROOT_PASSWORD --eval "db.adminCommand('ping')"; do
+            echo "Waiting for MongoDB..."
+            sleep 2
+          done
+          echo "MongoDB is ready!"
+
+          # Create databases and collections for multi-tenant architecture
+          mongo --host mongodb --username $MONGO_INITDB_ROOT_USERNAME --password $MONGO_INITDB_ROOT_PASSWORD <<EOF
+          use crewai_platform;
+
+          // Create collections with validation schemas
+          db.createCollection("execution_logs", {
+            validator: {
+              \$jsonSchema: {
+                bsonType: "object",
+                required: ["execution_id", "node_id", "status", "start_time"],
+                properties: {
+                  execution_id: { bsonType: "string" },
+                  node_id: { bsonType: "string" },
+                  status: { enum: ["queued", "running", "succeeded", "failed"] },
+                  start_time: { bsonType: "date" },
+                  end_time: { bsonType: "date" },
+                  logs: { bsonType: "array" },
+                  metadata: { bsonType: "object" }
+                }
+              }
+            }
+          });
+
+          db.createCollection("chat_messages", {
+            validator: {
+              \$jsonSchema: {
+                bsonType: "object",
+                required: ["session_id", "role", "content", "timestamp"],
+                properties: {
+                  session_id: { bsonType: "string" },
+                  role: { enum: ["user", "assistant", "system"] },
+                  content: { bsonType: "string" },
+                  timestamp: { bsonType: "date" },
+                  metadata: { bsonType: "object" }
+                }
+              }
+            }
+          });
+
+          db.createCollection("audit_logs", {
+            validator: {
+              \$jsonSchema: {
+                bsonType: "object",
+                required: ["timestamp", "tenant_id", "action", "resource_type"],
+                properties: {
+                  timestamp: { bsonType: "date" },
+                  tenant_id: { bsonType: "string" },
+                  user_id: { bsonType: "string" },
+                  action: { bsonType: "string" },
+                  resource_type: { bsonType: "string" },
+                  resource_id: { bsonType: "string" },
+                  result: { enum: ["success", "failure"] }
+                }
+              }
+            }
+          });
+
+          // Create indexes
+          db.execution_logs.createIndex({ execution_id: 1 });
+          db.execution_logs.createIndex({ status: 1 });
+          db.execution_logs.createIndex({ start_time: -1 });
+
+          db.chat_messages.createIndex({ session_id: 1 });
+          db.chat_messages.createIndex({ timestamp: -1 });
+
+          db.audit_logs.createIndex({ tenant_id: 1, timestamp: -1 });
+          db.audit_logs.createIndex({ action: 1 });
+          db.audit_logs.createIndex({ user_id: 1 });
+
+          print("MongoDB initialization complete!");
+          EOF
+        env:
+        - name: MONGO_INITDB_ROOT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: mongodb-user
+        - name: MONGO_INITDB_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: mongodb-password
+      restartPolicy: OnFailure

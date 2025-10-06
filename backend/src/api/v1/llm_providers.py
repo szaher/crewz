@@ -15,6 +15,7 @@ from ...schemas.llm_providers import (
     LLMProviderListResponse
 )
 from ...services.llm_provider_service import LLMProviderService
+from ...services.versioning_service import VersioningService
 from ...api.middleware.auth import require_auth
 
 router = APIRouter(prefix="/llm-providers", tags=["llm-providers"])
@@ -150,3 +151,91 @@ async def delete_llm_provider(
         )
 
     return None
+
+
+@router.get("/{provider_id}/versions", response_model=dict)
+async def get_provider_versions(
+    provider_id: int,
+    page: int = 1,
+    page_size: int = 10,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth)
+):
+    """
+    Get version history for an LLM provider.
+
+    Returns:
+    - versions: List of version entries with configuration snapshots and diffs
+    - total: Total number of versions
+    - page: Current page number
+    - page_size: Number of items per page
+    """
+    if page_size > 50:
+        page_size = 50
+
+    versioning_service = VersioningService(db)
+    offset = (page - 1) * page_size
+
+    versions, total = versioning_service.get_provider_versions(
+        provider_id=provider_id,
+        limit=page_size,
+        offset=offset
+    )
+
+    return {
+        "versions": [
+            {
+                "id": v.id,
+                "version_number": v.version_number,
+                "action": v.action.value,
+                "changed_by_user_id": v.changed_by_user_id,
+                "configuration": v.configuration,
+                "diff_from_previous": v.diff_from_previous,
+                "change_description": v.change_description,
+                "created_at": v.created_at.isoformat() if v.created_at else None,
+            }
+            for v in versions
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@router.post("/{provider_id}/rollback/{version_number}", response_model=LLMProviderResponse)
+async def rollback_provider(
+    provider_id: int,
+    version_number: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth)
+):
+    """
+    Rollback an LLM provider to a specific version.
+
+    - **version_number**: Version number to rollback to
+
+    Only admins can rollback providers.
+    """
+    # Only admins can rollback providers
+    if current_user["role"] not in ["admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can rollback LLM providers"
+        )
+
+    versioning_service = VersioningService(db)
+
+    try:
+        provider = versioning_service.rollback_provider(
+            provider_id=provider_id,
+            version_number=version_number,
+            changed_by_user_id=current_user.get("user_id")
+        )
+
+        service = LLMProviderService(db)
+        return LLMProviderResponse(provider=service._to_dict(provider))
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )

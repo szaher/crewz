@@ -1,0 +1,182 @@
+name: Kubernetes Deployment
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  KUSTOMIZE_VERSION: '5.2.1'
+
+jobs:
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    environment:
+      name: staging
+      url: https://staging.crewai-platform.com
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'latest'
+
+    - name: Set up Kustomize
+      run: |
+        wget -O kustomize.tar.gz https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz
+        tar -xzf kustomize.tar.gz
+        chmod +x kustomize
+        sudo mv kustomize /usr/local/bin/
+
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.STAGING_KUBECONFIG }}" | base64 -d > kubeconfig
+        export KUBECONFIG=$(pwd)/kubeconfig
+
+    - name: Update image tags
+      run: |
+        cd infra/kubernetes/overlays/staging
+        kustomize edit set image \
+          crewai-backend=ghcr.io/${{ github.repository }}/backend:${{ github.sha }} \
+          crewai-frontend=ghcr.io/${{ github.repository }}/frontend:${{ github.sha }}
+
+    - name: Deploy to staging
+      env:
+        KUBECONFIG: kubeconfig
+      run: |
+        kustomize build infra/kubernetes/overlays/staging | kubectl apply -f -
+
+    - name: Wait for deployment
+      env:
+        KUBECONFIG: kubeconfig
+      run: |
+        kubectl rollout status deployment/staging-backend -n crewai-staging --timeout=300s
+        kubectl rollout status deployment/staging-frontend -n crewai-staging --timeout=300s
+
+    - name: Run smoke tests
+      env:
+        KUBECONFIG: kubeconfig
+        STAGING_URL: https://staging.crewai-platform.com
+      run: |
+        # Wait for service to be ready
+        sleep 30
+        # Health check
+        curl -f ${STAGING_URL}/health || exit 1
+        # API check
+        curl -f ${STAGING_URL}/api/v1/health || exit 1
+
+    - name: Notify deployment status
+      if: always()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        text: 'Staging deployment ${{ job.status }}'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+    environment:
+      name: production
+      url: https://app.crewai-platform.com
+    needs: []  # Can add staging deployment as prerequisite
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'latest'
+
+    - name: Set up Kustomize
+      run: |
+        wget -O kustomize.tar.gz https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz
+        tar -xzf kustomize.tar.gz
+        chmod +x kustomize
+        sudo mv kustomize /usr/local/bin/
+
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.PROD_KUBECONFIG }}" | base64 -d > kubeconfig
+        export KUBECONFIG=$(pwd)/kubeconfig
+
+    - name: Extract version from tag
+      if: startsWith(github.ref, 'refs/tags/v')
+      id: get_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+    - name: Update image tags
+      run: |
+        cd infra/kubernetes/overlays/prod
+        VERSION=${{ steps.get_version.outputs.VERSION || github.sha }}
+        kustomize edit set image \
+          crewai-backend=ghcr.io/${{ github.repository }}/backend:${VERSION} \
+          crewai-frontend=ghcr.io/${{ github.repository }}/frontend:${VERSION}
+
+    - name: Create database backup
+      env:
+        KUBECONFIG: kubeconfig
+      run: |
+        kubectl exec -n crewai-prod postgres-0 -- pg_dump -U crewai -F c -b -v -f /tmp/backup-$(date +%Y%m%d-%H%M%S).dump
+
+    - name: Deploy to production
+      env:
+        KUBECONFIG: kubeconfig
+      run: |
+        kustomize build infra/kubernetes/overlays/prod | kubectl apply -f -
+
+    - name: Wait for deployment
+      env:
+        KUBECONFIG: kubeconfig
+      run: |
+        kubectl rollout status deployment/prod-backend -n crewai-prod --timeout=600s
+        kubectl rollout status deployment/prod-frontend -n crewai-prod --timeout=600s
+
+    - name: Run smoke tests
+      env:
+        KUBECONFIG: kubeconfig
+        PROD_URL: https://app.crewai-platform.com
+      run: |
+        # Wait for service to be ready
+        sleep 60
+        # Health check
+        curl -f ${PROD_URL}/health || exit 1
+        # API check
+        curl -f ${PROD_URL}/api/v1/health || exit 1
+
+    - name: Notify deployment status
+      if: always()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        text: 'Production deployment ${{ job.status }} - Version: ${{ steps.get_version.outputs.VERSION }}'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+
+    - name: Create GitHub Release
+      if: startsWith(github.ref, 'refs/tags/v') && success()
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ steps.get_version.outputs.VERSION }}
+        draft: false
+        prerelease: false

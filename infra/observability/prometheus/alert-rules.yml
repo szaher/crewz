@@ -1,0 +1,180 @@
+groups:
+- name: crewai_alerts
+  interval: 30s
+  rules:
+  # Backend service alerts
+  - alert: BackendHighErrorRate
+    expr: |
+      rate(http_requests_total{app="crewai-backend",status=~"5.."}[5m])
+      /
+      rate(http_requests_total{app="crewai-backend"}[5m])
+      > 0.05
+    for: 5m
+    labels:
+      severity: warning
+      component: backend
+    annotations:
+      summary: "High error rate on backend ({{ $value | humanizePercentage }})"
+      description: "Backend is returning more than 5% errors for the last 5 minutes"
+
+  - alert: BackendDown
+    expr: up{job="crewai-backend"} == 0
+    for: 1m
+    labels:
+      severity: critical
+      component: backend
+    annotations:
+      summary: "Backend service is down"
+      description: "Backend pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is down"
+
+  - alert: BackendHighLatency
+    expr: |
+      histogram_quantile(0.95,
+        rate(http_request_duration_seconds_bucket{app="crewai-backend"}[5m])
+      ) > 1
+    for: 5m
+    labels:
+      severity: warning
+      component: backend
+    annotations:
+      summary: "High latency on backend (p95: {{ $value }}s)"
+      description: "Backend 95th percentile latency is above 1 second"
+
+  # Flow execution alerts
+  - alert: HighFlowFailureRate
+    expr: |
+      rate(flow_executions_total{status="failed"}[10m])
+      /
+      rate(flow_executions_total[10m])
+      > 0.1
+    for: 10m
+    labels:
+      severity: warning
+      component: flows
+    annotations:
+      summary: "High flow failure rate ({{ $value | humanizePercentage }})"
+      description: "More than 10% of flow executions are failing"
+
+  - alert: FlowExecutionStuck
+    expr: flow_executions_active > 100
+    for: 30m
+    labels:
+      severity: warning
+      component: flows
+    annotations:
+      summary: "Too many active flow executions ({{ $value }})"
+      description: "There are {{ $value }} active flow executions for more than 30 minutes"
+
+  # LLM provider alerts
+  - alert: LLMProviderHighCost
+    expr: |
+      increase(llm_cost_total[1h]) > 100
+    labels:
+      severity: warning
+      component: llm
+    annotations:
+      summary: "LLM costs are high (${{ $value }} in last hour)"
+      description: "LLM provider {{ $labels.provider }} has incurred ${{ $value }} in the last hour"
+
+  - alert: LLMProviderErrors
+    expr: |
+      rate(llm_requests_total{status="error"}[5m]) > 1
+    for: 5m
+    labels:
+      severity: warning
+      component: llm
+    annotations:
+      summary: "LLM provider {{ $labels.provider }} is experiencing errors"
+      description: "Error rate: {{ $value }} errors/sec"
+
+  # Database alerts
+  - alert: PostgreSQLDown
+    expr: up{job="postgres"} == 0
+    for: 1m
+    labels:
+      severity: critical
+      component: database
+    annotations:
+      summary: "PostgreSQL is down"
+      description: "PostgreSQL database is not responding"
+
+  - alert: PostgreSQLHighConnections
+    expr: |
+      pg_stat_database_numbackends
+      /
+      pg_settings_max_connections
+      > 0.8
+    for: 5m
+    labels:
+      severity: warning
+      component: database
+    annotations:
+      summary: "PostgreSQL connection pool usage high ({{ $value | humanizePercentage }})"
+      description: "PostgreSQL is using more than 80% of available connections"
+
+  - alert: MongoDBDown
+    expr: up{job="mongodb"} == 0
+    for: 1m
+    labels:
+      severity: critical
+      component: database
+    annotations:
+      summary: "MongoDB is down"
+      description: "MongoDB database is not responding"
+
+  # Resource alerts
+  - alert: HighMemoryUsage
+    expr: |
+      container_memory_usage_bytes{pod=~"crewai-.*"}
+      /
+      container_spec_memory_limit_bytes{pod=~"crewai-.*"}
+      > 0.9
+    for: 5m
+    labels:
+      severity: warning
+      component: resources
+    annotations:
+      summary: "High memory usage on {{ $labels.pod }} ({{ $value | humanizePercentage }})"
+      description: "Pod {{ $labels.pod }} is using more than 90% of its memory limit"
+
+  - alert: HighCPUUsage
+    expr: |
+      rate(container_cpu_usage_seconds_total{pod=~"crewai-.*"}[5m])
+      /
+      container_spec_cpu_quota{pod=~"crewai-.*"}
+      * 100000
+      > 0.9
+    for: 5m
+    labels:
+      severity: warning
+      component: resources
+    annotations:
+      summary: "High CPU usage on {{ $labels.pod }} ({{ $value | humanizePercentage }})"
+      description: "Pod {{ $labels.pod }} is using more than 90% of its CPU limit"
+
+  # Docker-in-Docker alerts
+  - alert: DockerDindContainerLeaks
+    expr: |
+      sum(docker_containers_running) by (pod) > 50
+    for: 10m
+    labels:
+      severity: warning
+      component: docker-dind
+    annotations:
+      summary: "Too many containers running in DinD pod {{ $labels.pod }}"
+      description: "{{ $value }} containers are running, possible container leak"
+
+  # Cache alerts
+  - alert: LowCacheHitRate
+    expr: |
+      rate(cache_hits_total[5m])
+      /
+      (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m]))
+      < 0.5
+    for: 10m
+    labels:
+      severity: info
+      component: cache
+    annotations:
+      summary: "Low cache hit rate ({{ $value | humanizePercentage }})"
+      description: "Cache hit rate is below 50% for the last 10 minutes"
