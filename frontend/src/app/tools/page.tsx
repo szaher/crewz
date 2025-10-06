@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import ToolRegistry from '@/components/tools/ToolRegistry';
 import ToolForm from '@/components/tools/ToolForm';
@@ -13,11 +13,7 @@ export default function ToolsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingToolId, setEditingToolId] = useState<number | undefined>();
 
-  useEffect(() => {
-    loadTools();
-  }, []);
-
-  const loadTools = async () => {
+  const loadTools = useCallback(async () => {
     setLoading(true);
     try {
       const response = await apiClient.get('/api/v1/tools');
@@ -29,7 +25,11 @@ export default function ToolsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [setTools]);
+
+  useEffect(() => {
+    void loadTools();
+  }, [loadTools]);
 
   const handleCreateTool = () => {
     setEditingToolId(undefined);
@@ -43,7 +43,7 @@ export default function ToolsPage() {
 
   const handleSaveTool = () => {
     setShowForm(false);
-    loadTools();
+    void loadTools();
   };
 
   if (showForm) {

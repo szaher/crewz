@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import ExecutionDetail from '@/components/executions/ExecutionDetail';
@@ -17,11 +17,7 @@ export default function ExecutionPage() {
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
 
-  useEffect(() => {
-    loadExecution();
-  }, [executionId]);
-
-  const loadExecution = async () => {
+  const loadExecution = useCallback(async () => {
     setLoading(true);
     try {
       const response = await apiClient.get(`/api/v1/executions/${executionId}`);
@@ -33,7 +29,11 @@ export default function ExecutionPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [executionId]);
+
+  useEffect(() => {
+    void loadExecution();
+  }, [loadExecution]);
 
   const handleCancel = async () => {
     if (!execution || execution.status !== 'running') return;

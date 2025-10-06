@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Dashboard from '@/components/dashboard/Dashboard';
 import { apiClient } from '@/lib/api-client';
@@ -15,11 +15,7 @@ export default function DashboardPage() {
 
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
-
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     setLoading(true);
     try {
       // Load all data in parallel
@@ -41,7 +37,11 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [setAgents, setCrews, setExecutions, setFlows, setTools]);
+
+  useEffect(() => {
+    void loadDashboardData();
+  }, [loadDashboardData]);
 
   return (
     <ProtectedRoute>

@@ -2,7 +2,16 @@
 
 import os
 from typing import List, Dict, Any, Optional
-from clickhouse_driver import Client
+
+_CLICKHOUSE_IMPORT_ERROR: Optional[ModuleNotFoundError]
+
+try:
+    from clickhouse_driver import Client
+except ModuleNotFoundError as import_error:  # pragma: no cover - import guard
+    Client = None  # type: ignore[assignment]
+    _CLICKHOUSE_IMPORT_ERROR = import_error
+else:  # pragma: no cover - import guard
+    _CLICKHOUSE_IMPORT_ERROR = None
 from contextlib import contextmanager
 import structlog
 
@@ -35,6 +44,12 @@ class ClickHouseClient:
 
     def connect(self) -> Client:
         """Establish connection to ClickHouse."""
+        if Client is None:
+            raise ModuleNotFoundError(
+                "clickhouse_driver is required to use ClickHouse integrations. "
+                "Install the optional dependency or disable ClickHouse features."
+            ) from _CLICKHOUSE_IMPORT_ERROR
+
         if self._client is None:
             try:
                 self._client = Client(

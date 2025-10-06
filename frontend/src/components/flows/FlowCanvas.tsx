@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, DragEvent, useRef, useMemo } from 'react';
+import { useCallback, useEffect, DragEvent, useRef } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -50,7 +50,7 @@ function FlowCanvasInner({ flowId, readOnly = false, onNodeSelect }: FlowCanvasP
   const { currentFlow, updateFlow } = useFlowStore();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition } = useReactFlow();
-  let nodeIdCounter = useRef(1);
+  const nodeIdCounter = useRef(1);
 
   // Convert API FlowNode to ReactFlow Node
   const convertToReactFlowNodes = useCallback((flowNodes: FlowNode[]): Node[] => {
@@ -86,7 +86,7 @@ function FlowCanvasInner({ flowId, readOnly = false, onNodeSelect }: FlowCanvasP
       setNodes(convertToReactFlowNodes(currentFlow.nodes));
       setEdges(convertToReactFlowEdges(currentFlow.edges || []));
     }
-  }, [currentFlow?.id, convertToReactFlowNodes, convertToReactFlowEdges, setNodes, setEdges]);
+  }, [convertToReactFlowEdges, convertToReactFlowNodes, currentFlow, setEdges, setNodes]);
 
   // Sync nodes/edges changes back to store (with debounce to avoid loops)
   useEffect(() => {
@@ -118,7 +118,7 @@ function FlowCanvasInner({ flowId, readOnly = false, onNodeSelect }: FlowCanvasP
     }, 300); // 300ms debounce
 
     return () => clearTimeout(timeoutId);
-  }, [nodes, edges, currentFlow?.id, readOnly, updateFlow]);
+  }, [currentFlow, edges, nodes, readOnly, updateFlow]);
 
   // Handle new connections
   const onConnect: OnConnect = useCallback(
