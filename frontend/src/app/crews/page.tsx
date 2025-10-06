@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import CrewBuilder from '@/components/crews/CrewBuilder';
@@ -20,11 +20,7 @@ export default function CrewsPage() {
   const [editingCrewId, setEditingCrewId] = useState<number | undefined>();
   const [editingAgentId, setEditingAgentId] = useState<number | undefined>();
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [crewsResponse, agentsResponse] = await Promise.all([
@@ -43,7 +39,11 @@ export default function CrewsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [setAgents, setCrews]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   const handleCreateCrew = () => {
     setEditingCrewId(undefined);
@@ -67,12 +67,12 @@ export default function CrewsPage() {
 
   const handleSaveCrew = (crewId: number) => {
     setShowCrewBuilder(false);
-    loadData();
+    void loadData();
   };
 
   const handleSaveAgent = (agentId: number) => {
     setShowAgentForm(false);
-    loadData();
+    void loadData();
   };
 
   if (showCrewBuilder) {
