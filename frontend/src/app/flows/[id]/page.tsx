@@ -7,6 +7,7 @@ import FlowCanvas from '@/components/flows/FlowCanvas';
 import FlowToolbar from '@/components/flows/FlowToolbar';
 import NodePalette from '@/components/flows/NodePalette';
 import PropertyPanel from '@/components/flows/PropertyPanel';
+import FlowPropertiesPanel from '@/components/flows/FlowPropertiesPanel';
 import { useFlowStore } from '@/lib/store';
 import { apiClient } from '@/lib/api-client';
 
@@ -15,10 +16,11 @@ export default function FlowEditorPage() {
   const router = useRouter();
   const isNew = params.id === 'new';
   const flowId = !isNew && params.id ? Number(params.id) : null;
-  const { setCurrentFlow } = useFlowStore();
+  const { setCurrentFlow, currentFlow } = useFlowStore();
   const [selectedNode, setSelectedNode] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [isPropertiesPanelOpen, setIsPropertiesPanelOpen] = useState(false);
 
   useEffect(() => {
     // Handle /flows/new - create a new flow
@@ -141,7 +143,11 @@ export default function FlowEditorPage() {
   return (
     <ProtectedRoute>
       <div className="h-screen flex flex-col">
-        <FlowToolbar flowId={flowId} onDiscard={handleDiscard} />
+        <FlowToolbar
+          flowId={flowId}
+          onDiscard={handleDiscard}
+          onOpenProperties={() => setIsPropertiesPanelOpen(true)}
+        />
 
         <div className="flex-1 flex overflow-hidden">
           <NodePalette />
@@ -155,6 +161,16 @@ export default function FlowEditorPage() {
             onUpdateNode={handleUpdateNode}
           />
         </div>
+
+        {/* Flow Properties Panel */}
+        {currentFlow && flowId && (
+          <FlowPropertiesPanel
+            flowId={flowId}
+            initialData={currentFlow}
+            isOpen={isPropertiesPanelOpen}
+            onClose={() => setIsPropertiesPanelOpen(false)}
+          />
+        )}
       </div>
     </ProtectedRoute>
   );

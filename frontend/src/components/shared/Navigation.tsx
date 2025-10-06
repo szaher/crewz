@@ -3,18 +3,12 @@
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore, useTenantStore } from '@/lib/store';
 import { apiClient } from '@/lib/api-client';
+import UserProfileMenu from '../navigation/UserProfileMenu';
 
 export default function Navigation() {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, clearAuth } = useAuthStore();
   const { currentTenant } = useTenantStore();
-
-  const handleLogout = () => {
-    clearAuth();
-    apiClient.clearToken();
-    router.push('/login');
-  };
 
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', icon: '📊' },
@@ -59,21 +53,9 @@ export default function Navigation() {
         ))}
       </div>
 
-      {/* User Info & Logout */}
+      {/* User Profile Menu */}
       <div className="p-4 border-t border-gray-200">
-        <div className="mb-3">
-          <p className="text-sm font-medium text-gray-900">{user?.full_name}</p>
-          <p className="text-xs text-gray-500">{user?.email}</p>
-          <span className="mt-1 inline-block px-2 py-1 text-xs font-medium rounded bg-purple-100 text-purple-800">
-            {user?.role}
-          </span>
-        </div>
-        <button
-          onClick={handleLogout}
-          className="w-full px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100"
-        >
-          Logout
-        </button>
+        <UserProfileMenu />
       </div>
     </nav>
   );
