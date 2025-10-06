@@ -59,7 +59,18 @@ async def get_execution(
 
     Returns current execution state, input/output data, and any errors.
     """
-    execution_service = ExecutionService(db, None, None)  # TODO: inject dependencies
+    # Initialize services with proper dependencies
+    from ...services.flow_service import FlowService
+    from ...crewai.flow_executor import FlowExecutor
+    from ...crewai.crew_factory import CrewFactory
+    from ...services.execution_events import ExecutionEventPublisher
+
+    flow_service = FlowService(db)
+    crew_factory = CrewFactory(db)
+    event_publisher = ExecutionEventPublisher()
+    flow_executor = FlowExecutor(crew_factory, event_publisher)
+
+    execution_service = ExecutionService(db, flow_service, flow_executor)
     execution = await execution_service.get_execution(execution_id)
     return ExecutionResponse.from_orm(execution)
 
@@ -134,6 +145,17 @@ async def cancel_execution(
 
     Only pending or running executions can be cancelled.
     """
-    execution_service = ExecutionService(db, None, None)  # TODO: inject dependencies
+    # Initialize services with proper dependencies
+    from ...services.flow_service import FlowService
+    from ...crewai.flow_executor import FlowExecutor
+    from ...crewai.crew_factory import CrewFactory
+    from ...services.execution_events import ExecutionEventPublisher
+
+    flow_service = FlowService(db)
+    crew_factory = CrewFactory(db)
+    event_publisher = ExecutionEventPublisher()
+    flow_executor = FlowExecutor(crew_factory, event_publisher)
+
+    execution_service = ExecutionService(db, flow_service, flow_executor)
     execution = await execution_service.cancel_execution(execution_id)
     return ExecutionResponse.from_orm(execution)

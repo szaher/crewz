@@ -23,13 +23,23 @@ session_clients: Dict[int, Set[str]] = {}
 @sio.event
 async def connect(sid: str, environ: dict, auth: dict):
     """Handle client connection"""
-    # TODO: Verify JWT token from auth
+    # Verify JWT token from auth
     token = auth.get('token')
     if not token:
+        print(f"Connection rejected: No token provided")
         return False
 
-    print(f"Client connected: {sid}")
-    return True
+    # Validate JWT token
+    try:
+        from ..utils.jwt import verify_token
+        payload = verify_token(token)
+        # Store user/tenant info in socket session
+        await sio.save_session(sid, {'user_id': payload['user_id'], 'tenant_id': payload['tenant_id']})
+        print(f"Client connected: {sid} (user: {payload['user_id']})")
+        return True
+    except Exception as e:
+        print(f"Connection rejected: Invalid token - {str(e)}")
+        return False
 
 
 @sio.event
@@ -107,12 +117,27 @@ async def send_message(sid: str, data: dict):
             room=f"session_{session_id}"
         )
 
-        # TODO: Process message with crew/agent and generate response
-        # For now, echo back as assistant
+        # Process message with crew/agent and generate response
+        session = await chat_service.get_session(session_id)
+
+        if session.crew_id:
+            # Execute crew to generate response
+            from ..crewai.crew_factory import CrewFactory
+            crew_factory = CrewFactory(None)  # Will need DB session
+            crew = await crew_factory.create_crew_from_db(session.crew_id)
+
+            # Execute crew with message as input
+            crew_response = await crew.kickoff({"message": content})
+            response_content = crew_response.get('result', 'No response generated')
+        else:
+            # No crew assigned, return helpful message
+            response_content = f"Received your message: {content}. Please assign a crew to this session to get AI responses."
+
+        # Save assistant response
         assistant_response = await chat_service.create_message(
             session_id=session_id,
             role='assistant',
-            content=f"Echo: {content}"
+            content=response_content
         )
 
         # Broadcast assistant response

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import ChatWindow from '@/components/chat/ChatWindow';
 import { apiClient } from '@/lib/api-client';
-import type { ChatSession, ChatSessionCreate } from '@/types/api';
+import type { ChatSession, ChatSessionCreate, Crew } from '@/types/api';
 
 export default function ChatPage() {
   const router = useRouter();
@@ -15,10 +15,18 @@ export default function ChatPage() {
   const [showNewSessionForm, setShowNewSessionForm] = useState(false);
   const [newSessionName, setNewSessionName] = useState('');
   const [selectedCrewId, setSelectedCrewId] = useState<number | undefined>();
+  const [crews, setCrews] = useState<Crew[]>([]);
+  const [loadingCrews, setLoadingCrews] = useState(false);
 
   useEffect(() => {
     loadSessions();
   }, []);
+
+  useEffect(() => {
+    if (showNewSessionForm) {
+      loadCrews();
+    }
+  }, [showNewSessionForm]);
 
   const loadSessions = async () => {
     setLoading(true);
@@ -34,6 +42,23 @@ export default function ChatPage() {
       console.error('Failed to load chat sessions:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadCrews = async () => {
+    setLoadingCrews(true);
+    try {
+      const response = await apiClient.get('/api/v1/crews', {
+        params: { page: 1, page_size: 100 }
+      });
+      if (response.data) {
+        setCrews(response.data.crews || []);
+      }
+    } catch (error) {
+      console.error('Failed to load crews:', error);
+      setCrews([]);
+    } finally {
+      setLoadingCrews(false);
     }
   };
 
@@ -155,11 +180,23 @@ export default function ChatPage() {
                     id="crew_id"
                     value={selectedCrewId || ''}
                     onChange={(e) => setSelectedCrewId(e.target.value ? Number(e.target.value) : undefined)}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                    disabled={loadingCrews}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
-                    <option value="">No crew</option>
-                    {/* TODO: Load crews from store */}
+                    <option value="">
+                      {loadingCrews ? 'Loading crews...' : 'No crew'}
+                    </option>
+                    {crews.map((crew) => (
+                      <option key={crew.id} value={crew.id}>
+                        {crew.name}
+                      </option>
+                    ))}
                   </select>
+                  {crews.length === 0 && !loadingCrews && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      No crews available. Create a crew first.
+                    </p>
+                  )}
                 </div>
               </div>
 

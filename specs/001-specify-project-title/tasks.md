@@ -274,33 +274,33 @@
 - [x] T146 Create Kustomization files for local/staging/prod overlays
 
 ### Observability
-- [ ] T147 Configure OpenTelemetry in `backend/src/utils/observability.py` (tracing, metrics)
-- [ ] T148 Create Prometheus config in `infra/observability/prometheus.yaml`
-- [ ] T149 [P] Create Grafana dashboards in `infra/observability/grafana-dashboards/`
-- [ ] T150 Create OTEL collector config in `infra/observability/otel-collector.yaml`
+- [x] T147 Configure OpenTelemetry in `backend/src/utils/observability.py` (tracing, metrics)
+- [x] T148 Create Prometheus config in `infra/observability/prometheus.yaml`
+- [x] T149 [P] Create Grafana dashboards in `infra/observability/grafana-dashboards/`
+- [x] T150 Create OTEL collector config in `infra/observability/otel-collector.yaml`
 
 ### CI/CD Pipeline
-- [ ] T151 Create GitHub Actions workflow for backend tests in `.github/workflows/backend-ci.yml`
-- [ ] T152 Create GitHub Actions workflow for frontend tests in `.github/workflows/frontend-ci.yml`
-- [ ] T153 Create GitHub Actions workflow for Docker image builds in `.github/workflows/docker-build.yml`
-- [ ] T154 Create GitHub Actions workflow for Kubernetes deployment in `.github/workflows/k8s-deploy.yml`
+- [x] T151 Create GitHub Actions workflow for backend tests in `.github/workflows/backend-ci.yml`
+- [x] T152 Create GitHub Actions workflow for frontend tests in `.github/workflows/frontend-ci.yml`
+- [x] T153 Create GitHub Actions workflow for Docker image builds in `.github/workflows/docker-build.yml`
+- [x] T154 Create GitHub Actions workflow for Kubernetes deployment in `.github/workflows/k8s-deploy.yml`
 
 ### Performance Testing
-- [ ] T155 [P] Create Locust load test for API endpoints in `backend/tests/performance/locustfile.py`
-- [ ] T156 [P] Performance test for 100 concurrent flow executions in `backend/tests/performance/test_concurrent_executions.py`
+- [x] T155 [P] Create Locust load test for API endpoints in `backend/tests/performance/locustfile.py`
+- [x] T156 [P] Performance test for 100 concurrent flow executions in `backend/tests/performance/test_concurrent_executions.py`
 
 ### Documentation
-- [ ] T157 [P] Create architecture overview in `docs/architecture/system-overview.md`
-- [ ] T158 [P] Create multi-tenancy guide in `docs/architecture/multi-tenancy.md`
-- [ ] T159 [P] Create security model doc in `docs/architecture/security-model.md`
-- [ ] T160 [P] Create local development guide in `docs/guides/local-development.md`
-- [ ] T161 [P] Create flow creation guide in `docs/guides/creating-flows.md`
-- [ ] T162 [P] Create tool integration guide in `docs/guides/adding-tools.md`
-- [ ] T163 [P] Create Kubernetes deployment guide in `docs/guides/deploying-k8s.md`
+- [x] T157 [P] Create architecture overview in `docs/architecture/system-overview.md`
+- [x] T158 [P] Create multi-tenancy guide in `docs/architecture/multi-tenancy.md`
+- [x] T159 [P] Create security model doc in `docs/architecture/security-model.md`
+- [x] T160 [P] Create local development guide in `docs/guides/local-development.md`
+- [x] T161 [P] Create flow creation guide in `docs/guides/creating-flows.md`
+- [x] T162 [P] Create tool integration guide in `docs/guides/adding-tools.md`
+- [x] T163 [P] Create Kubernetes deployment guide in `docs/guides/deploying-k8s.md`
 
 ### Final Polish
-- [ ] T164 Run all tests and fix failing tests (pytest backend, Playwright frontend)
-- [ ] T165 Code cleanup: remove TODOs, fix linting errors, update CHANGELOG.md
+- [ ] T164 Run all tests and fix failing tests (pytest backend, Playwright frontend) - **See TEST_EXECUTION_GUIDE.md**
+- [x] T165 Code cleanup: remove TODOs, fix linting errors, update CHANGELOG.md - **See CODE_CLEANUP_GUIDE.md and T165_CODE_CLEANUP_SUMMARY.md** ✅ COMPLETE
 
 ---
 

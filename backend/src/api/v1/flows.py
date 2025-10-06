@@ -124,8 +124,18 @@ async def execute_flow(
 
     Returns execution record. Monitor progress via GET /executions/{execution_id}/stream
     """
+    # Initialize services with proper dependencies
     flow_service = FlowService(db)
-    execution_service = ExecutionService(db, flow_service, None)  # TODO: inject dependencies
+
+    from ...crewai.flow_executor import FlowExecutor
+    from ...crewai.crew_factory import CrewFactory
+    from ...services.execution_events import ExecutionEventPublisher
+
+    crew_factory = CrewFactory(db)
+    event_publisher = ExecutionEventPublisher()
+    flow_executor = FlowExecutor(crew_factory, event_publisher)
+
+    execution_service = ExecutionService(db, flow_service, flow_executor)
 
     execution_request = ExecutionCreate(
         execution_type="flow",

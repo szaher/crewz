@@ -49,15 +49,40 @@ async def login(
 
 @router.post("/refresh", response_model=LoginResponse)
 async def refresh_token(
+    refresh_token: str,
     db: Session = Depends(get_db),
-    # TODO: Add refresh token logic
 ):
     """
-    Refresh an expired access token.
+    Refresh an expired access token using a refresh token.
 
-    Not yet implemented - placeholder for future enhancement.
+    - **refresh_token**: Valid refresh token from previous login
+
+    Returns new access token and optionally new refresh token.
     """
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Token refresh not yet implemented",
-    )
+    auth_service = AuthService(db)
+    try:
+        # Validate and decode refresh token
+        token_data = await auth_service.validate_refresh_token(refresh_token)
+
+        # Generate new access token
+        new_access_token = await auth_service.create_access_token(
+            user_id=token_data["user_id"],
+            tenant_id=token_data["tenant_id"]
+        )
+
+        # Optionally rotate refresh token for enhanced security
+        new_refresh_token = await auth_service.create_refresh_token(
+            user_id=token_data["user_id"],
+            tenant_id=token_data["tenant_id"]
+        )
+
+        return LoginResponse(
+            access_token=new_access_token,
+            refresh_token=new_refresh_token,
+            token_type="bearer"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        )
