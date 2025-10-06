@@ -1,9 +1,15 @@
 """Versioning service for tracking configuration changes with diff and rollback support."""
 
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, TYPE_CHECKING
 from sqlalchemy.orm import Session
 from datetime import datetime
 import json
+
+if TYPE_CHECKING:
+    from ..models.agent_version import AgentVersion
+    from ..models.provider_version import ProviderVersion
+    from ..models.agent import Agent
+    from ..models.llm_provider import LLMProvider
 
 
 class VersioningService:

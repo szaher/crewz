@@ -14,7 +14,73 @@ Fixed critical issues in CI/CD workflows to ensure proper testing, building, and
 
 ## Files Fixed
 
-### 1. `.github/workflows/backend-ci.yml` ✅
+### 1. `.github/workflows/k8s-deploy.yml` ✅ **NEW**
+
+**Issues Fixed:**
+1. ❌ **Deprecated kubectl setup action**: azure/setup-kubectl@v3 → v4
+2. ❌ **Insecure kubeconfig handling**: Writing to pwd instead of $HOME/.kube
+3. ❌ **Manual kustomize download**: Using wget with hardcoded version
+4. ❌ **Deprecated Slack action**: 8398a7/action-slack@v3 → slackapi/slack-github-action@v1
+5. ❌ **Deprecated release action**: actions/create-release@v1 → softprops/action-gh-release@v1
+6. ❌ **No retry logic**: Single health check attempts
+7. ❌ **Hard deployment failures**: No graceful degradation
+
+**Changes Made:**
+```yaml
+# Updated kubectl setup
+- uses: azure/setup-kubectl@v4
+  with:
+    version: 'v1.28.0'
+
+# Improved kustomize installation
+run: |
+  curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+  sudo mv kustomize /usr/local/bin/
+
+# Secure kubeconfig handling
+run: |
+  mkdir -p $HOME/.kube
+  echo "${{ secrets.STAGING_KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+  chmod 600 $HOME/.kube/config
+
+# Added cluster verification
+- name: Verify cluster connection
+  run: |
+    kubectl cluster-info
+    kubectl get nodes
+
+# Added retry logic for health checks
+run: |
+  for i in {1..5}; do
+    if curl -f ${STAGING_URL}/health; then
+      echo "Health check passed"
+      break
+    fi
+    echo "Health check attempt $i failed, retrying..."
+    sleep 10
+  done
+
+# Updated Slack notification
+- uses: slackapi/slack-github-action@v1
+  with:
+    payload: |
+      {
+        "text": "Staging deployment ${{ job.status }}",
+        "blocks": [...]
+      }
+  env:
+    SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+  continue-on-error: true
+
+# Updated GitHub Release creation
+- uses: softprops/action-gh-release@v1
+  with:
+    generate_release_notes: true
+```
+
+---
+
+### 2. `.github/workflows/backend-ci.yml` ✅
 
 **Issues Fixed:**
 1. ❌ **MongoDB health check**: Used obsolete `mongo` command instead of `mongosh`
@@ -290,6 +356,7 @@ All changes are backward compatible. The workflows will:
 .github/workflows/backend-ci.yml     ✅ Fixed
 .github/workflows/frontend-ci.yml    ✅ Fixed
 .github/workflows/docker-build.yml   ✅ Fixed
+.github/workflows/k8s-deploy.yml     ✅ Fixed
 ```
 
 ---

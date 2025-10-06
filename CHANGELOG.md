@@ -267,6 +267,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Fixed conditional logic for security scans
   - Added continue-on-error for non-blocking scans
 
+- **Kubernetes Deployment Workflow** (.github/workflows/k8s-deploy.yml):
+  - Updated kubectl setup action (v3 → v4) with specific version
+  - Improved kustomize installation using official installer
+  - Fixed kubeconfig handling for better security ($HOME/.kube)
+  - Added cluster verification steps
+  - Updated Slack notification action to latest version
+  - Updated GitHub Release action (deprecated → softprops/action-gh-release@v1)
+  - Added retry logic for health checks (5 attempts with backoff)
+  - Added graceful error handling for deployment checks
+  - Added continue-on-error for backup and notification steps
+
 #### Impact
 - ✅ All CI jobs now properly configured
 - ✅ Complete service setup with health checks
