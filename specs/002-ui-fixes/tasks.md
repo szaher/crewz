@@ -51,17 +51,17 @@
 ## Phase 2: Flow Creation (T011-T025)
 
 ### Create Flow Modal Component
-- [ ] T011 [P] Create CreateFlowModal component in `frontend/src/components/flows/CreateFlowModal.tsx`
+- [x] T011 [P] Create CreateFlowModal component in `frontend/src/components/flows/CreateFlowModal.tsx`
 - [ ] T012 [P] Create FlowForm component (reusable) in `frontend/src/components/flows/FlowForm.tsx`
 - [ ] T013 Add form validation using zod in FlowForm
-- [ ] T014 [P] Create useFlows hook in `frontend/src/lib/hooks/useFlows.ts`
-- [ ] T015 Integrate createFlow API call in useFlows hook
+- [x] T014 [P] Create useFlows hook in `frontend/src/lib/hooks/useFlows.ts`
+- [x] T015 Integrate createFlow API call in useFlows hook
 
 ### Dashboard Integration
-- [ ] T016 Update Dashboard page (`frontend/src/app/dashboard/page.tsx`) to add "Create Flow" button
-- [ ] T017 Wire CreateFlowModal to Dashboard page
-- [ ] T018 Handle flow creation success (redirect to editor)
-- [ ] T019 Handle flow creation errors (display in modal)
+- [x] T016 Update Dashboard page (`frontend/src/app/dashboard/page.tsx`) to add "Create Flow" button
+- [x] T017 Wire CreateFlowModal to Dashboard page
+- [x] T018 Handle flow creation success (redirect to editor)
+- [x] T019 Handle flow creation errors (display in modal)
 
 ### Flow Creation API Integration
 - [ ] T020 Test API POST /api/v1/flows endpoint exists
@@ -78,10 +78,10 @@
 ## Phase 3: Flow Editing (T026-T040)
 
 ### Inline Name Editing
-- [ ] T026 [P] Create FlowNameEditor component in `frontend/src/components/flows/FlowNameEditor.tsx`
-- [ ] T027 Implement click-to-edit functionality in FlowNameEditor
-- [ ] T028 Add keyboard support (Enter=save, Escape=cancel)
-- [ ] T029 Integrate FlowNameEditor into Flow Editor page (`frontend/src/app/flows/[flow_id]/edit.tsx`)
+- [x] T026 [P] Create FlowNameEditor component in `frontend/src/components/flows/FlowNameEditor.tsx`
+- [x] T027 Implement click-to-edit functionality in FlowNameEditor
+- [x] T028 Add keyboard support (Enter=save, Escape=cancel)
+- [x] T029 Integrate FlowNameEditor into Flow Editor page (`frontend/src/app/flows/[flow_id]/edit.tsx`)
 
 ### Flow Properties Panel
 - [ ] T030 [P] Create FlowPropertiesPanel component in `frontend/src/components/flows/FlowPropertiesPanel.tsx`
@@ -103,48 +103,48 @@
 ## Phase 4: Observability Dashboard (T041-T070)
 
 ### Metrics Dashboard Page
-- [ ] T041 [P] Create Observability dashboard page in `frontend/src/app/observability/index.tsx`
-- [ ] T042 [P] Create MetricsDashboard component in `frontend/src/components/observability/MetricsDashboard.tsx`
-- [ ] T043 Add link to Observability in main navigation
+- [x] T041 [P] Create Observability dashboard page in `frontend/src/app/observability/index.tsx`
+- [x] T042 [P] Create MetricsDashboard component in `frontend/src/components/observability/MetricsDashboard.tsx`
+- [x] T043 Add link to Observability in main navigation
 
 ### Metrics API Integration
-- [ ] T044 [P] Create useMetrics hook in `frontend/src/lib/hooks/useMetrics.ts`
-- [ ] T045 Implement fetchMetrics function calling GET /api/v1/executions with aggregation
-- [ ] T046 Add auto-refresh with 30-second interval in useMetrics
+- [x] T044 [P] Create useMetrics hook in `frontend/src/lib/hooks/useMetrics.ts`
+- [x] T045 Implement fetchMetrics function calling GET /api/v1/executions with aggregation
+- [x] T046 Add auto-refresh with 30-second interval in useMetrics
 
 ### Metric Cards
-- [ ] T047 [P] Create MetricsCard component in `frontend/src/components/observability/MetricsCard.tsx`
-- [ ] T048 [P] Create TotalExecutionsCard in `frontend/src/components/observability/metrics/TotalExecutionsCard.tsx`
-- [ ] T049 [P] Create SuccessRateCard in `frontend/src/components/observability/metrics/SuccessRateCard.tsx`
-- [ ] T050 [P] Create ErrorRateCard in `frontend/src/components/observability/metrics/ErrorRateCard.tsx`
-- [ ] T051 [P] Create AvgTimeCard in `frontend/src/components/observability/metrics/AvgTimeCard.tsx`
-- [ ] T052 Integrate all metric cards into MetricsDashboard
+- [x] T047 [P] Create MetricsCard component in `frontend/src/components/observability/MetricsCard.tsx`
+- [x] T048 [P] Create TotalExecutionsCard in `frontend/src/components/observability/metrics/TotalExecutionsCard.tsx`
+- [x] T049 [P] Create SuccessRateCard in `frontend/src/components/observability/metrics/SuccessRateCard.tsx`
+- [x] T050 [P] Create ErrorRateCard in `frontend/src/components/observability/metrics/ErrorRateCard.tsx`
+- [x] T051 [P] Create AvgTimeCard in `frontend/src/components/observability/metrics/AvgTimeCard.tsx`
+- [x] T052 Integrate all metric cards into MetricsDashboard
 
 ### Execution Trend Chart
-- [ ] T053 Install recharts library (`npm install recharts`)
-- [ ] T054 [P] Create ExecutionTrendChart component in `frontend/src/components/observability/ExecutionTrendChart.tsx`
-- [ ] T055 Implement line chart showing executions over time (hourly buckets)
-- [ ] T056 Add hover tooltips to chart
-- [ ] T057 Integrate ExecutionTrendChart into MetricsDashboard
+- [x] T053 Install recharts library (`npm install recharts`)
+- [x] T054 [P] Create ExecutionTrendChart component in `frontend/src/components/observability/ExecutionTrendChart.tsx`
+- [x] T055 Implement line chart showing executions over time (hourly buckets)
+- [x] T056 Add hover tooltips to chart
+- [x] T057 Integrate ExecutionTrendChart into MetricsDashboard
 
 ### Recent Errors List
-- [ ] T058 [P] Create ErrorsList component in `frontend/src/components/observability/ErrorsList.tsx`
-- [ ] T059 Fetch recent errors from GET /api/v1/executions?status=failed&limit=10
-- [ ] T060 Display errors in table (time, flow name, error message)
-- [ ] T061 Add click to view execution details
-- [ ] T062 Integrate ErrorsList into MetricsDashboard
+- [x] T058 [P] Create ErrorsList component in `frontend/src/components/observability/ErrorsList.tsx`
+- [x] T059 Fetch recent errors from GET /api/v1/executions?status=failed&limit=10
+- [x] T060 Display errors in table (time, flow name, error message)
+- [x] T061 Add click to view execution details
+- [x] T062 Integrate ErrorsList into MetricsDashboard
 
 ### Time Range Filter
-- [ ] T063 [P] Create TimeRangeFilter component in `frontend/src/components/observability/TimeRangeFilter.tsx`
-- [ ] T064 Add time range options (Last Hour, 24h, 7 days, 30 days)
-- [ ] T065 Wire time range to metrics fetching
-- [ ] T066 Update charts when time range changes
+- [x] T063 [P] Create TimeRangeFilter component in `frontend/src/components/observability/TimeRangeFilter.tsx`
+- [x] T064 Add time range options (Last Hour, 24h, 7 days, 30 days)
+- [x] T065 Wire time range to metrics fetching
+- [x] T066 Update charts when time range changes
 
 ### Dashboard Polish
-- [ ] T067 Add loading state for metrics dashboard (skeleton)
-- [ ] T068 Add error state for metrics dashboard (retry button)
-- [ ] T069 Add empty state ("No execution data yet")
-- [ ] T070 Add refresh button to manually update metrics
+- [x] T067 Add loading state for metrics dashboard (skeleton)
+- [x] T068 Add error state for metrics dashboard (retry button)
+- [x] T069 Add empty state ("No execution data yet")
+- [x] T070 Add refresh button to manually update metrics
 
 ---
 
