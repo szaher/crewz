@@ -63,32 +63,45 @@ class FlowValidator:
         """
         errors = []
 
-        # Basic validation first
+        # Basic validation first and continue collecting all errors
         basic_validation = self.validate_flow(nodes, edges)
-        if not basic_validation["valid"]:
-            return basic_validation
+        errors.extend(basic_validation["errors"])
 
-        # Check for input nodes (no incoming edges)
         node_ids = {node["id"] for node in nodes}
         target_ids = {edge["target"] for edge in edges}
-        input_nodes = node_ids - target_ids
+
+        # Determine candidate input nodes. Prefer explicit input node types when
+        # available, otherwise fall back to nodes without incoming edges.
+        explicit_input_nodes = {
+            node["id"] for node in nodes if node.get("type") == "input"
+        }
+        input_nodes = explicit_input_nodes or (node_ids - target_ids)
 
         if not input_nodes:
             errors.append("Flow must have at least one input node (no incoming edges)")
 
-        # Check for output nodes (no outgoing edges)
+        # Determine candidate output nodes. Prefer explicit output node types when
+        # available, otherwise fall back to nodes without outgoing edges.
         source_ids = {edge["source"] for edge in edges}
-        output_nodes = node_ids - source_ids
+        explicit_output_nodes = {
+            node["id"] for node in nodes if node.get("type") == "output"
+        }
+        output_nodes = explicit_output_nodes or (node_ids - source_ids)
 
         if not output_nodes:
-            errors.append("Flow must have at least one output node (no outgoing edges)")
+            errors.append(
+                "Flow must have at least one output node (no outgoing edges)"
+            )
 
-        # Check all nodes are reachable from input nodes
-        reachable = self._get_reachable_nodes(input_nodes, edges)
+        # Check all nodes are reachable from determined input nodes.
+        reachable = self._get_reachable_nodes(input_nodes, edges) if input_nodes else set()
         unreachable = node_ids - reachable
 
         if unreachable:
-            errors.append(f"Unreachable nodes detected: {unreachable}")
+            sorted_unreachable = sorted(unreachable)
+            errors.append(
+                f"Unreachable nodes detected: {sorted_unreachable}"
+            )
 
         return {
             "valid": len(errors) == 0,

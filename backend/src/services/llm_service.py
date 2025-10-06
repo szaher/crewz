@@ -7,7 +7,7 @@ import litellm
 from litellm import acompletion, completion_cost
 
 from ..models import LLMProvider
-from ..utils.encryption import decrypt_api_key
+from ..utils.encryption import decrypt_api_key, encrypt_api_key
 
 
 class LLMService:
@@ -205,8 +205,6 @@ class LLMService:
         Raises:
             HTTPException: If creation fails
         """
-        from ..utils.encryption import encrypt_api_key
-
         # Encrypt API key if provided
         encrypted_key = None
         if api_key:
