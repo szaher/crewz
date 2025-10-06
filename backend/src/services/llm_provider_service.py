@@ -5,6 +5,8 @@ from sqlalchemy import and_
 from typing import List, Tuple, Optional
 from ..models.llm_provider import LLMProvider, LLMProviderType
 from ..schemas.llm_providers import LLMProviderCreate, LLMProviderUpdate
+from .encryption_service import get_encryption_service
+from .versioning_service import VersioningService
 
 
 class LLMProviderService:
@@ -12,6 +14,8 @@ class LLMProviderService:
 
     def __init__(self, db: Session):
         self.db = db
+        self.encryption = get_encryption_service()
+        self.versioning = VersioningService(db)
 
     async def create_provider(
         self,
@@ -28,13 +32,16 @@ class LLMProviderService:
                 )
             ).update({"is_default": False})
 
+        # Encrypt API key before storing
+        encrypted_api_key = self.encryption.encrypt_if_not_empty(provider_data.api_key)
+
         # Create provider
         provider = LLMProvider(
             tenant_id=tenant_id,
             name=provider_data.name,
             provider_type=LLMProviderType(provider_data.provider_type),
             model_name=provider_data.model_name,
-            api_key=provider_data.api_key,
+            api_key=encrypted_api_key,
             api_base=provider_data.api_base,
             config=provider_data.config,
             is_default=provider_data.is_default,
@@ -43,6 +50,15 @@ class LLMProviderService:
         self.db.add(provider)
         self.db.commit()
         self.db.refresh(provider)
+
+        # Create initial version
+        config = self.versioning.config_to_dict(provider)
+        self.versioning.create_provider_version(
+            provider_id=provider.id,
+            configuration=config,
+            action="create",
+            change_description="Initial provider creation"
+        )
 
         return self._to_dict(provider)
 
@@ -113,11 +129,24 @@ class LLMProviderService:
         if 'provider_type' in update_data:
             update_data['provider_type'] = LLMProviderType(update_data['provider_type'])
 
+        # Encrypt API key if being updated
+        if 'api_key' in update_data and update_data['api_key']:
+            update_data['api_key'] = self.encryption.encrypt(update_data['api_key'])
+
         for key, value in update_data.items():
             setattr(provider, key, value)
 
         self.db.commit()
         self.db.refresh(provider)
+
+        # Create version for update
+        config = self.versioning.config_to_dict(provider)
+        self.versioning.create_provider_version(
+            provider_id=provider.id,
+            configuration=config,
+            action="update",
+            change_description="Provider configuration updated"
+        )
 
         return self._to_dict(provider)
 
@@ -142,9 +171,15 @@ class LLMProviderService:
 
         return True
 
-    def _to_dict(self, provider: LLMProvider) -> dict:
-        """Convert LLM provider model to dictionary."""
-        return {
+    def _to_dict(self, provider: LLMProvider, include_api_key: bool = False) -> dict:
+        """
+        Convert LLM provider model to dictionary.
+
+        Args:
+            provider: LLM provider model
+            include_api_key: If True, return masked API key. Never return decrypted key in API responses.
+        """
+        result = {
             "id": provider.id,
             "name": provider.name,
             "provider_type": provider.provider_type.value,
@@ -156,3 +191,26 @@ class LLMProviderService:
             "created_at": provider.created_at.isoformat() if provider.created_at else None,
             "updated_at": provider.updated_at.isoformat() if provider.updated_at else None,
         }
+
+        # Never expose encrypted keys in API responses
+        # Show masked version for confirmation
+        if include_api_key and provider.api_key:
+            result["api_key_set"] = True
+        else:
+            result["api_key_set"] = bool(provider.api_key)
+
+        return result
+
+    def get_decrypted_api_key(self, provider: LLMProvider) -> Optional[str]:
+        """
+        Get decrypted API key for internal use (e.g., making LLM calls).
+
+        Args:
+            provider: LLM provider model
+
+        Returns:
+            Decrypted API key or None
+        """
+        if provider.api_key:
+            return self.encryption.decrypt(provider.api_key)
+        return None

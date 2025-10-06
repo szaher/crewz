@@ -117,12 +117,30 @@ async def validate_tool(
     tool_service = ToolService(db)
     tool = await tool_service.get_tool(tool_id)
 
-    # TODO: Implement actual tool validation
-    return {
-        "tool_id": tool_id,
-        "tool_name": tool.name,
-        "tool_type": tool.tool_type,
-        "test_input": test_input,
-        "validation_status": "not_yet_implemented",
-        "message": "Tool validation endpoint is a placeholder",
-    }
+    try:
+        # Execute tool with test input
+        from ...services.docker_service import DockerService
+        docker_service = DockerService()
+
+        # Run tool with test input and capture output
+        result = await docker_service.execute_tool(tool_id, test_input, timeout=30)
+
+        return {
+            "tool_id": tool_id,
+            "tool_name": tool.name,
+            "tool_type": tool.tool_type,
+            "test_input": test_input,
+            "validation_status": "success",
+            "output": result,
+            "message": "Tool executed successfully"
+        }
+    except Exception as e:
+        return {
+            "tool_id": tool_id,
+            "tool_name": tool.name,
+            "tool_type": tool.tool_type,
+            "test_input": test_input,
+            "validation_status": "failed",
+            "error": str(e),
+            "message": f"Tool validation failed: {str(e)}"
+        }

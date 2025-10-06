@@ -21,6 +21,7 @@ interface ApiResponse<T = any> {
 class ApiClient {
   private baseUrl: string;
   private token: string | null = null;
+  private onUnauthorized: (() => void) | null = null;
 
   constructor(baseUrl: string = API_BASE_URL) {
     this.baseUrl = baseUrl;
@@ -29,6 +30,13 @@ class ApiClient {
     if (typeof window !== 'undefined') {
       this.token = localStorage.getItem('access_token');
     }
+  }
+
+  /**
+   * Set callback for handling unauthorized (401) responses
+   */
+  setUnauthorizedHandler(handler: () => void) {
+    this.onUnauthorized = handler;
   }
 
   /**
@@ -101,6 +109,16 @@ class ApiClient {
       }
 
       if (!response.ok) {
+        // Handle 401 Unauthorized - token expired or invalid
+        if (response.status === 401 && !skipAuth) {
+          this.clearToken();
+
+          // Call the unauthorized handler if set (will trigger logout)
+          if (this.onUnauthorized) {
+            this.onUnauthorized();
+          }
+        }
+
         return {
           error: data?.detail || data?.message || 'Request failed',
           status: response.status,

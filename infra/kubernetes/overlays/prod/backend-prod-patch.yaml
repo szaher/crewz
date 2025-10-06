@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  template:
+    spec:
+      containers:
+      - name: backend
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: LOG_LEVEL
+          value: "WARNING"
+        - name: FRONTEND_URL
+          value: "https://app.crewai-platform.com"
+        - name: ALLOWED_ORIGINS
+          value: "https://app.crewai-platform.com"
+        # Production-grade resource limits
+        resources:
+          requests:
+            cpu: "1"
+            memory: "2Gi"
+          limits:
+            cpu: "4"
+            memory: "8Gi"

@@ -1,6 +1,6 @@
 """Agent and Crew API endpoints."""
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from ...db.postgres import get_db
@@ -12,6 +12,7 @@ from ...schemas.agents import (
 )
 from ...services.agent_service import AgentService
 from ...services.crew_service import CrewService
+from ...services.versioning_service import VersioningService
 from ...api.middleware.auth import require_auth
 
 router = APIRouter()
@@ -94,6 +95,83 @@ async def delete_agent(
     """Delete an agent."""
     agent_service = AgentService(db)
     await agent_service.delete_agent(agent_id)
+
+
+@router.get("/{agent_id}/versions", response_model=dict)
+async def get_agent_versions(
+    agent_id: int,
+    page: int = 1,
+    page_size: int = 10,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Get version history for an agent.
+
+    Returns:
+    - versions: List of version entries with configuration snapshots and diffs
+    - total: Total number of versions
+    - page: Current page number
+    - page_size: Number of items per page
+    """
+    if page_size > 50:
+        page_size = 50
+
+    versioning_service = VersioningService(db)
+    offset = (page - 1) * page_size
+
+    versions, total = versioning_service.get_agent_versions(
+        agent_id=agent_id,
+        limit=page_size,
+        offset=offset
+    )
+
+    return {
+        "versions": [
+            {
+                "id": v.id,
+                "version_number": v.version_number,
+                "action": v.action.value,
+                "changed_by_user_id": v.changed_by_user_id,
+                "configuration": v.configuration,
+                "diff_from_previous": v.diff_from_previous,
+                "change_description": v.change_description,
+                "created_at": v.created_at.isoformat() if v.created_at else None,
+            }
+            for v in versions
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@router.post("/{agent_id}/rollback/{version_number}", response_model=AgentResponse)
+async def rollback_agent(
+    agent_id: int,
+    version_number: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Rollback an agent to a specific version.
+
+    - **version_number**: Version number to rollback to
+    """
+    versioning_service = VersioningService(db)
+
+    try:
+        agent = versioning_service.rollback_agent(
+            agent_id=agent_id,
+            version_number=version_number,
+            changed_by_user_id=current_user.get("user_id")
+        )
+        return AgentResponse.from_orm(agent)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
 
 
 # Crew endpoints

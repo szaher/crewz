@@ -116,7 +116,11 @@ class ExecutionService:
         self.db.commit()
         self.db.refresh(execution)
 
-        # TODO: Send cancellation signal to running task
+        # Send cancellation signal to running task
+        # Publish cancellation event via Redis for background workers to pick up
+        from ..services.execution_events import ExecutionEventPublisher
+        event_publisher = ExecutionEventPublisher()
+        await event_publisher.publish_cancellation(execution_id)
 
         return execution
 
@@ -148,9 +152,16 @@ class ExecutionService:
                 execution.status = "completed"
 
             elif execution.execution_type == "crew":
-                # Execute crew
-                # TODO: Implement crew execution
-                execution.output_data = {"result": "crew execution not yet implemented"}
+                # Execute crew directly (without flow)
+                from ..crewai.crew_factory import CrewFactory
+
+                crew_factory = CrewFactory(self.db)
+                crew = await crew_factory.create_crew_from_db(execution.crew_id)
+
+                # Execute crew with input data
+                output = await crew.kickoff(execution.input_data)
+
+                execution.output_data = {"result": output}
                 execution.status = "completed"
 
             else:

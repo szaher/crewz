@@ -1,0 +1,260 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docker-dind
+  labels:
+    app: docker-dind
+    component: tool-execution
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: docker-dind
+  template:
+    metadata:
+      labels:
+        app: docker-dind
+        component: tool-execution
+    spec:
+      # Use Sysbox runtime for secure Docker-in-Docker
+      runtimeClassName: sysbox-runc
+
+      serviceAccountName: docker-dind-sa
+
+      containers:
+      - name: docker
+        image: docker:24-dind
+        securityContext:
+          privileged: false  # Sysbox doesn't require privileged mode
+        ports:
+        - name: docker
+          containerPort: 2375
+          protocol: TCP
+        env:
+        - name: DOCKER_TLS_CERTDIR
+          value: ""
+        - name: DOCKER_HOST
+          value: "unix:///var/run/docker.sock"
+
+        # Resource limits per DinD instance
+        resources:
+          requests:
+            cpu: "1"
+            memory: "2Gi"
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+
+        volumeMounts:
+        - name: docker-storage
+          mountPath: /var/lib/docker
+        - name: docker-sock
+          mountPath: /var/run
+
+        livenessProbe:
+          exec:
+            command:
+            - docker
+            - info
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          exec:
+            command:
+            - docker
+            - info
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+      volumes:
+      - name: docker-storage
+        emptyDir: {}
+      - name: docker-sock
+        emptyDir: {}
+
+      # Anti-affinity to spread across nodes
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - docker-dind
+              topologyKey: kubernetes.io/hostname
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: docker-dind
+  labels:
+    app: docker-dind
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service
+  ports:
+  - name: docker
+    port: 2375
+    targetPort: docker
+    protocol: TCP
+  selector:
+    app: docker-dind
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: docker-dind-sa
+  labels:
+    app: docker-dind
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: docker-dind-role
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: docker-dind-rolebinding
+subjects:
+- kind: ServiceAccount
+  name: docker-dind-sa
+roleRef:
+  kind: Role
+  name: docker-dind-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# RuntimeClass for Sysbox
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: sysbox-runc
+handler: sysbox-runc
+
+---
+# PodSecurityPolicy for Docker-in-Docker (if PSP is enabled)
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: docker-dind-psp
+spec:
+  privileged: false
+  allowPrivilegeEscalation: true
+  requiredDropCapabilities:
+    - ALL
+  volumes:
+    - 'emptyDir'
+    - 'secret'
+    - 'configMap'
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: 'MustRunAsNonRoot'
+  seLinux:
+    rule: 'RunAsAny'
+  supplementalGroups:
+    rule: 'RunAsAny'
+  fsGroup:
+    rule: 'RunAsAny'
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: docker-dind-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: docker-dind
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+      - type: Pods
+        value: 4
+        periodSeconds: 15
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+
+---
+# NetworkPolicy for Docker-in-Docker (security isolation)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: docker-dind-netpol
+spec:
+  podSelector:
+    matchLabels:
+      app: docker-dind
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: crewai-backend
+    ports:
+    - protocol: TCP
+      port: 2375
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow pulling Docker images
+  - to:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443
+  # Block all other egress by default

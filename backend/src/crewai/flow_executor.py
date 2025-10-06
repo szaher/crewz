@@ -148,33 +148,68 @@ class FlowExecutor:
         elif node_type == "agent":
             # Agent execution node
             agent_id = node_data.get("agent_id")
-            # TODO: Execute agent with input_data
-            return {"result": "agent output"}
+            task_description = node_data.get("task", "")
+            expected_output = node_data.get("expected_output", "")
+
+            # Execute agent via CrewAI
+            agent = await self.crew_factory.create_agent_from_db(agent_id)
+            result = await agent.execute_task(task_description, input_data)
+            return {"result": result, "metadata": {"agent_id": agent_id}}
 
         elif node_type == "crew":
             # Crew execution node
             crew_id = node_data.get("crew_id")
-            # TODO: Execute crew with input_data
-            return {"result": "crew output"}
+            task_description = node_data.get("task", "")
+
+            # Execute crew via CrewAI
+            crew = await self.crew_factory.create_crew_from_db(crew_id)
+            result = await crew.kickoff(task_description, input_data)
+            return {"result": result, "metadata": {"crew_id": crew_id}}
 
         elif node_type == "tool":
             # Tool execution node
             tool_id = node_data.get("tool_id")
-            # TODO: Execute tool with input_data
-            return {"result": "tool output"}
+            tool_inputs = node_data.get("inputs", {})
+
+            # Merge node config inputs with runtime inputs
+            merged_inputs = {**tool_inputs, **input_data}
+
+            # Execute tool via Docker service
+            from ..services.docker_service import DockerService
+            docker_service = DockerService()
+            result = await docker_service.execute_tool(tool_id, merged_inputs)
+            return {"result": result, "metadata": {"tool_id": tool_id}}
 
         elif node_type == "llm":
             # Direct LLM call node
             provider_id = node_data.get("llm_provider_id")
-            prompt = node_data.get("prompt", "")
-            # TODO: Execute LLM with prompt and input_data
-            return {"result": "llm output"}
+            prompt_template = node_data.get("prompt", "")
+
+            # Format prompt with input data
+            prompt = prompt_template.format(**input_data)
+
+            # Execute LLM via LLM service
+            from ..services.llm_service import LLMService
+            llm_service = LLMService()
+            result = await llm_service.complete(provider_id, prompt)
+            return {"result": result, "metadata": {"provider_id": provider_id}}
 
         elif node_type == "condition":
             # Conditional branching node
-            condition = node_data.get("condition")
-            # TODO: Evaluate condition and return branch decision
-            return {"branch": "true"}
+            condition_expr = node_data.get("condition", "")
+
+            # Evaluate condition expression
+            # Simple evaluation - in production, use safe evaluator
+            try:
+                # Create evaluation context from input data
+                context = {**input_data}
+                result = eval(condition_expr, {"__builtins__": {}}, context)
+                branch = "true" if result else "false"
+            except Exception as e:
+                # Default to false branch on error
+                branch = "false"
+
+            return {"branch": branch, "metadata": {"condition": condition_expr}}
 
         else:
             raise ValueError(f"Unknown node type: {node_type}")

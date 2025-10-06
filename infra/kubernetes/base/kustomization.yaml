@@ -1,0 +1,45 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: crewai-platform
+
+resources:
+- backend-deployment.yaml
+- frontend-deployment.yaml
+- postgres-statefulset.yaml
+- mongodb-statefulset.yaml
+- docker-dind-deployment.yaml
+- services.yaml
+
+commonLabels:
+  platform: crewai
+  managed-by: kustomize
+
+configMapGenerator:
+- name: app-config
+  literals:
+  - APP_NAME=crewai-platform
+  - LOG_LEVEL=INFO
+
+secretGenerator:
+- name: db-credentials
+  literals:
+  - postgres-user=crewai
+  - postgres-password=CHANGE_ME_IN_OVERLAY
+  - postgres-url=postgresql://crewai:CHANGE_ME@postgres:5432/crewai_platform
+  - mongodb-user=crewai
+  - mongodb-password=CHANGE_ME_IN_OVERLAY
+  - mongodb-url=mongodb://crewai:CHANGE_ME@mongodb:27017/crewai_platform
+  - redis-url=redis://redis:6379/0
+- name: app-secrets
+  literals:
+  - jwt-secret=CHANGE_ME_IN_OVERLAY
+  - encryption-key=CHANGE_ME_IN_OVERLAY
+
+images:
+- name: crewai-backend
+  newName: crewai-backend
+  newTag: latest
+- name: crewai-frontend
+  newName: crewai-frontend
+  newTag: latest

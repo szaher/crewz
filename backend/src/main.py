@@ -61,10 +61,22 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 async def startup_event():
     """Initialize application on startup"""
     logger.info("starting_crewai_platform", environment="development")
-    # TODO: Initialize database connections
-    # TODO: Run database migrations
-    # TODO: Initialize Redis connection
-    # TODO: Initialize LLM service
+
+    try:
+        # Initialize database connections
+        from .db import init_db
+        await init_db()
+        logger.info("database_initialized")
+    except Exception as e:
+        logger.error("database_init_failed", error=str(e))
+
+    try:
+        # Initialize Redis connection
+        from .db.redis import init_redis
+        await init_redis()
+        logger.info("redis_initialized")
+    except Exception as e:
+        logger.error("redis_init_failed", error=str(e))
 
 
 # Shutdown event
@@ -72,8 +84,22 @@ async def startup_event():
 async def shutdown_event():
     """Cleanup on shutdown"""
     logger.info("shutting_down_crewai_platform")
-    # TODO: Close database connections
-    # TODO: Close Redis connection
+
+    try:
+        # Close database connections
+        from .db import close_db
+        await close_db()
+        logger.info("database_closed")
+    except Exception as e:
+        logger.error("database_close_failed", error=str(e))
+
+    try:
+        # Close Redis connection
+        from .db.redis import close_redis
+        await close_redis()
+        logger.info("redis_closed")
+    except Exception as e:
+        logger.error("redis_close_failed", error=str(e))
 
 
 # Health check endpoint
@@ -83,16 +109,33 @@ async def health_check():
     Health check endpoint
     Returns service status and database connectivity
     """
-    return JSONResponse(
-        status_code=200,
-        content={
-            "status": "healthy",
-            "service": "crewai-platform-backend",
-            "version": "1.0.0",
-            # TODO: Add database connection status
-            # TODO: Add Redis connection status
-        }
-    )
+    health_status = {
+        "status": "healthy",
+        "service": "crewai-platform-backend",
+        "version": "1.0.0",
+        "checks": {}
+    }
+
+    # Check database connection
+    try:
+        from .db import check_db_health
+        db_healthy = await check_db_health()
+        health_status["checks"]["database"] = "healthy" if db_healthy else "unhealthy"
+    except Exception as e:
+        health_status["checks"]["database"] = "unhealthy"
+        health_status["status"] = "degraded"
+
+    # Check Redis connection
+    try:
+        from .db.redis import check_redis_health
+        redis_healthy = await check_redis_health()
+        health_status["checks"]["redis"] = "healthy" if redis_healthy else "unhealthy"
+    except Exception as e:
+        health_status["checks"]["redis"] = "unhealthy"
+        health_status["status"] = "degraded"
+
+    status_code = 200 if health_status["status"] == "healthy" else 503
+    return JSONResponse(status_code=status_code, content=health_status)
 
 
 # Root endpoint
