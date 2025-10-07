@@ -153,7 +153,7 @@
 ### Crew Management Integration
 - [x] T071 Verify Crew API endpoints exist (GET, POST, PUT, DELETE /api/v1/crews)
 - [x] T072 [P] Create useCrews hook in `frontend/src/lib/hooks/useCrews.ts`
-- [ ] T073 Update CrewBuilder component (`frontend/src/components/crews/CrewBuilder.tsx`) to use useCrews
+- [x] T073 Update CrewBuilder component (`frontend/src/components/crews/CrewBuilder.tsx`) to use useCrews
 - [x] T074 Add createCrew function to useCrews hook
 - [x] T075 Add updateCrew function to useCrews hook
 - [x] T076 Add deleteCrew function to useCrews hook
