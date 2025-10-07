@@ -33,14 +33,15 @@ export default function ChatPage() {
     setLoading(true);
     try {
       const response = await apiClient.get('/api/v1/chat/sessions');
-      if (response.data) {
-        setSessions(response.data.sessions || []);
-        if (response.data.sessions.length > 0) {
-          setActiveSessionId(response.data.sessions[0].id);
-        }
+      // API returns array directly, not wrapped in {sessions: [...]}
+      const sessions = Array.isArray(response.data) ? response.data : [];
+      setSessions(sessions);
+      if (sessions.length > 0) {
+        setActiveSessionId(sessions[0].id);
       }
     } catch (error) {
       console.error('Failed to load chat sessions:', error);
+      setSessions([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
