@@ -32,6 +32,22 @@ export default function ToolForm({ toolId, onSave, onCancel }: ToolFormProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const formatError = (err: any): string => {
+    if (typeof err === 'string') return err;
+    if (err instanceof Error) return err.message;
+    if (err && typeof err === 'object') {
+      // Handle Pydantic validation errors
+      if (Array.isArray(err)) {
+        return err.map(e => `${e.loc?.join('.') || 'field'}: ${e.msg || 'Invalid'}`).join(', ');
+      }
+      if (err.detail) return typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
+      if (err.message) return err.message;
+      if (err.msg) return err.msg;
+      return JSON.stringify(err);
+    }
+    return 'Failed to save tool';
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -41,7 +57,7 @@ export default function ToolForm({ toolId, onSave, onCancel }: ToolFormProps) {
       if (toolId) {
         const response = await apiClient.put(`/api/v1/tools/${toolId}`, formData);
         if (response.error) {
-          setError(response.error);
+          setError(formatError(response.error));
         } else if (response.data) {
           updateTool(toolId, response.data.tool);
           onSave?.(toolId);
@@ -49,14 +65,14 @@ export default function ToolForm({ toolId, onSave, onCancel }: ToolFormProps) {
       } else {
         const response = await apiClient.post('/api/v1/tools', formData);
         if (response.error) {
-          setError(response.error);
+          setError(formatError(response.error));
         } else if (response.data) {
           addTool(response.data.tool);
           onSave?.(response.data.tool.id);
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save tool');
+      setError(formatError(err));
     } finally {
       setLoading(false);
     }
