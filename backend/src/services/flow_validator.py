@@ -28,16 +28,20 @@ class FlowValidator:
             return {"valid": False, "errors": errors}
 
         # Validate node IDs are unique
-        node_ids = [node["id"] for node in nodes]
+        # Handle both dict and object types
+        node_ids = [node.id if hasattr(node, 'id') else node["id"] for node in nodes]
         if len(node_ids) != len(set(node_ids)):
             errors.append("Node IDs must be unique")
 
         # Validate edge references
         for edge in edges:
-            if edge["source"] not in node_ids:
-                errors.append(f"Edge source '{edge['source']}' not found in nodes")
-            if edge["target"] not in node_ids:
-                errors.append(f"Edge target '{edge['target']}' not found in nodes")
+            edge_source = edge.source if hasattr(edge, 'source') else edge["source"]
+            edge_target = edge.target if hasattr(edge, 'target') else edge["target"]
+
+            if edge_source not in node_ids:
+                errors.append(f"Edge source '{edge_source}' not found in nodes")
+            if edge_target not in node_ids:
+                errors.append(f"Edge target '{edge_target}' not found in nodes")
 
         # Check for cycles
         if self._has_cycle(nodes, edges):
@@ -67,13 +71,16 @@ class FlowValidator:
         basic_validation = self.validate_flow(nodes, edges)
         errors.extend(basic_validation["errors"])
 
-        node_ids = {node["id"] for node in nodes}
-        target_ids = {edge["target"] for edge in edges}
+        # Handle both dict and object types
+        node_ids = {node.id if hasattr(node, 'id') else node["id"] for node in nodes}
+        target_ids = {edge.target if hasattr(edge, 'target') else edge["target"] for edge in edges}
 
         # Determine candidate input nodes. Prefer explicit input node types when
         # available, otherwise fall back to nodes without incoming edges.
         explicit_input_nodes = {
-            node["id"] for node in nodes if node.get("type") == "input"
+            node.id if hasattr(node, 'id') else node["id"]
+            for node in nodes
+            if (node.type if hasattr(node, 'type') else node.get("type")) == "input"
         }
         input_nodes = explicit_input_nodes or (node_ids - target_ids)
 
@@ -82,9 +89,11 @@ class FlowValidator:
 
         # Determine candidate output nodes. Prefer explicit output node types when
         # available, otherwise fall back to nodes without outgoing edges.
-        source_ids = {edge["source"] for edge in edges}
+        source_ids = {edge.source if hasattr(edge, 'source') else edge["source"] for edge in edges}
         explicit_output_nodes = {
-            node["id"] for node in nodes if node.get("type") == "output"
+            node.id if hasattr(node, 'id') else node["id"]
+            for node in nodes
+            if (node.type if hasattr(node, 'type') else node.get("type")) == "output"
         }
         output_nodes = explicit_output_nodes or (node_ids - source_ids)
 
@@ -121,10 +130,12 @@ class FlowValidator:
         Returns:
             True if cycle detected, False otherwise
         """
-        # Build adjacency list
+        # Build adjacency list - handle both dict and object types
         graph = defaultdict(list)
         for edge in edges:
-            graph[edge["source"]].append(edge["target"])
+            edge_source = edge.source if hasattr(edge, 'source') else edge["source"]
+            edge_target = edge.target if hasattr(edge, 'target') else edge["target"]
+            graph[edge_source].append(edge_target)
 
         # Track visited and recursion stack
         visited = set()
@@ -144,9 +155,9 @@ class FlowValidator:
             rec_stack.remove(node_id)
             return False
 
-        # Check all components
+        # Check all components - handle both dict and object types
         for node in nodes:
-            node_id = node["id"]
+            node_id = node.id if hasattr(node, 'id') else node["id"]
             if node_id not in visited:
                 if dfs(node_id):
                     return True
@@ -166,10 +177,12 @@ class FlowValidator:
         Returns:
             Set of reachable node IDs
         """
-        # Build adjacency list
+        # Build adjacency list - handle both dict and object types
         graph = defaultdict(list)
         for edge in edges:
-            graph[edge["source"]].append(edge["target"])
+            edge_source = edge.source if hasattr(edge, 'source') else edge["source"]
+            edge_target = edge.target if hasattr(edge, 'target') else edge["target"]
+            graph[edge_source].append(edge_target)
 
         # BFS from all start nodes
         reachable = set(start_nodes)
@@ -207,14 +220,17 @@ class FlowValidator:
         graph = defaultdict(list)
         in_degree = defaultdict(int)
 
-        # Initialize all nodes with 0 in-degree
+        # Initialize all nodes with 0 in-degree - handle both dict and object types
         for node in nodes:
-            in_degree[node["id"]] = 0
+            node_id = node.id if hasattr(node, 'id') else node["id"]
+            in_degree[node_id] = 0
 
-        # Build graph
+        # Build graph - handle both dict and object types
         for edge in edges:
-            graph[edge["source"]].append(edge["target"])
-            in_degree[edge["target"]] += 1
+            edge_source = edge.source if hasattr(edge, 'source') else edge["source"]
+            edge_target = edge.target if hasattr(edge, 'target') else edge["target"]
+            graph[edge_source].append(edge_target)
+            in_degree[edge_target] += 1
 
         # Find all nodes with 0 in-degree
         queue = deque([node_id for node_id, degree in in_degree.items() if degree == 0])
