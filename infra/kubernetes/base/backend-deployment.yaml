@@ -75,6 +75,10 @@ spec:
           value: "https://app.crewai-platform.com"
         - name: ALLOWED_ORIGINS
           value: "https://app.crewai-platform.com,https://staging.crewai-platform.com"
+        - name: ALLOWED_ORIGIN_REGEX
+          value: "^https?://.*$"
+        - name: ALLOW_ALL_ORIGINS
+          value: "false"
 
         # Observability
         - name: OTEL_EXPORTER_OTLP_ENDPOINT

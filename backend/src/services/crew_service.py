@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
 from ..models import Crew, Agent
+from ..models.crew import CrewProcess
 
 
 class CrewService:
@@ -38,10 +39,13 @@ class CrewService:
         Returns:
             Created Crew model
         """
+        # Ensure correct enum type for process
+        proc = process if isinstance(process, CrewProcess) else CrewProcess(process)
+
         crew = Crew(
             name=name,
             description=description,
-            process=process,
+            process=proc,
             verbose=verbose,
             memory=memory,
             manager_llm_provider_id=manager_llm_provider_id,
@@ -105,7 +109,7 @@ class CrewService:
         if description is not None:
             crew.description = description
         if process is not None:
-            crew.process = process
+            crew.process = process if isinstance(process, CrewProcess) else CrewProcess(process)
         if verbose is not None:
             crew.verbose = verbose
         if memory is not None:

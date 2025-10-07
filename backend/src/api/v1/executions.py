@@ -15,7 +15,7 @@ from ...api.middleware.auth import require_auth
 router = APIRouter()
 
 
-@router.get("", response_model=list)
+@router.get("", response_model=dict)
 async def list_executions(
     skip: int = 0,
     limit: int = 100,
@@ -36,16 +36,19 @@ async def list_executions(
         .all()
     )
 
-    return [
-        {
-            "id": e.id,
-            "flow_id": e.flow_id,
-            "status": e.status.value,
-            "started_at": e.started_at.isoformat() if e.started_at else None,
-            "completed_at": e.completed_at.isoformat() if e.completed_at else None,
-        }
-        for e in executions
-    ]
+    results = []
+    for e in executions:
+        status_val = getattr(e.status, "value", e.status if e.status is not None else "unknown")
+        results.append(
+            {
+                "id": e.id,
+                "flow_id": e.flow_id,
+                "status": status_val,
+                "started_at": e.started_at.isoformat() if getattr(e, "started_at", None) else None,
+                "completed_at": e.completed_at.isoformat() if getattr(e, "completed_at", None) else None,
+            }
+        )
+    return {"executions": results, "total": len(results), "skip": skip, "limit": limit}
 
 
 @router.get("/{execution_id}", response_model=ExecutionResponse)

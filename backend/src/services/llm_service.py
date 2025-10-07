@@ -125,9 +125,16 @@ class LLMService:
 
             return response
         except Exception as e:
+            msg = str(e)
+            # Provide clearer client error for common misconfigurations
+            if "Decryption failed" in msg or "api key" in msg.lower() or "authentication" in msg.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="LLM provider credentials invalid or missing",
+                )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"LLM completion failed: {str(e)}",
+                detail=f"LLM completion failed: {msg}",
             )
 
     async def chat_completion_stream(

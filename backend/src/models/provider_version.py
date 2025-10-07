@@ -1,7 +1,7 @@
 """LLM Provider version model for tracking provider configuration changes."""
 
 from sqlalchemy import Column, String, Text, Integer, ForeignKey, JSON, Enum
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
 from .base import BaseModel
 import enum
 
@@ -42,7 +42,11 @@ class ProviderVersion(BaseModel):
     change_description = Column(Text, nullable=True)
 
     # Relationships
-    provider = relationship("LLMProvider", backref="versions")
+    provider = relationship(
+        "LLMProvider",
+        backref=backref("versions", cascade="all, delete-orphan"),
+        passive_deletes=True,
+    )
     changed_by = relationship("User", foreign_keys=[changed_by_user_id])
 
     def __repr__(self):

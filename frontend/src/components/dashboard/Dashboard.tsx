@@ -130,6 +130,14 @@ export default function Dashboard() {
           </button>
 
           <button
+            onClick={() => router.push('/providers')}
+            className="p-4 text-center border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
+          >
+            <div className="text-2xl mb-2">🔌</div>
+            <p className="text-sm font-medium text-gray-700">Providers</p>
+          </button>
+
+          <button
             onClick={() => router.push('/chat')}
             className="p-4 text-center border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
           >

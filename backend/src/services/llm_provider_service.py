@@ -171,6 +171,44 @@ class LLMProviderService:
 
         return True
 
+    async def set_default_provider(
+        self,
+        tenant_id: int,
+        provider_id: int,
+    ) -> Optional[dict]:
+        """
+        Set a specific provider as the default for a tenant.
+
+        Unsets any existing default provider. Returns the updated provider dict
+        or None if provider not found within the tenant.
+        """
+        provider = self.db.query(LLMProvider).filter(
+            and_(LLMProvider.id == provider_id, LLMProvider.tenant_id == tenant_id)
+        ).first()
+
+        if not provider:
+            return None
+
+        # Unset prior defaults
+        self.db.query(LLMProvider).filter(
+            and_(LLMProvider.tenant_id == tenant_id, LLMProvider.is_default == True)
+        ).update({"is_default": False})
+
+        provider.is_default = True
+        self.db.commit()
+        self.db.refresh(provider)
+
+        # Version entry for default-change action
+        config = self.versioning.config_to_dict(provider)
+        self.versioning.create_provider_version(
+            provider_id=provider.id,
+            configuration=config,
+            action="update",
+            change_description="Set as default provider",
+        )
+
+        return self._to_dict(provider)
+
     def _to_dict(self, provider: LLMProvider, include_api_key: bool = False) -> dict:
         """
         Convert LLM provider model to dictionary.

@@ -3,7 +3,12 @@
  * Handles JWT authentication, tenant context, and error handling
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Prefer explicit env, else derive from browser host (works over LAN)
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  (typeof window !== 'undefined'
+    ? `${window.location.protocol}//${window.location.hostname}:8000`
+    : 'http://localhost:8000');
 
 interface ApiClientOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
@@ -99,13 +104,26 @@ class ApiClient {
     try {
       const response = await fetch(url, requestOptions);
 
-      let data;
-      const contentType = response.headers.get('content-type');
+      const contentType = response.headers.get('content-type') || '';
+      const isNoContent = response.status === 204 || response.status === 205 || response.headers.get('content-length') === '0';
 
-      if (contentType?.includes('application/json')) {
-        data = await response.json();
-      } else {
-        data = await response.text();
+      let data: any = null;
+      if (!isNoContent) {
+        if (contentType.includes('application/json')) {
+          try {
+            data = await response.json();
+          } catch {
+            // Empty or invalid JSON; leave data as null
+            data = null;
+          }
+        } else {
+          try {
+            const text = await response.text();
+            data = text || null;
+          } catch {
+            data = null;
+          }
+        }
       }
 
       if (!response.ok) {
@@ -119,8 +137,9 @@ class ApiClient {
           }
         }
 
+        const errorMessage = (typeof data === 'string' && data) || data?.detail || data?.message || 'Request failed';
         return {
-          error: data?.detail || data?.message || 'Request failed',
+          error: errorMessage,
           status: response.status,
         };
       }

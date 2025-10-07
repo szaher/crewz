@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import CrewBuilder from '@/components/crews/CrewBuilder';
@@ -13,6 +13,7 @@ export default function CrewsPage() {
   const router = useRouter();
   const { crews, setCrews } = useCrewStore();
   const { agents, setAgents } = useAgentStore();
+  const searchParams = useSearchParams();
 
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'crews' | 'agents'>('crews');
@@ -45,6 +46,24 @@ export default function CrewsPage() {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  // Apply deep-linking filters via query params
+  const providerFilter = searchParams?.get('llm_provider_id');
+  const managerFilter = searchParams?.get('manager_llm_provider_id');
+
+  useEffect(() => {
+    if (providerFilter) {
+      setActiveTab('agents');
+    } else if (managerFilter) {
+      setActiveTab('crews');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providerFilter, managerFilter]);
+
+  const clearFilter = () => {
+    // Remove query params by navigating to base route
+    router.push('/crews');
+  };
 
   const handleCreateCrew = () => {
     setEditingCrewId(undefined);
@@ -108,7 +127,7 @@ export default function CrewsPage() {
     <ProtectedRoute>
       <div className="max-w-7xl mx-auto p-6">
         <Breadcrumbs />
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-2">
           <h1 className="text-3xl font-bold text-gray-900">Crews & Agents</h1>
           <div className="flex gap-2">
             {activeTab === 'crews' ? (
@@ -129,6 +148,38 @@ export default function CrewsPage() {
           </div>
         </div>
 
+        {(providerFilter || managerFilter) && (
+          <div className="mb-4 flex items-center gap-3">
+            <span className="text-sm text-gray-600">Active filter:</span>
+            {providerFilter && (
+              <span className="inline-flex items-center gap-2 text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded">
+                Agents · provider #{providerFilter}
+                <button
+                  onClick={clearFilter}
+                  className="ml-1 text-blue-700 hover:text-blue-900"
+                  aria-label="Clear filter"
+                  title="Clear filter"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+            {managerFilter && (
+              <span className="inline-flex items-center gap-2 text-xs bg-purple-50 text-purple-700 border border-purple-200 px-2 py-1 rounded">
+                Crews · manager provider #{managerFilter}
+                <button
+                  onClick={clearFilter}
+                  className="ml-1 text-purple-700 hover:text-purple-900"
+                  aria-label="Clear filter"
+                  title="Clear filter"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="border-b border-gray-200 mb-6">
           <nav className="flex gap-8">
@@ -140,7 +191,12 @@ export default function CrewsPage() {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Crews ({crews.length})
+              {(() => {
+                const count = managerFilter
+                  ? crews.filter((c: any) => (c as any).manager_llm_provider_id === Number(managerFilter)).length
+                  : crews.length;
+                return <>Crews ({count})</>;
+              })()}
             </button>
             <button
               onClick={() => setActiveTab('agents')}
@@ -150,7 +206,12 @@ export default function CrewsPage() {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Agents ({agents.length})
+              {(() => {
+                const count = providerFilter
+                  ? agents.filter((a: any) => (a as any).llm_provider_id === Number(providerFilter)).length
+                  : agents.length;
+                return <>Agents ({count})</>;
+              })()}
             </button>
           </nav>
         </div>
@@ -162,7 +223,10 @@ export default function CrewsPage() {
           </div>
         ) : activeTab === 'crews' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {crews.map((crew) => (
+            {(managerFilter
+              ? crews.filter((c: any) => (c as any).manager_llm_provider_id === Number(managerFilter))
+              : crews
+            ).map((crew) => (
               <div
                 key={crew.id}
                 className="bg-white p-6 rounded-lg border border-gray-200 hover:shadow-lg transition-shadow"
@@ -188,7 +252,10 @@ export default function CrewsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {agents.map((agent) => (
+            {(providerFilter
+              ? agents.filter((a: any) => (a as any).llm_provider_id === Number(providerFilter))
+              : agents
+            ).map((agent) => (
               <div
                 key={agent.id}
                 className="bg-white p-6 rounded-lg border border-gray-200 hover:shadow-lg transition-shadow"

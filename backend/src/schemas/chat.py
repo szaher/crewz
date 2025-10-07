@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 from enum import Enum
+from typing import List, Dict
 
 
 class ChatRole(str, Enum):
@@ -59,3 +60,20 @@ class ChatMessageResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ChatDirectRequest(BaseModel):
+    """Direct chat without creating a session."""
+
+    provider_id: Optional[int] = None
+    messages: List[Dict[str, str]] = Field(
+        ..., description="List of chat messages with role and content"
+    )
+    temperature: float = 0.7
+    max_tokens: Optional[int] = None
+
+
+class ChatDirectResponse(BaseModel):
+    """Direct chat response payload."""
+
+    content: str

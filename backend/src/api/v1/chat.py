@@ -10,6 +10,8 @@ from ...schemas.chat import (
     ChatSessionResponse,
     ChatMessageCreate,
     ChatMessageResponse,
+    ChatDirectRequest,
+    ChatDirectResponse,
 )
 from ...services.chat_service import ChatService
 from ...services.llm_service import LLMService
@@ -51,6 +53,57 @@ async def create_session(
     chat_service = ChatService(db, llm_service)
     session = await chat_service.create_session(request, user_id=current_user["id"])
     return ChatSessionResponse.from_orm(session)
+
+
+@router.post("/direct", response_model=ChatDirectResponse)
+async def direct_chat(
+    payload: ChatDirectRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Direct chat with the default or specified LLM provider without creating a session.
+
+    - If `provider_id` is omitted, uses the tenant's default active provider.
+    - Does not persist messages.
+    """
+    # Resolve provider
+    provider_id = payload.provider_id
+    if provider_id is None:
+        from ...models.llm_provider import LLMProvider
+        provider = (
+            db.query(LLMProvider)
+            .filter(
+                LLMProvider.tenant_id == current_user["tenant_id"],
+                LLMProvider.is_default == True,
+                LLMProvider.is_active == True,
+            )
+            .first()
+        )
+        if not provider:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "No default LLM provider configured. "
+                    "Create a chat session (which can choose a provider) or set a default provider."
+                ),
+            )
+        provider_id = provider.id
+
+    llm_service = LLMService(db)
+    result = await llm_service.chat_completion(
+        provider_id=provider_id,
+        messages=payload.messages,
+        temperature=payload.temperature,
+        max_tokens=payload.max_tokens,
+    )
+
+    try:
+        content = result.choices[0].message.content
+    except Exception:
+        raise HTTPException(status_code=500, detail="Unexpected LLM response format")
+
+    return ChatDirectResponse(content=content)
 
 
 @router.get("/sessions/{session_id}/messages", response_model=List[ChatMessageResponse])

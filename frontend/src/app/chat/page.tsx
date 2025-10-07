@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import ChatWindow from '@/components/chat/ChatWindow';
@@ -10,6 +10,7 @@ import type { ChatSession, ChatSessionCreate, Crew } from '@/types/api';
 
 export default function ChatPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,7 +37,12 @@ export default function ChatPage() {
       // API returns array directly, not wrapped in {sessions: [...]}
       const sessions = Array.isArray(response.data) ? response.data : [];
       setSessions(sessions);
-      if (sessions.length > 0) {
+      // Prefer session from URL if provided
+      const sessionParam = searchParams?.get('session');
+      const sessionIdFromUrl = sessionParam ? Number(sessionParam) : null;
+      if (sessionIdFromUrl && sessions.some((s) => s.id === sessionIdFromUrl)) {
+        setActiveSessionId(sessionIdFromUrl);
+      } else if (sessions.length > 0) {
         setActiveSessionId(sessions[0].id);
       }
     } catch (error) {
@@ -75,8 +81,9 @@ export default function ChatPage() {
 
       const response = await apiClient.post('/api/v1/chat/sessions', sessionData);
       if (response.data) {
-        setSessions([...sessions, response.data.session]);
-        setActiveSessionId(response.data.session.id);
+        const created = response.data.session ?? response.data;
+        setSessions([...sessions, created]);
+        setActiveSessionId(created.id);
         setShowNewSessionForm(false);
         setNewSessionName('');
         setSelectedCrewId(undefined);
@@ -151,9 +158,10 @@ export default function ChatPage() {
               crewId={activeSession.crew_id || undefined}
             />
           ) : (
-            <div className="flex items-center justify-center h-full bg-white">
-              <p className="text-gray-500">Select or create a chat session to begin</p>
-            </div>
+            <QuickChat
+              onCreateSession={() => setShowNewSessionForm(true)}
+              onGoConfigure={() => router.push('/providers')}
+            />
           )}
         </div>
 
@@ -231,5 +239,134 @@ export default function ChatPage() {
         </div>
       </div>
     </ProtectedRoute>
+  );
+}
+
+function QuickChat({ onCreateSession, onGoConfigure }: { onCreateSession: () => void; onGoConfigure: () => void }) {
+  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
+  const [hint, setHint] = useState<{ title: string; body: string; type: 'provider' | 'credentials' } | null>(null);
+
+  const handleSend = async () => {
+    if (!input.trim()) return;
+    const userText = input;
+    setInput('');
+    setMessages((prev) => [...prev, { role: 'user', content: userText }]);
+    setSending(true);
+    try {
+      const payload = {
+        // messages: include prior chat for minimal context
+        messages: [
+          { role: 'system', content: 'You are a helpful assistant.' },
+          ...messages.map((m) => ({ role: m.role, content: m.content })),
+          { role: 'user', content: userText },
+        ],
+      };
+      const res = await apiClient.post('/api/v1/chat/direct', payload);
+      if (res.error) {
+        const errMsg = res.error.toString();
+        if (res.status === 400 && errMsg.includes('No default LLM provider configured')) {
+          setHint({
+            title: 'No default LLM provider',
+            body: 'Create a chat session to choose a provider, or set a default provider in your configuration.',
+            type: 'provider',
+          });
+        } else if (res.status === 400 && errMsg.toLowerCase().includes('credentials')) {
+          setHint({
+            title: 'LLM credentials missing/invalid',
+            body: 'Update your LLM provider configuration with a valid API key.',
+            type: 'credentials',
+          });
+        } else {
+          setMessages((prev) => [
+            ...prev,
+            { role: 'assistant', content: `Sorry, I could not respond: ${errMsg}` },
+          ]);
+        }
+        return;
+      }
+      const content: string = res?.data?.content ?? '';
+      if (content) {
+        setMessages((prev) => [...prev, { role: 'assistant', content }]);
+      }
+    } catch (e) {
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: 'Sorry, I could not respond right now.' },
+      ]);
+      // eslint-disable-next-line no-console
+      console.error('Quick chat failed', e);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-white">
+      <div className="border-b border-gray-200 px-6 py-4">
+        <h2 className="text-lg font-semibold text-gray-900">Quick Chat</h2>
+        <p className="text-sm text-gray-500">Chat without creating a saved session</p>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+        {hint && (
+          <div className="p-3 border border-amber-300 bg-amber-50 rounded-md">
+            <div className="font-medium text-amber-900">{hint.title}</div>
+            <div className="text-sm text-amber-800 mt-1">{hint.body}</div>
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={onCreateSession}
+                className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700"
+              >
+                Create Session
+              </button>
+              <button
+                onClick={onGoConfigure}
+                className="px-3 py-1.5 text-sm rounded-md bg-gray-800 text-white hover:bg-gray-900"
+              >
+                Configure Provider
+              </button>
+            </div>
+          </div>
+        )}
+        {messages.length === 0 ? (
+          <p className="text-gray-500">Say hello to start chatting.</p>
+        ) : (
+          messages.map((m, i) => (
+            <div key={i} className={m.role === 'user' ? 'text-right' : 'text-left'}>
+              <div className={`inline-block px-3 py-2 rounded-lg ${m.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-800'}`}>
+                {m.content}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="border-t border-gray-200 px-6 py-4">
+        <div className="flex gap-2">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            rows={2}
+            placeholder="Type your message..."
+            className="flex-1 rounded-md border border-gray-300 px-3 py-2 resize-none focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+          />
+          <button
+            onClick={handleSend}
+            disabled={sending || !input.trim()}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed self-end"
+          >
+            {sending ? 'Sending...' : 'Send'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
