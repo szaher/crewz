@@ -171,13 +171,13 @@
 
 ### Tool Registry Integration
 - [x] T086 [P] Create useTools hook in `frontend/src/lib/hooks/useTools.ts`
-- [ ] T087 Update ToolRegistry component to use useTools hook
+- [x] T087 Update ToolRegistry component to use useTools hook
 - [x] T088 Add createTool, updateTool, deleteTool functions
 - [x] T089 Add validateTool function (POST /api/v1/tools/{id}/validate)
-- [ ] T090 Fix tool registration form
-- [ ] T091 Fix tool list display
-- [ ] T092 Add test tool functionality UI
-- [ ] T093 Add loading/error/empty states to tool UI
+- [x] T090 Fix tool registration form
+- [x] T091 Fix tool list display
+- [x] T092 Add test tool functionality UI
+- [x] T093 Add loading/error/empty states to tool UI
 
 ### LLM Provider Management Integration
 - [x] T094 [P] Create useLLMProviders hook in `frontend/src/lib/hooks/useLLMProviders.ts`

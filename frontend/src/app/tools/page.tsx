@@ -1,36 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import ToolRegistry from '@/components/tools/ToolRegistry';
 import ToolForm from '@/components/tools/ToolForm';
-import { useToolStore } from '@/lib/store';
-import { apiClient } from '@/lib/api-client';
+import { useTools } from '@/lib/hooks/useTools';
 
 export default function ToolsPage() {
-  const { setTools } = useToolStore();
-  const [loading, setLoading] = useState(true);
+  const { tools, loading, error, refetch } = useTools();
   const [showForm, setShowForm] = useState(false);
   const [editingToolId, setEditingToolId] = useState<number | undefined>();
-
-  const loadTools = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await apiClient.get('/api/v1/tools');
-      if (response.data) {
-        setTools(response.data.tools || []);
-      }
-    } catch (error) {
-      console.error('Failed to load tools:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [setTools]);
-
-  useEffect(() => {
-    void loadTools();
-  }, [loadTools]);
 
   const handleCreateTool = () => {
     setEditingToolId(undefined);
@@ -44,7 +24,7 @@ export default function ToolsPage() {
 
   const handleSaveTool = () => {
     setShowForm(false);
-    void loadTools();
+    refetch();
   };
 
   if (showForm) {
@@ -68,12 +48,35 @@ export default function ToolsPage() {
     <ProtectedRoute>
       <div className="max-w-7xl mx-auto p-6">
         <Breadcrumbs />
-        {loading ? (
+        {error ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="text-center max-w-md">
+              <p className="text-red-600 mb-4">Failed to load tools: {error}</p>
+              <button
+                onClick={refetch}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        ) : loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
+        ) : tools.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <p className="text-gray-500 mb-4">No tools registered yet. Create your first tool to get started.</p>
+            <button
+              onClick={handleCreateTool}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+            >
+              Create Tool
+            </button>
+          </div>
         ) : (
           <ToolRegistry
+            tools={tools}
             onCreateTool={handleCreateTool}
             onEditTool={handleEditTool}
           />
