@@ -69,9 +69,9 @@
 - [ ] T022 [P] Add E2E test for flow creation in `frontend/tests/e2e/flow-creation.spec.ts`
 
 ### Flow List Display
-- [ ] T023 Update Dashboard to display flows list with newly created flows
-- [ ] T024 Add empty state for flows list ("No flows yet. Create your first flow")
-- [ ] T025 Add loading state for flows list (skeleton)
+- [x] T023 Update Dashboard to display flows list with newly created flows
+- [x] T024 Add empty state for flows list ("No flows yet. Create your first flow")
+- [x] T025 Add loading state for flows list (skeleton)
 
 ---
 
