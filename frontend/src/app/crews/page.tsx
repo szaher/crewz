@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import CrewBuilder from '@/components/crews/CrewBuilder';
 import AgentForm from '@/components/crews/AgentForm';
 import { useCrewStore, useAgentStore } from '@/lib/store';
@@ -106,6 +107,7 @@ export default function CrewsPage() {
   return (
     <ProtectedRoute>
       <div className="max-w-7xl mx-auto p-6">
+        <Breadcrumbs />
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-bold text-gray-900">Crews & Agents</h1>
           <div className="flex gap-2">

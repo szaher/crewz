@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import ExecutionDetail from '@/components/executions/ExecutionDetail';
 import ExecutionLogs from '@/components/executions/ExecutionLogs';
 import { apiClient } from '@/lib/api-client';
@@ -82,6 +83,7 @@ export default function ExecutionPage() {
   return (
     <ProtectedRoute>
       <div className="max-w-7xl mx-auto p-6">
+        <Breadcrumbs />
         {/* Actions Bar */}
         <div className="mb-6 flex items-center justify-between">
           <button

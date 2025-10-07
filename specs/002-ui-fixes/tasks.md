@@ -44,7 +44,7 @@
 
 ### Breadcrumbs Integration
 - [x] T009 Add breadcrumbs to Flow Editor page (`frontend/src/app/flows/[flow_id]/edit.tsx`)
-- [ ] T010 Add breadcrumbs to other pages (Crews, Tools, Chat, Executions)
+- [x] T010 Add breadcrumbs to other pages (Crews, Tools, Chat, Executions)
 
 ---
 

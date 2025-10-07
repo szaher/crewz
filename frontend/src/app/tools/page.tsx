@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import ToolRegistry from '@/components/tools/ToolRegistry';
 import ToolForm from '@/components/tools/ToolForm';
 import { useToolStore } from '@/lib/store';
@@ -66,6 +67,7 @@ export default function ToolsPage() {
   return (
     <ProtectedRoute>
       <div className="max-w-7xl mx-auto p-6">
+        <Breadcrumbs />
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>

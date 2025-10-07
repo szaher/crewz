@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import ChatWindow from '@/components/chat/ChatWindow';
 import { apiClient } from '@/lib/api-client';
 import type { ChatSession, ChatSessionCreate, Crew } from '@/types/api';
@@ -88,12 +89,16 @@ export default function ChatPage() {
 
   return (
     <ProtectedRoute>
-      <div className="h-screen flex">
-        {/* Sidebar - Sessions List */}
-        <div className="w-64 bg-gray-50 border-r border-gray-200 flex flex-col">
-          <div className="p-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Chat Sessions</h2>
-          </div>
+      <div className="h-screen flex flex-col">
+        <div className="px-6 pt-4">
+          <Breadcrumbs />
+        </div>
+        <div className="flex-1 flex overflow-hidden">
+          {/* Sidebar - Sessions List */}
+          <div className="w-64 bg-gray-50 border-r border-gray-200 flex flex-col">
+            <div className="p-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Chat Sessions</h2>
+            </div>
 
           <div className="flex-1 overflow-y-auto">
             {loading ? (
@@ -222,6 +227,7 @@ export default function ChatPage() {
             </div>
           </div>
         )}
+        </div>
       </div>
     </ProtectedRoute>
   );
