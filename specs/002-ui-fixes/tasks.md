@@ -181,13 +181,13 @@
 
 ### LLM Provider Management Integration
 - [x] T094 [P] Create useLLMProviders hook in `frontend/src/lib/hooks/useLLMProviders.ts`
-- [ ] T095 Update LLM provider management page to use useLLMProviders hook
+- [x] T095 Update LLM provider management page to use useLLMProviders hook
 - [x] T096 Add createProvider, updateProvider, deleteProvider functions
 - [x] T097 Add testConnection function
-- [ ] T098 Fix provider configuration form
-- [ ] T099 Fix provider list display
-- [ ] T100 Mask API keys in UI (show *****)
-- [ ] T101 Add loading/error/empty states to provider UI
+- [x] T098 Fix provider configuration form
+- [x] T099 Fix provider list display
+- [x] T100 Mask API keys in UI (show *****)
+- [x] T101 Add loading/error/empty states to provider UI
 
 ### Execution Monitoring Integration
 - [x] T102 [P] Create useExecutions hook in `frontend/src/lib/hooks/useExecutions.ts`
