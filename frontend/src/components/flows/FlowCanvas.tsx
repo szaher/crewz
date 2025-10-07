@@ -27,6 +27,8 @@ import AgentNode from './nodes/AgentNode';
 import ToolNode from './nodes/ToolNode';
 import LLMNode from './nodes/LLMNode';
 import ConditionNode from './nodes/ConditionNode';
+import InputNode from './nodes/InputNode';
+import OutputNode from './nodes/OutputNode';
 
 // Register custom node types
 const nodeTypes: NodeTypes = {
@@ -35,8 +37,8 @@ const nodeTypes: NodeTypes = {
   llm: LLMNode,
   condition: ConditionNode,
   crew: AgentNode, // Reuse AgentNode for crew
-  input: LLMNode, // Reuse LLMNode for input
-  output: LLMNode, // Reuse LLMNode for output
+  input: InputNode,
+  output: OutputNode,
   decision: ConditionNode, // Reuse ConditionNode for decision
 };
 
@@ -168,13 +170,35 @@ function FlowCanvasInner({ flowId, readOnly = false, onNodeSelect }: FlowCanvasP
         y: event.clientY,
       });
 
+      // Create default data based on node type
+      let defaultData: any = {
+        label: `${type.charAt(0).toUpperCase() + type.slice(1)} Node`,
+      };
+
+      // Special defaults for input/output nodes
+      if (type === 'input') {
+        defaultData = {
+          label: 'Flow Input',
+          description: 'Define input variables for this flow',
+          inputs: [
+            { name: 'input_1', type: 'string', required: true },
+          ],
+        };
+      } else if (type === 'output') {
+        defaultData = {
+          label: 'Flow Output',
+          description: 'Define output variables from this flow',
+          outputs: [
+            { name: 'result', type: 'string' },
+          ],
+        };
+      }
+
       const newNode: Node = {
         id: `node_${nodeIdCounter.current++}`,
         type,
         position,
-        data: {
-          label: `${type.charAt(0).toUpperCase() + type.slice(1)} Node`,
-        },
+        data: defaultData,
       };
 
       setNodes((nds) => nds.concat(newNode));
