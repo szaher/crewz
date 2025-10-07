@@ -31,19 +31,19 @@
 ## Phase 1: Navigation Improvements (T001-T010)
 
 ### Header Navigation Component
-- [ ] T001 Update Navigation header in `frontend/src/components/shared/Navigation.tsx` - add Dashboard/Home button
-- [ ] T002 Add active page highlighting in `frontend/src/components/shared/Navigation.tsx`
-- [ ] T003 [P] Create Breadcrumbs component in `frontend/src/components/navigation/Breadcrumbs.tsx`
-- [ ] T004 [P] Create useNavigation hook in `frontend/src/lib/hooks/useNavigation.ts`
-- [ ] T005 Update all pages to include Navigation component with dashboard button
+- [x] T001 Update Navigation header in `frontend/src/components/shared/Navigation.tsx` - add Dashboard/Home button
+- [x] T002 Add active page highlighting in `frontend/src/components/shared/Navigation.tsx`
+- [x] T003 [P] Create Breadcrumbs component in `frontend/src/components/navigation/Breadcrumbs.tsx`
+- [x] T004 [P] Create useNavigation hook in `frontend/src/lib/hooks/useNavigation.ts`
+- [x] T005 Update all pages to include Navigation component with dashboard button
 
 ### User Profile Menu
-- [ ] T006 [P] Create UserProfileMenu component in `frontend/src/components/navigation/UserProfileMenu.tsx`
-- [ ] T007 Integrate UserProfileMenu into Navigation header
-- [ ] T008 [P] Add logout functionality in UserProfileMenu
+- [x] T006 [P] Create UserProfileMenu component in `frontend/src/components/navigation/UserProfileMenu.tsx`
+- [x] T007 Integrate UserProfileMenu into Navigation header
+- [x] T008 [P] Add logout functionality in UserProfileMenu
 
 ### Breadcrumbs Integration
-- [ ] T009 Add breadcrumbs to Flow Editor page (`frontend/src/app/flows/[flow_id]/edit.tsx`)
+- [x] T009 Add breadcrumbs to Flow Editor page (`frontend/src/app/flows/[flow_id]/edit.tsx`)
 - [ ] T010 Add breadcrumbs to other pages (Crews, Tools, Chat, Executions)
 
 ---
@@ -84,19 +84,19 @@
 - [x] T029 Integrate FlowNameEditor into Flow Editor page (`frontend/src/app/flows/[flow_id]/edit.tsx`)
 
 ### Flow Properties Panel
-- [ ] T030 [P] Create FlowPropertiesPanel component in `frontend/src/components/flows/FlowPropertiesPanel.tsx`
-- [ ] T031 Add General section (name, description)
-- [ ] T032 [P] Add Variables section with JSON editor in FlowPropertiesPanel
-- [ ] T033 [P] Add Settings section (timeout, retry policy) in FlowPropertiesPanel
-- [ ] T034 [P] Add Metadata section (read-only) in FlowPropertiesPanel
-- [ ] T035 Add slide-in animation for properties panel
+- [x] T030 [P] Create FlowPropertiesPanel component in `frontend/src/components/flows/FlowPropertiesPanel.tsx`
+- [x] T031 Add General section (name, description)
+- [x] T032 [P] Add Variables section with JSON editor in FlowPropertiesPanel
+- [x] T033 [P] Add Settings section (timeout, retry policy) in FlowPropertiesPanel
+- [x] T034 [P] Add Metadata section (read-only) in FlowPropertiesPanel
+- [x] T035 Add slide-in animation for properties panel
 
 ### Flow Update API Integration
-- [ ] T036 Add updateFlow function in useFlows hook
-- [ ] T037 Wire FlowPropertiesPanel save button to updateFlow API
-- [ ] T038 Handle update success (show toast, close panel)
-- [ ] T039 Handle update errors (display in panel)
-- [ ] T040 Add unsaved changes detection in FlowPropertiesPanel
+- [x] T036 Add updateFlow function in useFlows hook
+- [x] T037 Wire FlowPropertiesPanel save button to updateFlow API
+- [x] T038 Handle update success (show toast, close panel)
+- [x] T039 Handle update errors (display in panel)
+- [x] T040 Add unsaved changes detection in FlowPropertiesPanel
 
 ---
 
