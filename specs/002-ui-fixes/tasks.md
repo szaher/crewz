@@ -163,11 +163,11 @@
 
 ### Agent Management Integration
 - [x] T080 [P] Create useAgents hook in `frontend/src/lib/hooks/useAgents.ts`
-- [ ] T081 Update agent management page to use useAgents hook
+- [x] T081 Update agent management page to use useAgents hook
 - [x] T082 Add createAgent, updateAgent, deleteAgent functions
-- [ ] T083 Fix agent form submission
-- [ ] T084 Fix agent list display
-- [ ] T085 Add loading/error/empty states to agent UI
+- [x] T083 Fix agent form submission
+- [x] T084 Fix agent list display
+- [x] T085 Add loading/error/empty states to agent UI
 
 ### Tool Registry Integration
 - [x] T086 [P] Create useTools hook in `frontend/src/lib/hooks/useTools.ts`

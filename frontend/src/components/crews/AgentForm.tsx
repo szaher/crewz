@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useAgentStore, useToolStore } from '@/lib/store';
-import { apiClient } from '@/lib/api-client';
+import { useAgents } from '@/lib/hooks/useAgents';
+import { useToolStore } from '@/lib/store';
 import type { AgentCreate, LLMConfig } from '@/types/api';
 
 interface AgentFormProps {
@@ -12,7 +12,7 @@ interface AgentFormProps {
 }
 
 export default function AgentForm({ agentId, onSave, onCancel }: AgentFormProps) {
-  const { agents, addAgent, updateAgent } = useAgentStore();
+  const { agents, createAgent, updateAgent: updateAgentHook } = useAgents();
   const { tools } = useToolStore();
 
   const existingAgent = agentId ? agents.find((a) => a.id === agentId) : null;
@@ -59,22 +59,12 @@ export default function AgentForm({ agentId, onSave, onCancel }: AgentFormProps)
     try {
       if (agentId) {
         // Update existing agent
-        const response = await apiClient.put(`/api/v1/agents/${agentId}`, formData);
-        if (response.error) {
-          setError(response.error);
-        } else if (response.data) {
-          updateAgent(agentId, response.data.agent);
-          onSave?.(agentId);
-        }
+        const updatedAgent = await updateAgentHook(agentId, formData);
+        onSave?.(updatedAgent.id);
       } else {
         // Create new agent
-        const response = await apiClient.post('/api/v1/agents', formData);
-        if (response.error) {
-          setError(response.error);
-        } else if (response.data) {
-          addAgent(response.data.agent);
-          onSave?.(response.data.agent.id);
-        }
+        const newAgent = await createAgent(formData);
+        onSave?.(newAgent.id);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save agent');
