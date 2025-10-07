@@ -152,7 +152,7 @@
 
 ### Crew Management Integration
 - [ ] T071 Verify Crew API endpoints exist (GET, POST, PUT, DELETE /api/v1/crews)
-- [ ] T072 [P] Create useCrews hook in `frontend/src/lib/hooks/useCrews.ts`
+- [x] T072 [P] Create useCrews hook in `frontend/src/lib/hooks/useCrews.ts`
 - [ ] T073 Update CrewBuilder component (`frontend/src/components/crews/CrewBuilder.tsx`) to use useCrews
 - [ ] T074 Add createCrew function to useCrews hook
 - [ ] T075 Add updateCrew function to useCrews hook
@@ -162,7 +162,7 @@
 - [ ] T079 Test crew creation, editing, deletion end-to-end
 
 ### Agent Management Integration
-- [ ] T080 [P] Create useAgents hook in `frontend/src/lib/hooks/useAgents.ts`
+- [x] T080 [P] Create useAgents hook in `frontend/src/lib/hooks/useAgents.ts`
 - [ ] T081 Update agent management page to use useAgents hook
 - [ ] T082 Add createAgent, updateAgent, deleteAgent functions
 - [ ] T083 Fix agent form submission
@@ -170,7 +170,7 @@
 - [ ] T085 Add loading/error/empty states to agent UI
 
 ### Tool Registry Integration
-- [ ] T086 [P] Create useTools hook in `frontend/src/lib/hooks/useTools.ts`
+- [x] T086 [P] Create useTools hook in `frontend/src/lib/hooks/useTools.ts`
 - [ ] T087 Update ToolRegistry component to use useTools hook
 - [ ] T088 Add createTool, updateTool, deleteTool functions
 - [ ] T089 Add validateTool function (POST /api/v1/tools/{id}/validate)
@@ -180,7 +180,7 @@
 - [ ] T093 Add loading/error/empty states to tool UI
 
 ### LLM Provider Management Integration
-- [ ] T094 [P] Create useLLMProviders hook in `frontend/src/lib/hooks/useLLMProviders.ts`
+- [x] T094 [P] Create useLLMProviders hook in `frontend/src/lib/hooks/useLLMProviders.ts`
 - [ ] T095 Update LLM provider management page to use useLLMProviders hook
 - [ ] T096 Add createProvider, updateProvider, deleteProvider functions
 - [ ] T097 Add testConnection function
@@ -190,7 +190,7 @@
 - [ ] T101 Add loading/error/empty states to provider UI
 
 ### Execution Monitoring Integration
-- [ ] T102 [P] Create useExecutions hook in `frontend/src/lib/hooks/useExecutions.ts`
+- [x] T102 [P] Create useExecutions hook in `frontend/src/lib/hooks/useExecutions.ts`
 - [ ] T103 Update execution list page to use useExecutions hook
 - [ ] T104 Add fetchExecutionDetails function
 - [ ] T105 Add fetchExecutionLogs function (SSE streaming)
