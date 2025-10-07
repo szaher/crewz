@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useCrewStore, useAgentStore } from '@/lib/store';
-import { apiClient } from '@/lib/api-client';
+import { useCrews } from '@/lib/hooks/useCrews';
+import { useAgentStore } from '@/lib/store';
 import type { CrewCreate, CrewUpdate } from '@/types/api';
 import AgentCard from './AgentCard';
 
@@ -12,7 +12,7 @@ interface CrewBuilderProps {
 }
 
 export default function CrewBuilder({ crewId, onSave }: CrewBuilderProps) {
-  const { crews, addCrew, updateCrew } = useCrewStore();
+  const { crews, createCrew, updateCrew: updateCrewHook, getCrew } = useCrews();
   const { agents } = useAgentStore();
 
   const existingCrew = crewId ? crews.find((c) => c.id === crewId) : null;
@@ -69,22 +69,12 @@ export default function CrewBuilder({ crewId, onSave }: CrewBuilderProps) {
     try {
       if (crewId) {
         // Update existing crew
-        const response = await apiClient.put(`/api/v1/crews/${crewId}`, formData);
-        if (response.error) {
-          setError(response.error);
-        } else if (response.data) {
-          updateCrew(crewId, response.data.crew);
-          onSave?.(crewId);
-        }
+        const updatedCrew = await updateCrewHook(crewId, formData);
+        onSave?.(updatedCrew.id);
       } else {
         // Create new crew
-        const response = await apiClient.post('/api/v1/crews', formData);
-        if (response.error) {
-          setError(response.error);
-        } else if (response.data) {
-          addCrew(response.data.crew);
-          onSave?.(response.data.crew.id);
-        }
+        const newCrew = await createCrew(formData);
+        onSave?.(newCrew.id);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save crew');

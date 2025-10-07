@@ -151,7 +151,7 @@
 ## Phase 5: UI-Backend Integration Fixes (T071-T115)
 
 ### Crew Management Integration
-- [ ] T071 Verify Crew API endpoints exist (GET, POST, PUT, DELETE /api/v1/crews)
+- [x] T071 Verify Crew API endpoints exist (GET, POST, PUT, DELETE /api/v1/crews)
 - [x] T072 [P] Create useCrews hook in `frontend/src/lib/hooks/useCrews.ts`
 - [ ] T073 Update CrewBuilder component (`frontend/src/components/crews/CrewBuilder.tsx`) to use useCrews
 - [x] T074 Add createCrew function to useCrews hook
