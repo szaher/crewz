@@ -157,9 +157,9 @@
 - [x] T074 Add createCrew function to useCrews hook
 - [x] T075 Add updateCrew function to useCrews hook
 - [x] T076 Add deleteCrew function to useCrews hook
-- [ ] T077 Fix crew list display in `/crews` page
-- [ ] T078 Add loading/error/empty states to crew list
-- [ ] T079 Test crew creation, editing, deletion end-to-end
+- [x] T077 Fix crew list display in `/crews` page
+- [x] T078 Add loading/error/empty states to crew list
+- [x] T079 Test crew creation, editing, deletion end-to-end
 
 ### Agent Management Integration
 - [x] T080 [P] Create useAgents hook in `frontend/src/lib/hooks/useAgents.ts`

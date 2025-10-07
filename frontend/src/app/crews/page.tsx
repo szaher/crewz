@@ -1,51 +1,33 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import CrewBuilder from '@/components/crews/CrewBuilder';
 import AgentForm from '@/components/crews/AgentForm';
-import { useCrewStore, useAgentStore } from '@/lib/store';
-import { apiClient } from '@/lib/api-client';
+import { useCrews } from '@/lib/hooks/useCrews';
+import { useAgents } from '@/lib/hooks/useAgents';
 
 export default function CrewsPage() {
   const router = useRouter();
-  const { crews, setCrews } = useCrewStore();
-  const { agents, setAgents } = useAgentStore();
+  const { crews, loading: crewsLoading, error: crewsError, refetch: refetchCrews } = useCrews();
+  const { agents, loading: agentsLoading, error: agentsError, refetch: refetchAgents } = useAgents();
   const searchParams = useSearchParams();
 
-  const [loading, setLoading] = useState(true);
+  const loading = crewsLoading || agentsLoading;
+  const error = crewsError || agentsError;
+
   const [activeTab, setActiveTab] = useState<'crews' | 'agents'>('crews');
   const [showCrewBuilder, setShowCrewBuilder] = useState(false);
   const [showAgentForm, setShowAgentForm] = useState(false);
   const [editingCrewId, setEditingCrewId] = useState<number | undefined>();
   const [editingAgentId, setEditingAgentId] = useState<number | undefined>();
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [crewsResponse, agentsResponse] = await Promise.all([
-        apiClient.get('/api/v1/crews'),
-        apiClient.get('/api/v1/agents'),
-      ]);
-
-      if (crewsResponse.data) {
-        setCrews(crewsResponse.data.crews || []);
-      }
-      if (agentsResponse.data) {
-        setAgents(agentsResponse.data.agents || []);
-      }
-    } catch (error) {
-      console.error('Failed to load crews and agents:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [setAgents, setCrews]);
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
+  const loadData = () => {
+    refetchCrews();
+    refetchAgents();
+  };
 
   // Apply deep-linking filters via query params
   const providerFilter = searchParams?.get('llm_provider_id');
@@ -217,16 +199,39 @@ export default function CrewsPage() {
         </div>
 
         {/* Content */}
-        {loading ? (
+        {error ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="text-center max-w-md">
+              <p className="text-red-600 mb-4">Failed to load data: {error}</p>
+              <button
+                onClick={loadData}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        ) : loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
         ) : activeTab === 'crews' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {(managerFilter
-              ? crews.filter((c: any) => (c as any).manager_llm_provider_id === Number(managerFilter))
-              : crews
-            ).map((crew) => (
+          crews.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <p className="text-gray-500 mb-4">No crews yet. Create your first crew to get started.</p>
+              <button
+                onClick={handleCreateCrew}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+              >
+                Create Crew
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {(managerFilter
+                ? crews.filter((c: any) => (c as any).manager_llm_provider_id === Number(managerFilter))
+                : crews
+              ).map((crew) => (
               <div
                 key={crew.id}
                 className="bg-white p-6 rounded-lg border border-gray-200 hover:shadow-lg transition-shadow"
@@ -250,12 +255,24 @@ export default function CrewsPage() {
               </div>
             ))}
           </div>
+          )
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {(providerFilter
-              ? agents.filter((a: any) => (a as any).llm_provider_id === Number(providerFilter))
-              : agents
-            ).map((agent) => (
+          agents.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <p className="text-gray-500 mb-4">No agents yet. Create your first agent to get started.</p>
+              <button
+                onClick={handleCreateAgent}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+              >
+                Create Agent
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {(providerFilter
+                ? agents.filter((a: any) => (a as any).llm_provider_id === Number(providerFilter))
+                : agents
+              ).map((agent) => (
               <div
                 key={agent.id}
                 className="bg-white p-6 rounded-lg border border-gray-200 hover:shadow-lg transition-shadow"
@@ -284,6 +301,7 @@ export default function CrewsPage() {
               </div>
             ))}
           </div>
+          )
         )}
       </div>
     </ProtectedRoute>
