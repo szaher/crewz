@@ -52,8 +52,8 @@
 
 ### Create Flow Modal Component
 - [x] T011 [P] Create CreateFlowModal component in `frontend/src/components/flows/CreateFlowModal.tsx`
-- [ ] T012 [P] Create FlowForm component (reusable) in `frontend/src/components/flows/FlowForm.tsx`
-- [ ] T013 Add form validation using zod in FlowForm
+- [x] T012 [P] Create FlowForm component (reusable) in `frontend/src/components/flows/FlowForm.tsx`
+- [x] T013 Add form validation using zod in FlowForm
 - [x] T014 [P] Create useFlows hook in `frontend/src/lib/hooks/useFlows.ts`
 - [x] T015 Integrate createFlow API call in useFlows hook
 
@@ -64,7 +64,7 @@
 - [x] T019 Handle flow creation errors (display in modal)
 
 ### Flow Creation API Integration
-- [ ] T020 Test API POST /api/v1/flows endpoint exists
+- [x] T020 Test API POST /api/v1/flows endpoint exists
 - [ ] T021 [P] Add flow creation tests in `frontend/tests/components/CreateFlowModal.test.tsx`
 - [ ] T022 [P] Add E2E test for flow creation in `frontend/tests/e2e/flow-creation.spec.ts`
 
