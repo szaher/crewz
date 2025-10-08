@@ -68,10 +68,8 @@ export default function ToolForm({ toolId, onSave, onCancel }: ToolFormProps) {
   };
 
   const validatePythonCode = (code: string): boolean => {
-    setCodeError(null);
-
     if (!code || code.trim() === '') {
-      setCodeError('Function code is required for function-type tools');
+      setCodeError('Function code is required for custom tools');
       return false;
     }
 
@@ -152,7 +150,6 @@ def perform_search(query: str, limit: int) -> list:
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setCodeError(null);
 
     // Validate Python code for custom-type tools
     if (formData.tool_type === 'custom') {
@@ -161,6 +158,7 @@ def perform_search(query: str, limit: int) -> list:
       }
     }
 
+    setCodeError(null); // Clear code errors only after validation passes
     setLoading(true);
 
     try {
