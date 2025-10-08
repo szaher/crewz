@@ -163,7 +163,7 @@ def perform_search(query: str, limit: int) -> list:
         if (response.error) {
           setError(formatError(response.error));
         } else if (response.data) {
-          updateTool(toolId, response.data.tool);
+          updateTool(toolId, response.data);
           onSave?.(toolId);
         }
       } else {
@@ -171,8 +171,8 @@ def perform_search(query: str, limit: int) -> list:
         if (response.error) {
           setError(formatError(response.error));
         } else if (response.data) {
-          addTool(response.data.tool);
-          onSave?.(response.data.tool.id);
+          addTool(response.data);
+          onSave?.(response.data.id);
         }
       }
     } catch (err) {
