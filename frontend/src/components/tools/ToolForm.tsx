@@ -1,14 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { useToolStore } from '@/lib/store';
 import { apiClient } from '@/lib/api-client';
 import type { ToolCreate } from '@/types/api';
 
 // Dynamically import CodeMirror to avoid SSR issues
-const CodeMirror = dynamic(() => import('@uiw/react-codemirror'), { ssr: false });
-const python = dynamic(() => import('@codemirror/lang-python').then(mod => mod.python), { ssr: false });
+const CodeMirror = dynamic(
+  () => import('@uiw/react-codemirror'),
+  { ssr: false }
+);
 
 interface ToolFormProps {
   toolId?: number;
@@ -38,6 +40,16 @@ export default function ToolForm({ toolId, onSave, onCancel }: ToolFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [codeError, setCodeError] = useState<string | null>(null);
   const [showExampleModal, setShowExampleModal] = useState(false);
+  const [pythonExtension, setPythonExtension] = useState<any>(null);
+
+  // Load python extension dynamically
+  useMemo(() => {
+    if (typeof window !== 'undefined') {
+      import('@codemirror/lang-python').then((mod) => {
+        setPythonExtension(mod.python());
+      });
+    }
+  }, []);
 
   const formatError = (err: any): string => {
     if (typeof err === 'string') return err;
@@ -295,38 +307,44 @@ def perform_search(query: str, limit: int) -> list:
             </button>
           </div>
           <div className="border border-gray-300 rounded-md overflow-hidden">
-            <CodeMirror
-              value={formData.function_code || ''}
-              height="400px"
-              extensions={[python()]}
-              onChange={(value) => {
-                setFormData({ ...formData, function_code: value });
-                setCodeError(null);
-              }}
-              theme="light"
-              basicSetup={{
-                lineNumbers: true,
-                highlightActiveLineGutter: true,
-                highlightSpecialChars: true,
-                foldGutter: true,
-                drawSelection: true,
-                dropCursor: true,
-                allowMultipleSelections: true,
-                indentOnInput: true,
-                bracketMatching: true,
-                closeBrackets: true,
-                autocompletion: true,
-                rectangularSelection: true,
-                crosshairCursor: true,
-                highlightActiveLine: true,
-                highlightSelectionMatches: true,
-                closeBracketsKeymap: true,
-                searchKeymap: true,
-                foldKeymap: true,
-                completionKeymap: true,
-                lintKeymap: true,
-              }}
-            />
+            {pythonExtension ? (
+              <CodeMirror
+                value={formData.function_code || ''}
+                height="400px"
+                extensions={[pythonExtension]}
+                onChange={(value) => {
+                  setFormData({ ...formData, function_code: value });
+                  setCodeError(null);
+                }}
+                theme="light"
+                basicSetup={{
+                  lineNumbers: true,
+                  highlightActiveLineGutter: true,
+                  highlightSpecialChars: true,
+                  foldGutter: true,
+                  drawSelection: true,
+                  dropCursor: true,
+                  allowMultipleSelections: true,
+                  indentOnInput: true,
+                  bracketMatching: true,
+                  closeBrackets: true,
+                  autocompletion: true,
+                  rectangularSelection: true,
+                  crosshairCursor: true,
+                  highlightActiveLine: true,
+                  highlightSelectionMatches: true,
+                  closeBracketsKeymap: true,
+                  searchKeymap: true,
+                  foldKeymap: true,
+                  completionKeymap: true,
+                  lintKeymap: true,
+                }}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-[400px] bg-gray-50">
+                <div className="text-gray-500">Loading code editor...</div>
+              </div>
+            )}
           </div>
           {codeError && (
             <div className="mt-2 text-sm text-red-600">
@@ -427,30 +445,36 @@ def perform_search(query: str, limit: int) -> list:
               <div className="mb-4">
                 <h4 className="font-semibold text-gray-900 mb-2">Example Code:</h4>
                 <div className="border border-gray-300 rounded-md overflow-hidden">
-                  <CodeMirror
-                    value={exampleCode}
-                    height="400px"
-                    extensions={[python()]}
-                    editable={false}
-                    theme="light"
-                    basicSetup={{
-                      lineNumbers: true,
-                      highlightActiveLineGutter: false,
-                      highlightSpecialChars: true,
-                      foldGutter: true,
-                      drawSelection: false,
-                      dropCursor: false,
-                      allowMultipleSelections: false,
-                      indentOnInput: false,
-                      bracketMatching: true,
-                      closeBrackets: false,
-                      autocompletion: false,
-                      rectangularSelection: false,
-                      crosshairCursor: false,
-                      highlightActiveLine: false,
-                      highlightSelectionMatches: false,
-                    }}
-                  />
+                  {pythonExtension ? (
+                    <CodeMirror
+                      value={exampleCode}
+                      height="400px"
+                      extensions={[pythonExtension]}
+                      editable={false}
+                      theme="light"
+                      basicSetup={{
+                        lineNumbers: true,
+                        highlightActiveLineGutter: false,
+                        highlightSpecialChars: true,
+                        foldGutter: true,
+                        drawSelection: false,
+                        dropCursor: false,
+                        allowMultipleSelections: false,
+                        indentOnInput: false,
+                        bracketMatching: true,
+                        closeBrackets: false,
+                        autocompletion: false,
+                        rectangularSelection: false,
+                        crosshairCursor: false,
+                        highlightActiveLine: false,
+                        highlightSelectionMatches: false,
+                      }}
+                    />
+                  ) : (
+                    <pre className="bg-gray-50 p-4 overflow-auto h-[400px] text-sm font-mono">
+                      {exampleCode}
+                    </pre>
+                  )}
                 </div>
               </div>
 
