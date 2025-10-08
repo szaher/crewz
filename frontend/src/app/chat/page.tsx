@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import Navigation from '@/components/shared/Navigation';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import ChatWindow from '@/components/chat/ChatWindow';
 import { apiClient } from '@/lib/api-client';
@@ -97,11 +98,14 @@ export default function ChatPage() {
 
   return (
     <ProtectedRoute>
-      <div className="h-screen flex flex-col">
-        <div className="px-6 pt-4">
-          <Breadcrumbs />
-        </div>
-        <div className="flex-1 flex overflow-hidden">
+      <div className="flex h-screen bg-gray-50">
+        <Navigation />
+        <div className="flex-1 overflow-auto">
+          <div className="h-screen flex flex-col">
+            <div className="px-6 pt-4">
+              <Breadcrumbs />
+            </div>
+            <div className="flex-1 flex overflow-hidden">
           {/* Sidebar - Sessions List */}
           <div className="w-64 bg-gray-50 border-r border-gray-200 flex flex-col">
             <div className="p-4 border-b border-gray-200">
@@ -236,6 +240,8 @@ export default function ChatPage() {
             </div>
           </div>
         )}
+            </div>
+          </div>
         </div>
       </div>
     </ProtectedRoute>

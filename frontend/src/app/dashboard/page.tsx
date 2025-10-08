@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import Navigation from '@/components/shared/Navigation';
 import Dashboard from '@/components/dashboard/Dashboard';
 import { apiClient } from '@/lib/api-client';
 import { useFlowStore, useExecutionStore, useCrewStore, useAgentStore, useToolStore } from '@/lib/store';
@@ -45,14 +46,19 @@ export default function DashboardPage() {
 
   return (
     <ProtectedRoute>
-      <div className="max-w-7xl mx-auto p-6">
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="flex h-screen bg-gray-50">
+        <Navigation />
+        <div className="flex-1 overflow-auto">
+          <div className="max-w-7xl mx-auto p-6">
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+              </div>
+            ) : (
+              <Dashboard />
+            )}
           </div>
-        ) : (
-          <Dashboard />
-        )}
+        </div>
       </div>
     </ProtectedRoute>
   );

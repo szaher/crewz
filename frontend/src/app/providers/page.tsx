@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import Navigation from '@/components/shared/Navigation';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import { useLLMProviders, type LLMProvider as ProviderItem } from '@/lib/hooks/useLLMProviders';
 import { apiClient } from '@/lib/api-client';
@@ -93,8 +94,11 @@ export default function ProvidersPage() {
 
   return (
     <ProtectedRoute>
-      <div className="max-w-5xl mx-auto p-6 space-y-6">
-        <Breadcrumbs />
+      <div className="flex h-screen bg-gray-50">
+        <Navigation />
+        <div className="flex-1 overflow-auto">
+          <div className="max-w-5xl mx-auto p-6 space-y-6">
+            <Breadcrumbs />
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">LLM Providers</h1>
@@ -300,6 +304,8 @@ export default function ProvidersPage() {
             }}
           />
         )}
+          </div>
+        </div>
       </div>
     </ProtectedRoute>
   );

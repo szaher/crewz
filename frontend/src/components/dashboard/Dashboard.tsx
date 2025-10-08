@@ -104,12 +104,12 @@ export default function Dashboard() {
       {/* Quick Actions */}
       <div className="bg-white p-6 rounded-lg border border-gray-200">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <button
             onClick={() => setIsCreateFlowModalOpen(true)}
             className="p-4 text-center border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
           >
-            <div className="text-2xl mb-2">➕</div>
+            <div className="text-2xl mb-2">🔀</div>
             <p className="text-sm font-medium text-gray-700">Create Flow</p>
           </button>
 
@@ -134,7 +134,15 @@ export default function Dashboard() {
             className="p-4 text-center border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
           >
             <div className="text-2xl mb-2">🔌</div>
-            <p className="text-sm font-medium text-gray-700">Providers</p>
+            <p className="text-sm font-medium text-gray-700">Add Provider</p>
+          </button>
+
+          <button
+            onClick={() => router.push('/observability')}
+            className="p-4 text-center border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
+          >
+            <div className="text-2xl mb-2">📈</div>
+            <p className="text-sm font-medium text-gray-700">Observability</p>
           </button>
 
           <button

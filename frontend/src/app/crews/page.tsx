@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import Navigation from '@/components/shared/Navigation';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import CrewBuilder from '@/components/crews/CrewBuilder';
 import AgentForm from '@/components/crews/AgentForm';
@@ -80,10 +81,15 @@ export default function CrewsPage() {
   if (showCrewBuilder) {
     return (
       <ProtectedRoute>
-        <CrewBuilder
-          crewId={editingCrewId}
-          onSave={handleSaveCrew}
-        />
+        <div className="flex h-screen bg-gray-50">
+          <Navigation />
+          <div className="flex-1 overflow-auto">
+            <CrewBuilder
+              crewId={editingCrewId}
+              onSave={handleSaveCrew}
+            />
+          </div>
+        </div>
       </ProtectedRoute>
     );
   }
@@ -91,15 +97,20 @@ export default function CrewsPage() {
   if (showAgentForm) {
     return (
       <ProtectedRoute>
-        <div className="max-w-4xl mx-auto p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">
-            {editingAgentId ? 'Edit Agent' : 'Create New Agent'}
-          </h2>
-          <AgentForm
+        <div className="flex h-screen bg-gray-50">
+          <Navigation />
+          <div className="flex-1 overflow-auto">
+            <div className="max-w-4xl mx-auto p-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">
+                {editingAgentId ? 'Edit Agent' : 'Create New Agent'}
+              </h2>
+              <AgentForm
             agentId={editingAgentId}
             onSave={handleSaveAgent}
             onCancel={() => setShowAgentForm(false)}
           />
+            </div>
+          </div>
         </div>
       </ProtectedRoute>
     );
@@ -107,7 +118,10 @@ export default function CrewsPage() {
 
   return (
     <ProtectedRoute>
-      <div className="max-w-7xl mx-auto p-6">
+      <div className="flex h-screen bg-gray-50">
+        <Navigation />
+        <div className="flex-1 overflow-auto">
+          <div className="max-w-7xl mx-auto p-6">
         <Breadcrumbs />
         <div className="flex items-center justify-between mb-2">
           <h1 className="text-3xl font-bold text-gray-900">Crews & Agents</h1>
@@ -303,6 +317,8 @@ export default function CrewsPage() {
           </div>
           )
         )}
+          </div>
+        </div>
       </div>
     </ProtectedRoute>
   );

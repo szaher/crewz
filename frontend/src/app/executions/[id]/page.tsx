@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import Navigation from '@/components/shared/Navigation';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import ExecutionDetail from '@/components/executions/ExecutionDetail';
 import ExecutionLogs from '@/components/executions/ExecutionLogs';
@@ -55,8 +56,13 @@ export default function ExecutionPage() {
   if (loading) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="flex h-screen bg-gray-50">
+          <Navigation />
+          <div className="flex-1 overflow-auto">
+            <div className="min-h-screen flex items-center justify-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+          </div>
         </div>
       </ProtectedRoute>
     );
@@ -65,15 +71,20 @@ export default function ExecutionPage() {
   if (!execution) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <p className="text-gray-500">Execution not found</p>
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="mt-4 text-blue-600 hover:text-blue-700"
-            >
-              Go to Dashboard
-            </button>
+        <div className="flex h-screen bg-gray-50">
+          <Navigation />
+          <div className="flex-1 overflow-auto">
+            <div className="min-h-screen flex items-center justify-center">
+              <div className="text-center">
+                <p className="text-gray-500">Execution not found</p>
+                <button
+                  onClick={() => router.push('/dashboard')}
+                  className="mt-4 text-blue-600 hover:text-blue-700"
+                >
+                  Go to Dashboard
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </ProtectedRoute>
@@ -82,8 +93,11 @@ export default function ExecutionPage() {
 
   return (
     <ProtectedRoute>
-      <div className="max-w-7xl mx-auto p-6">
-        <Breadcrumbs />
+      <div className="flex h-screen bg-gray-50">
+        <Navigation />
+        <div className="flex-1 overflow-auto">
+          <div className="max-w-7xl mx-auto p-6">
+            <Breadcrumbs />
         {/* Actions Bar */}
         <div className="mb-6 flex items-center justify-between">
           <button
@@ -110,6 +124,8 @@ export default function ExecutionPage() {
         {/* Live Logs */}
         <div className="mt-6">
           <ExecutionLogs executionId={executionId} />
+        </div>
+          </div>
         </div>
       </div>
     </ProtectedRoute>

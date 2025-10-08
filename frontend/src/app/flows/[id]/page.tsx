@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import Navigation from '@/components/shared/Navigation';
 import FlowCanvas from '@/components/flows/FlowCanvas';
 import FlowToolbar from '@/components/flows/FlowToolbar';
 import NodePalette from '@/components/flows/NodePalette';
@@ -114,8 +115,13 @@ export default function FlowEditorPage() {
   if (loading) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="flex h-screen bg-gray-50">
+          <Navigation />
+          <div className="flex-1 overflow-auto">
+            <div className="min-h-screen flex items-center justify-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+          </div>
         </div>
       </ProtectedRoute>
     );
@@ -124,16 +130,21 @@ export default function FlowEditorPage() {
   if (!isNew && (!flowId || isNaN(flowId))) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Invalid Flow ID</h1>
-            <p className="text-gray-600">The flow ID in the URL is invalid.</p>
-            <button
-              onClick={() => router.push('/flows')}
-              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-            >
-              Back to Flows
-            </button>
+        <div className="flex h-screen bg-gray-50">
+          <Navigation />
+          <div className="flex-1 overflow-auto">
+            <div className="min-h-screen flex items-center justify-center">
+              <div className="text-center">
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Invalid Flow ID</h1>
+                <p className="text-gray-600">The flow ID in the URL is invalid.</p>
+                <button
+                  onClick={() => router.push('/flows')}
+                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
+                  Back to Flows
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </ProtectedRoute>
@@ -142,7 +153,10 @@ export default function FlowEditorPage() {
 
   return (
     <ProtectedRoute>
-      <div className="h-screen flex flex-col">
+      <div className="flex h-screen bg-gray-50">
+        <Navigation />
+        <div className="flex-1 overflow-auto">
+          <div className="h-screen flex flex-col">
         <FlowToolbar
           flowId={flowId}
           onDiscard={handleDiscard}
@@ -171,6 +185,8 @@ export default function FlowEditorPage() {
             onClose={() => setIsPropertiesPanelOpen(false)}
           />
         )}
+          </div>
+        </div>
       </div>
     </ProtectedRoute>
   );
