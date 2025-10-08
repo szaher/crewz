@@ -312,19 +312,13 @@ export interface CrewResponse {
 
 export interface Tool {
   id: number;
-  tenant_id: number;
   name: string;
   description: string;
   tool_type: 'builtin' | 'custom' | 'docker';
+  code?: string;
   docker_image?: string;
   docker_command?: string;
-  function_code?: string;
-  api_endpoint?: string;
-  api_method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
-  api_headers?: Record<string, string>;
-  input_schema?: Record<string, any>;
-  output_schema?: Record<string, any>;
-  is_active: boolean;
+  schema: Record<string, any>;
   created_at: string;
   updated_at: string;
 }
@@ -333,14 +327,10 @@ export interface ToolCreate {
   name: string;
   description: string;
   tool_type: 'builtin' | 'custom' | 'docker';
+  code?: string;
   docker_image?: string;
   docker_command?: string;
-  function_code?: string;
-  api_endpoint?: string;
-  api_method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
-  api_headers?: Record<string, string>;
-  input_schema?: Record<string, any>;
-  output_schema?: Record<string, any>;
+  schema?: Record<string, any>;
 }
 
 export interface ToolUpdate {

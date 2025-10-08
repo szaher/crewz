@@ -26,14 +26,10 @@ export default function ToolForm({ toolId, onSave, onCancel }: ToolFormProps) {
     name: existingTool?.name || '',
     description: existingTool?.description || '',
     tool_type: existingTool?.tool_type || 'custom',
-    input_schema: existingTool?.input_schema || {},
-    output_schema: existingTool?.output_schema || {},
+    schema: existingTool?.schema || {},
     docker_image: existingTool?.docker_image,
     docker_command: existingTool?.docker_command,
-    function_code: existingTool?.function_code,
-    api_endpoint: existingTool?.api_endpoint,
-    api_method: existingTool?.api_method,
-    api_headers: existingTool?.api_headers,
+    code: existingTool?.code,
   });
 
   const [loading, setLoading] = useState(false);
@@ -117,10 +113,10 @@ export default function ToolForm({ toolId, onSave, onCancel }: ToolFormProps) {
     Execute the tool with the given parameters.
 
     Args:
-        params (dict): Input parameters defined by input_schema
+        params (dict): Input parameters defined by schema
 
     Returns:
-        dict: Output data matching output_schema
+        dict: Output data matching schema
     """
     # Example: Web search tool
     query = params.get('query', '')
@@ -142,7 +138,7 @@ def perform_search(query: str, limit: int) -> list:
 `;
 
   const loadExampleCode = () => {
-    setFormData({ ...formData, function_code: exampleCode });
+    setFormData({ ...formData, code: exampleCode });
     setShowExampleModal(false);
     setCodeError(null);
   };
@@ -153,7 +149,7 @@ def perform_search(query: str, limit: int) -> list:
 
     // Validate Python code for custom-type tools
     if (formData.tool_type === 'custom') {
-      if (!validatePythonCode(formData.function_code || '')) {
+      if (!validatePythonCode(formData.code || '')) {
         return; // Validation error is already set by validatePythonCode
       }
     }
@@ -277,11 +273,11 @@ def perform_search(query: str, limit: int) -> list:
           <div className="border border-gray-300 rounded-md overflow-hidden">
             {pythonExtension ? (
               <CodeMirror
-                value={formData.function_code || ''}
+                value={formData.code || ''}
                 height="400px"
                 extensions={[pythonExtension]}
                 onChange={(value) => {
-                  setFormData({ ...formData, function_code: value });
+                  setFormData({ ...formData, code: value });
                   setCodeError(null);
                 }}
                 theme="light"
@@ -325,36 +321,25 @@ def perform_search(query: str, limit: int) -> list:
         </div>
       )}
 
-      {/* Schemas */}
+      {/* Schema */}
       <div className="bg-white p-6 rounded-lg border border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Input/Output Schemas</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Input Schema (JSON)</label>
-            <textarea
-              rows={8}
-              value={JSON.stringify(formData.input_schema, null, 2)}
-              onChange={(e) => {
-                try {
-                  setFormData({ ...formData, input_schema: JSON.parse(e.target.value) });
-                } catch {}
-              }}
-              className="block w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-xs"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Output Schema (JSON)</label>
-            <textarea
-              rows={8}
-              value={JSON.stringify(formData.output_schema, null, 2)}
-              onChange={(e) => {
-                try {
-                  setFormData({ ...formData, output_schema: JSON.parse(e.target.value) });
-                } catch {}
-              }}
-              className="block w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-xs"
-            />
-          </div>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Tool Schema</h3>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Schema (JSON)</label>
+          <textarea
+            rows={8}
+            value={JSON.stringify(formData.schema, null, 2)}
+            onChange={(e) => {
+              try {
+                setFormData({ ...formData, schema: JSON.parse(e.target.value) });
+              } catch {}
+            }}
+            className="block w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-xs"
+            placeholder='{"input": {"query": "string"}, "output": {"results": "array"}}'
+          />
+          <p className="mt-2 text-xs text-gray-500">
+            Define the input and output structure for your tool in JSON format
+          </p>
         </div>
       </div>
 
@@ -448,7 +433,7 @@ def perform_search(query: str, limit: int) -> list:
 
               <div className="bg-blue-50 p-4 rounded-md">
                 <p className="text-sm text-blue-800">
-                  <strong>Tip:</strong> Your input_schema defines what parameters are available in the <code className="px-1 py-0.5 bg-blue-100 rounded">params</code> dictionary. Your output_schema defines what your function should return.
+                  <strong>Tip:</strong> The schema defines the structure of your tool's inputs and outputs. Parameters are available in the <code className="px-1 py-0.5 bg-blue-100 rounded">params</code> dictionary.
                 </p>
               </div>
             </div>
