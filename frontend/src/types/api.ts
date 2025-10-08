@@ -315,7 +315,7 @@ export interface Tool {
   tenant_id: number;
   name: string;
   description: string;
-  tool_type: 'function' | 'api' | 'docker';
+  tool_type: 'builtin' | 'custom' | 'docker';
   docker_image?: string;
   docker_command?: string;
   function_code?: string;
@@ -332,7 +332,7 @@ export interface Tool {
 export interface ToolCreate {
   name: string;
   description: string;
-  tool_type: 'function' | 'api' | 'docker';
+  tool_type: 'builtin' | 'custom' | 'docker';
   docker_image?: string;
   docker_command?: string;
   function_code?: string;

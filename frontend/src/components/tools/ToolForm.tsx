@@ -25,7 +25,7 @@ export default function ToolForm({ toolId, onSave, onCancel }: ToolFormProps) {
   const [formData, setFormData] = useState<ToolCreate>({
     name: existingTool?.name || '',
     description: existingTool?.description || '',
-    tool_type: existingTool?.tool_type || 'function',
+    tool_type: existingTool?.tool_type || 'custom',
     input_schema: existingTool?.input_schema || {},
     output_schema: existingTool?.output_schema || {},
     docker_image: existingTool?.docker_image,
@@ -154,8 +154,8 @@ def perform_search(query: str, limit: int) -> list:
     setError(null);
     setCodeError(null);
 
-    // Validate Python code for function-type tools
-    if (formData.tool_type === 'function') {
+    // Validate Python code for custom-type tools
+    if (formData.tool_type === 'custom') {
       if (!validatePythonCode(formData.function_code || '')) {
         return; // Validation error is already set by validatePythonCode
       }
@@ -226,8 +226,8 @@ def perform_search(query: str, limit: int) -> list:
               onChange={(e) => setFormData({ ...formData, tool_type: e.target.value as any })}
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
             >
-              <option value="function">Function (Python code)</option>
-              <option value="api">API Endpoint</option>
+              <option value="builtin">Built-in CrewAI Tool</option>
+              <option value="custom">Custom (Python code)</option>
               <option value="docker">Docker Container</option>
             </select>
           </div>
@@ -263,38 +263,8 @@ def perform_search(query: str, limit: int) -> list:
         </div>
       )}
 
-      {formData.tool_type === 'api' && (
-        <div className="bg-white p-6 rounded-lg border border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">API Configuration</h3>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">API Endpoint</label>
-              <input
-                type="url"
-                value={formData.api_endpoint || ''}
-                onChange={(e) => setFormData({ ...formData, api_endpoint: e.target.value })}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm"
-                placeholder="https://api.example.com/search"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">HTTP Method</label>
-              <select
-                value={formData.api_method || 'GET'}
-                onChange={(e) => setFormData({ ...formData, api_method: e.target.value as any })}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
-              >
-                <option value="GET">GET</option>
-                <option value="POST">POST</option>
-                <option value="PUT">PUT</option>
-                <option value="DELETE">DELETE</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {formData.tool_type === 'function' && (
+      {formData.tool_type === 'custom' && (
         <div className="bg-white p-6 rounded-lg border border-gray-200">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Function Code</h3>
