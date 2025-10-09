@@ -1,6 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import type { Tool } from '@/types/api';
+import ToolExecuteModal from './ToolExecuteModal';
 
 interface ToolRegistryProps {
   tools: Tool[];
@@ -9,6 +11,7 @@ interface ToolRegistryProps {
 }
 
 export default function ToolRegistry({ tools, onEditTool, onCreateTool }: ToolRegistryProps) {
+  const [executingTool, setExecutingTool] = useState<Tool | null>(null);
 
   const getToolTypeIcon = (toolType: string) => {
     switch (toolType) {
@@ -88,15 +91,32 @@ export default function ToolRegistry({ tools, onEditTool, onCreateTool }: ToolRe
                 )}
               </div>
 
-              <button
-                onClick={() => onEditTool(tool.id)}
-                className="w-full px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
-              >
-                Edit Tool
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setExecutingTool(tool)}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
+                >
+                  ▶ Execute
+                </button>
+                <button
+                  onClick={() => onEditTool(tool.id)}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
+                >
+                  Edit
+                </button>
+              </div>
             </div>
           ))}
         </div>
+      )}
+
+      {/* Execute Modal */}
+      {executingTool && (
+        <ToolExecuteModal
+          tool={executingTool}
+          isOpen={!!executingTool}
+          onClose={() => setExecutingTool(null)}
+        />
       )}
     </div>
   );

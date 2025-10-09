@@ -5,8 +5,13 @@ import { useRouter } from 'next/navigation';
 import { useCrews } from '@/lib/hooks/useCrews';
 import { useAgents } from '@/lib/hooks/useAgents';
 import { useLLMProviders } from '@/lib/hooks/useLLMProviders';
+import { useTasks } from '@/lib/hooks/useTasks';
 import type { CrewCreate, CrewUpdate } from '@/types/api';
+import type { Task, TaskCreate, TaskUpdate } from '@/types/task';
 import AgentCard from './AgentCard';
+import TaskForm from '../tasks/TaskForm';
+import TaskList from '../tasks/TaskList';
+import TaskTemplateSelector from '../tasks/TaskTemplateSelector';
 
 interface CrewBuilderProps {
   crewId?: number;
@@ -18,6 +23,7 @@ export default function CrewBuilder({ crewId, onSave }: CrewBuilderProps) {
   const { crews, createCrew, updateCrew: updateCrewHook, getCrew } = useCrews();
   const { agents, loading: agentsLoading, error: agentsError, refetch: refetchAgents } = useAgents();
   const { providers, loading: providersLoading } = useLLMProviders();
+  const { tasks, fetchTasks, createTask, updateTask, deleteTask } = useTasks();
 
   const existingCrew = crewId ? crews.find((c) => c.id === crewId) : null;
 
@@ -35,6 +41,10 @@ export default function CrewBuilder({ crewId, onSave }: CrewBuilderProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [providerFilter, setProviderFilter] = useState<number | 'all'>('all');
+
+  // Task management state
+  const [showTaskForm, setShowTaskForm] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | undefined>(undefined);
 
   useEffect(() => {
     // Ensure agents are loaded when opening the builder
@@ -55,6 +65,13 @@ export default function CrewBuilder({ crewId, onSave }: CrewBuilderProps) {
       setSelectedAgents(existingCrew.agent_ids);
     }
   }, [existingCrew]);
+
+  useEffect(() => {
+    // Fetch tasks when editing an existing crew
+    if (crewId) {
+      fetchTasks(crewId);
+    }
+  }, [crewId, fetchTasks]);
 
   const handleAgentToggle = (agentId: number) => {
     const newSelection = selectedAgents.includes(agentId)
@@ -92,6 +109,53 @@ export default function CrewBuilder({ crewId, onSave }: CrewBuilderProps) {
       setLoading(false);
     }
   };
+
+  const handleCreateTask = () => {
+    setEditingTask(undefined);
+    setShowTaskForm(true);
+  };
+
+  const handleEditTask = (task: Task) => {
+    setEditingTask(task);
+    setShowTaskForm(true);
+  };
+
+  const handleSaveTask = async (taskData: TaskCreate | TaskUpdate) => {
+    if (!crewId) {
+      alert('Please save the crew before adding tasks');
+      return;
+    }
+
+    try {
+      if (editingTask) {
+        await updateTask(editingTask.id, taskData as TaskUpdate);
+      } else {
+        await createTask({ ...taskData, crew_id: crewId } as TaskCreate);
+      }
+      setShowTaskForm(false);
+      setEditingTask(undefined);
+      fetchTasks(crewId);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to save task');
+    }
+  };
+
+  const handleDeleteTask = async (taskId: number) => {
+    try {
+      await deleteTask(taskId);
+      if (crewId) {
+        fetchTasks(crewId);
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete task');
+    }
+  };
+
+  // Build agent names map for task list
+  const agentNames = agents.reduce((acc, agent) => {
+    acc[agent.id] = agent.name;
+    return acc;
+  }, {} as Record<number, string>);
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -225,6 +289,63 @@ export default function CrewBuilder({ crewId, onSave }: CrewBuilderProps) {
             </div>
           )}
         </div>
+
+        {/* Tasks Management */}
+        {crewId && (
+          <div className="bg-white p-6 rounded-lg border border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Tasks ({tasks.filter(t => t.crew_id === crewId).length})
+              </h3>
+              <div className="flex gap-2">
+                <TaskTemplateSelector
+                  crewId={crewId}
+                  agentIds={selectedAgents}
+                  onTasksCreated={() => fetchTasks(crewId)}
+                />
+                <button
+                  type="button"
+                  onClick={handleCreateTask}
+                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
+                >
+                  Add Task
+                </button>
+              </div>
+            </div>
+
+            {showTaskForm ? (
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                <h4 className="text-md font-semibold text-gray-900 mb-4">
+                  {editingTask ? 'Edit Task' : 'Create New Task'}
+                </h4>
+                <TaskForm
+                  task={editingTask}
+                  crewId={crewId}
+                  onSave={handleSaveTask}
+                  onCancel={() => {
+                    setShowTaskForm(false);
+                    setEditingTask(undefined);
+                  }}
+                />
+              </div>
+            ) : (
+              <TaskList
+                tasks={tasks.filter(t => t.crew_id === crewId)}
+                onEdit={handleEditTask}
+                onDelete={handleDeleteTask}
+                agentNames={agentNames}
+              />
+            )}
+          </div>
+        )}
+
+        {!crewId && (
+          <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+            <p className="text-sm text-blue-800">
+              💡 Save the crew first to add tasks. Tasks will help define what work this crew should perform.
+            </p>
+          </div>
+        )}
 
         {/* Error Message */}
         {error && (

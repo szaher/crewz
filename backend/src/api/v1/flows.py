@@ -129,11 +129,20 @@ async def execute_flow(
 
     from ...crewai.flow_executor import FlowExecutor
     from ...crewai.crew_factory import CrewFactory
+    from ...crewai.agent_factory import AgentFactory
     from ...services.execution_events import ExecutionEventPublisher
+    from ...services.llm_service import LLMService
+    from ...services.docker_service import DockerService
+    from ...crewai.tool_adapter import ToolAdapter
 
-    crew_factory = CrewFactory(db)
+    # Initialize factories with dependencies
+    llm_service = LLMService(db)
+    docker_service = DockerService()
+    tool_adapter = ToolAdapter(docker_service)
+    agent_factory = AgentFactory(llm_service, tool_adapter)
+    crew_factory = CrewFactory(agent_factory)
     event_publisher = ExecutionEventPublisher()
-    flow_executor = FlowExecutor(crew_factory, event_publisher)
+    flow_executor = FlowExecutor(crew_factory, agent_factory, event_publisher)
 
     execution_service = ExecutionService(db, flow_service, flow_executor)
 

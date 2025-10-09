@@ -51,25 +51,46 @@ class ToolAdapter:
 
     def _get_builtin_tool(self, tool_name: str) -> CrewAITool:
         """Get built-in CrewAI tool by name."""
-        # Import built-in tools from CrewAI
-        from crewai.tools import (
-            SerperDevTool,
-            WebsiteSearchTool,
-            FileReadTool,
-            DirectoryReadTool,
-        )
+        # Normalize tool name: "Web Search" -> "web_search"
+        normalized_name = tool_name.lower().replace(" ", "_")
 
-        tool_map = {
-            "serper_search": SerperDevTool,
-            "website_search": WebsiteSearchTool,
-            "file_read": FileReadTool,
-            "directory_read": DirectoryReadTool,
-        }
+        # Import built-in tools from CrewAI (with fallback for missing tools)
+        tool_map = {}
 
-        if tool_name not in tool_map:
-            raise ValueError(f"Unknown built-in tool: {tool_name}")
+        try:
+            from crewai.tools import FileReadTool
+            tool_map["file_read"] = FileReadTool
+        except ImportError:
+            pass
 
-        return tool_map[tool_name]()
+        try:
+            from crewai.tools import DirectoryReadTool
+            tool_map["directory_read"] = DirectoryReadTool
+        except ImportError:
+            pass
+
+        try:
+            from crewai.tools import SerperDevTool
+            tool_map["serper_search"] = SerperDevTool
+        except ImportError:
+            pass
+
+        try:
+            from crewai.tools import WebsiteSearchTool
+            tool_map["website_search"] = WebsiteSearchTool
+            tool_map["web_search"] = WebsiteSearchTool  # Alias
+        except ImportError:
+            pass
+
+        if normalized_name not in tool_map:
+            available = list(tool_map.keys()) if tool_map else []
+            raise ValueError(
+                f"Built-in tool '{tool_name}' not available in this CrewAI version. "
+                f"Available tools: {available}. "
+                f"Consider creating a custom tool instead."
+            )
+
+        return tool_map[normalized_name]()
 
     def _create_custom_tool_func(self, code: str) -> Callable:
         """

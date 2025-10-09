@@ -14,11 +14,17 @@ class DockerService:
     """
 
     def __init__(self):
-        # Connect to Docker daemon
+        # Connect to Docker daemon (optional - gracefully handle if not available)
         try:
             self.client = docker.from_env()
+            self.available = True
         except Exception as e:
-            raise RuntimeError(f"Failed to connect to Docker: {str(e)}")
+            # Docker not available - this is OK for basic operations
+            # Tools that require Docker will fail gracefully
+            self.client = None
+            self.available = False
+            import logging
+            logging.warning(f"Docker service not available: {str(e)}")
 
     async def execute_tool(
         self,
@@ -44,6 +50,12 @@ class DockerService:
         Raises:
             HTTPException: If execution fails
         """
+        if not self.available:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Docker service is not available. Cannot execute Docker-based tools.",
+            )
+
         container = None
 
         try:
@@ -114,6 +126,12 @@ class DockerService:
         Args:
             image: Docker image name
         """
+        if not self.available:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Docker service is not available. Cannot pull images.",
+            )
+
         try:
             self.client.images.pull(image)
         except Exception as e:
@@ -124,6 +142,8 @@ class DockerService:
 
     def list_images(self) -> list:
         """List all available Docker images."""
+        if not self.available:
+            return []
         return [img.tags for img in self.client.images.list()]
 
     def cleanup_old_containers(self, hours: int = 24) -> int:
@@ -136,6 +156,9 @@ class DockerService:
         Returns:
             Number of containers removed
         """
+        if not self.available:
+            return 0
+
         import datetime
 
         cutoff = datetime.datetime.now() - datetime.timedelta(hours=hours)

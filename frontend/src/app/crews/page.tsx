@@ -6,6 +6,7 @@ import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Navigation from '@/components/shared/Navigation';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import CrewBuilder from '@/components/crews/CrewBuilder';
+import ExecuteModal from '@/components/shared/ExecuteModal';
 import { useCrews } from '@/lib/hooks/useCrews';
 
 export default function CrewsPage() {
@@ -17,6 +18,7 @@ export default function CrewsPage() {
 
   const [showCrewBuilder, setShowCrewBuilder] = useState(false);
   const [editingCrewId, setEditingCrewId] = useState<number | undefined>();
+  const [executingCrew, setExecutingCrew] = useState<any | null>(null);
 
   const loadData = () => {
     refetchCrews();
@@ -146,20 +148,31 @@ export default function CrewsPage() {
               >
                 <h3 className="text-lg font-semibold text-gray-900">{crew.name}</h3>
                 <p className="text-sm text-gray-600 mt-2">{crew.description}</p>
-                <div className="mt-4 flex items-center gap-2">
+                <div className="mt-4 flex items-center gap-2 flex-wrap">
                   <span className="px-2 py-1 text-xs font-medium rounded bg-purple-100 text-purple-800">
                     {crew.process_type}
                   </span>
                   <span className="px-2 py-1 text-xs font-medium rounded bg-blue-100 text-blue-800">
                     {crew.agent_ids.length} agent{crew.agent_ids.length !== 1 ? 's' : ''}
                   </span>
+                  <span className="px-2 py-1 text-xs font-medium rounded bg-green-100 text-green-800">
+                    {crew.task_count || 0} task{(crew.task_count || 0) !== 1 ? 's' : ''}
+                  </span>
                 </div>
-                <button
-                  onClick={() => handleEditCrew(crew.id)}
-                  className="mt-4 w-full px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
-                >
-                  Edit Crew
-                </button>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    onClick={() => setExecutingCrew(crew)}
+                    className="flex-1 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
+                  >
+                    ▶ Execute
+                  </button>
+                  <button
+                    onClick={() => handleEditCrew(crew.id)}
+                    className="flex-1 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
+                  >
+                    Edit
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -168,6 +181,58 @@ export default function CrewsPage() {
           </div>
         </div>
       </div>
+
+      {/* Execute Modal */}
+      {executingCrew && (
+        <ExecuteModal
+          title="Execute Crew"
+          description={
+            executingCrew.task_count > 0
+              ? `Execute ${executingCrew.name} crew with ${executingCrew.task_count} pre-configured task(s). The crew contains ${executingCrew.agent_ids.length} agent(s) working in ${executingCrew.process_type} mode. Tasks are already defined in the crew.`
+              : `Execute ${executingCrew.name} crew. The crew contains ${executingCrew.agent_ids.length} agent(s) working in ${executingCrew.process_type} mode. Provide tasks to execute.`
+          }
+          entityType="crew"
+          entityId={executingCrew.id}
+          entityName={executingCrew.name}
+          inputs={
+            executingCrew.task_count > 0
+              ? [
+                  {
+                    label: 'Input Data (optional - JSON format)',
+                    key: 'input_data',
+                    type: 'textarea',
+                    placeholder: '{"key": "value"}',
+                    required: false
+                  },
+                  {
+                    label: 'Context (optional)',
+                    key: 'context',
+                    type: 'textarea',
+                    placeholder: 'Any additional context for the crew...',
+                    required: false
+                  }
+                ]
+              : [
+                  {
+                    label: 'Tasks (one per line or comma-separated)',
+                    key: 'tasks',
+                    type: 'textarea',
+                    placeholder: 'Task 1\nTask 2\nTask 3...',
+                    required: true
+                  },
+                  {
+                    label: 'Context (optional)',
+                    key: 'context',
+                    type: 'textarea',
+                    placeholder: 'Any additional context for the crew...',
+                    required: false
+                  }
+                ]
+          }
+          isOpen={!!executingCrew}
+          onClose={() => setExecutingCrew(null)}
+        />
+      )}
     </ProtectedRoute>
   );
 }

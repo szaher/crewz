@@ -167,6 +167,7 @@ interface Crew {
   description: string;
   process_type: 'sequential' | 'hierarchical' | 'consensus';
   agent_ids: number[];
+  task_count?: number;
   config: Record<string, any>;
   is_active: boolean;
   created_at: string;

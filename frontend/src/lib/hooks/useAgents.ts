@@ -99,6 +99,8 @@ export function useAgents() {
     agents,
     loading,
     error,
+    // Keep both names for backward compatibility across components
+    fetchAgents,
     createAgent,
     updateAgent,
     deleteAgent,

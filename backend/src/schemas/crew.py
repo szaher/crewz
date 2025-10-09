@@ -28,6 +28,7 @@ class CrewUpdate(BaseModel):
     description: Optional[str] = None
     process: Optional[CrewProcess] = None
     verbose: Optional[bool] = None
+    memory: Optional[bool] = None
     agent_ids: Optional[List[int]] = None
     manager_llm_provider_id: Optional[int] = None
     # Compatibility with older frontend payloads
@@ -46,6 +47,7 @@ class CrewOut(BaseModel):
     memory: bool
     manager_llm_provider_id: Optional[int] = None
     agent_ids: List[int] = []
+    task_count: int = 0
     created_at: datetime
     updated_at: datetime
 

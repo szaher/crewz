@@ -98,7 +98,8 @@ export function useExecutions() {
 
   useEffect(() => {
     fetchExecutions();
-  }, [fetchExecutions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only fetch on mount
 
   // SSE streaming for live logs
   const streamExecutionLogs = (

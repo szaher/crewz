@@ -4,6 +4,7 @@ from .tenant import Tenant
 from .user import User
 from .agent import Agent
 from .crew import Crew
+from .task import Task
 from .flow import Flow
 from .tool import Tool
 from .execution import Execution
@@ -19,6 +20,7 @@ __all__ = [
     "User",
     "Agent",
     "Crew",
+    "Task",
     "Flow",
     "Tool",
     "Execution",

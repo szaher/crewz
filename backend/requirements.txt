@@ -68,3 +68,6 @@ structlog==23.2.0
 # Analytics & Feedback (Phase 3.2)
 clickhouse-driver==0.2.6
 textblob==0.17.1
+
+# Web Search
+duckduckgo-search==4.1.1

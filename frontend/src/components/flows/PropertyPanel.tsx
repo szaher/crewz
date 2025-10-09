@@ -232,39 +232,72 @@ export default function PropertyPanel({ selectedNode, onUpdateNode, onClearSelec
     );
   };
 
-  const renderCrewProperties = () => (
-    <div className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Select Crew
-        </label>
-        <select
-          value={nodeData.crew_id || ''}
-          onChange={(e) => handleUpdate('crew_id', Number(e.target.value))}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-        >
-          <option value="">Choose a crew...</option>
-          {crews.map((crew) => (
-            <option key={crew.id} value={crew.id}>
-              {crew.name}
-            </option>
-          ))}
-        </select>
+  const renderCrewProperties = () => {
+    const crew = crews.find(c => c.id === nodeData.crew_id);
+
+    return (
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Select Crew
+          </label>
+          <select
+            value={nodeData.crew_id || ''}
+            onChange={(e) => handleUpdate('crew_id', Number(e.target.value))}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+          >
+            <option value="">Choose a crew...</option>
+            {crews.map((crew) => (
+              <option key={crew.id} value={crew.id}>
+                {crew.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {crew && (
+          <div className="mt-4 p-3 bg-gray-50 rounded-lg space-y-2">
+            <h4 className="font-medium text-gray-900 text-sm">Crew Details</h4>
+            <div className="space-y-1 text-xs">
+              {crew.description && (
+                <p><span className="font-medium">Description:</span> {crew.description}</p>
+              )}
+              <p><span className="font-medium">Process:</span> {crew.process_type}</p>
+              <p><span className="font-medium">Agents:</span> {crew.agent_ids.length}</p>
+              <p><span className="font-medium">Tasks:</span> {crew.task_count || 0}</p>
+            </div>
+
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <h5 className="font-medium text-gray-700 text-xs mb-2">Configuration</h5>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span className="text-gray-600">Verbose:</span>
+                  <span className="ml-1">{crew.verbose ? '✓' : '✗'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Memory:</span>
+                  <span className="ml-1">{crew.memory ? '✓' : '✗'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Node Label
+          </label>
+          <input
+            type="text"
+            value={nodeData.label || ''}
+            onChange={(e) => handleUpdate('label', e.target.value)}
+            placeholder="Crew Node"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+          />
+        </div>
       </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Node Label
-        </label>
-        <input
-          type="text"
-          value={nodeData.label || ''}
-          onChange={(e) => handleUpdate('label', e.target.value)}
-          placeholder="Crew Node"
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-        />
-      </div>
-    </div>
-  );
+    );
+  };
 
   const renderToolProperties = () => (
     <div className="space-y-4">
@@ -409,7 +442,7 @@ export default function PropertyPanel({ selectedNode, onUpdateNode, onClearSelec
 
           {inputs.length === 0 && (
             <p className="text-xs text-gray-500 text-center py-4">
-              No input variables defined. Click "Add Input" to add one.
+              No input variables defined. Click &quot;Add Input&quot; to add one.
             </p>
           )}
         </div>
@@ -515,7 +548,7 @@ export default function PropertyPanel({ selectedNode, onUpdateNode, onClearSelec
 
           {outputs.length === 0 && (
             <p className="text-xs text-gray-500 text-center py-4">
-              No output variables defined. Click "Add Output" to add one.
+              No output variables defined. Click &quot;Add Output&quot; to add one.
             </p>
           )}
         </div>

@@ -18,6 +18,7 @@ export default function Navigation() {
     { name: 'Flows', path: '/flows', icon: '🔀' },
     { name: 'Crews', path: '/crews', icon: '👥' },
     { name: 'Agents', path: '/agents', icon: '🤖' },
+    { name: 'Tasks', path: '/tasks', icon: '✅' },
     { name: 'Providers', path: '/providers', icon: '🔌' },
     { name: 'Tools', path: '/tools', icon: '🔧' },
     { name: 'Executions', path: '/executions', icon: '⚙️' },

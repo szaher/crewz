@@ -131,7 +131,8 @@ export function useMetrics(timeRange: string = '24h', autoRefresh: boolean = tru
   // Initial fetch
   useEffect(() => {
     fetchMetrics();
-  }, [fetchMetrics]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeRange]); // Only re-fetch when timeRange changes
 
   // Auto-refresh every 30 seconds
   useEffect(() => {
@@ -142,7 +143,8 @@ export function useMetrics(timeRange: string = '24h', autoRefresh: boolean = tru
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [autoRefresh, fetchMetrics]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRefresh, timeRange]); // Depend on timeRange, not fetchMetrics
 
   return {
     summary,

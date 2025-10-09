@@ -49,16 +49,32 @@ def create_default_tools(db):
         {
             "name": "Web Search",
             "description": "Search the web for current information using DuckDuckGo",
-            "tool_type": "builtin",
+            "tool_type": "custom",
+            "code": """
+def search_web(query: str) -> str:
+    \"\"\"Search the web for information.\"\"\"
+    # Placeholder implementation
+    # In production, integrate with a search API like DuckDuckGo, Google, or Serper
+    return f"Search results for: {query}\\n[Placeholder - configure search API]"
+""",
             "schema": {
                 "input": {"query": "string"},
-                "output": {"results": "array"}
+                "output": {"results": "string"}
             }
         },
         {
             "name": "File Reader",
             "description": "Read and analyze file contents",
-            "tool_type": "builtin",
+            "tool_type": "custom",
+            "code": """
+def read_file(file_path: str) -> str:
+    \"\"\"Read file contents.\"\"\"
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except Exception as e:
+        return f"Error reading file: {str(e)}"
+""",
             "schema": {
                 "input": {"file_path": "string"},
                 "output": {"content": "string"}
@@ -67,7 +83,40 @@ def create_default_tools(db):
         {
             "name": "Calculator",
             "description": "Perform mathematical calculations",
-            "tool_type": "builtin",
+            "tool_type": "custom",
+            "code": """
+def calculate(expression: str) -> str:
+    \"\"\"Safely evaluate a mathematical expression.\"\"\"
+    try:
+        # Use ast.literal_eval for safety - only allows literals
+        import ast
+        import operator
+
+        # Define safe operations
+        ops = {
+            ast.Add: operator.add,
+            ast.Sub: operator.sub,
+            ast.Mult: operator.mul,
+            ast.Div: operator.truediv,
+            ast.Pow: operator.pow,
+            ast.USub: operator.neg,
+        }
+
+        def eval_expr(node):
+            if isinstance(node, ast.Num):
+                return node.n
+            elif isinstance(node, ast.BinOp):
+                return ops[type(node.op)](eval_expr(node.left), eval_expr(node.right))
+            elif isinstance(node, ast.UnaryOp):
+                return ops[type(node.op)](eval_expr(node.operand))
+            else:
+                raise TypeError(node)
+
+        result = eval_expr(ast.parse(expression, mode='eval').body)
+        return str(result)
+    except Exception as e:
+        return f"Error calculating: {str(e)}"
+""",
             "schema": {
                 "input": {"expression": "string"},
                 "output": {"result": "number"}

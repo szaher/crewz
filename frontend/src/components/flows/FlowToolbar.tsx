@@ -83,9 +83,11 @@ export default function FlowToolbar({ flowId, onSave, onExecute, onDiscard, onOp
 
       if (response.error) {
         alert(`Execution failed: ${response.error}`);
-      } else if (response.data) {
-        router.push(`/executions/${response.data.execution_id}`);
+      } else if (response.data?.id) {
+        router.push(`/executions/${response.data.id}`);
         onExecute?.();
+      } else {
+        alert('Execution started but no ID returned');
       }
     } catch (error) {
       console.error('Execution error:', error);

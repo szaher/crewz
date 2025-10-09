@@ -12,7 +12,10 @@ import { useExecutions, type Execution } from '@/lib/hooks/useExecutions';
 export default function ExecutionPage() {
   const params = useParams();
   const router = useRouter();
-  const executionId = Number(params.id);
+
+  // Safely parse execution ID
+  const rawId = params.id;
+  const executionId = rawId && rawId !== 'undefined' ? Number(rawId) : NaN;
 
   const { getExecution, cancelExecution } = useExecutions();
   const [execution, setExecution] = useState<Execution | null>(null);
@@ -21,6 +24,13 @@ export default function ExecutionPage() {
   const [cancelling, setCancelling] = useState(false);
 
   const loadExecution = useCallback(async () => {
+    // Validate executionId before making API call
+    if (!executionId || isNaN(executionId)) {
+      setError('Invalid execution ID');
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -33,7 +43,8 @@ export default function ExecutionPage() {
     } finally {
       setLoading(false);
     }
-  }, [executionId, getExecution]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [executionId]); // Only depend on executionId, not getExecution
 
   useEffect(() => {
     void loadExecution();

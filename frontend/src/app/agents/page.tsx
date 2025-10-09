@@ -6,6 +6,7 @@ import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Navigation from '@/components/shared/Navigation';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import AgentForm from '@/components/crews/AgentForm';
+import ExecuteModal from '@/components/shared/ExecuteModal';
 import { useAgents } from '@/lib/hooks/useAgents';
 
 export default function AgentsPage() {
@@ -15,6 +16,7 @@ export default function AgentsPage() {
 
   const [showAgentForm, setShowAgentForm] = useState(false);
   const [editingAgentId, setEditingAgentId] = useState<number | undefined>();
+  const [executingAgent, setExecutingAgent] = useState<any | null>(null);
 
   const providerFilter = searchParams?.get('llm_provider_id');
 
@@ -152,12 +154,20 @@ export default function AgentsPage() {
                         Active
                       </span>
                     </div>
-                    <button
-                      onClick={() => handleEditAgent(agent.id)}
-                      className="mt-4 w-full px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
-                    >
-                      Edit Agent
-                    </button>
+                    <div className="mt-4 flex gap-2">
+                      <button
+                        onClick={() => setExecutingAgent(agent)}
+                        className="flex-1 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
+                      >
+                        ▶ Execute
+                      </button>
+                      <button
+                        onClick={() => handleEditAgent(agent.id)}
+                        className="flex-1 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
+                      >
+                        Edit
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -165,6 +175,42 @@ export default function AgentsPage() {
           </div>
         </div>
       </div>
+
+      {/* Execute Modal */}
+      {executingAgent && (
+        <ExecuteModal
+          title="Execute Agent"
+          description={`Execute ${executingAgent.name} with a task. The agent will use its configured role, goal, and tools to complete the task.`}
+          entityType="agent"
+          entityId={executingAgent.id}
+          entityName={executingAgent.name}
+          inputs={[
+            {
+              label: 'Task Description',
+              key: 'task',
+              type: 'textarea',
+              placeholder: 'Describe the task you want the agent to perform...',
+              required: true
+            },
+            {
+              label: 'Expected Output',
+              key: 'expected_output',
+              type: 'text',
+              placeholder: 'What kind of output do you expect?',
+              required: false
+            },
+            {
+              label: 'Context (optional)',
+              key: 'context',
+              type: 'textarea',
+              placeholder: 'Any additional context or information...',
+              required: false
+            }
+          ]}
+          isOpen={!!executingAgent}
+          onClose={() => setExecutingAgent(null)}
+        />
+      )}
     </ProtectedRoute>
   );
 }

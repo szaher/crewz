@@ -44,7 +44,26 @@ export default function Markdown({ content }: MarkdownProps) {
   const html = useMemo(() => {
     if (!content) return '';
     try {
-      const rawHtml = window.marked ? window.marked.parse(content) : content;
+      // Filter out tool call JSON blocks
+      let filteredContent = content;
+
+      // Remove JSON code blocks that contain tool_calls, function_call, or tools arrays
+      // Matches ```json ... ``` or ``` ... ``` blocks containing tool-related JSON
+      filteredContent = filteredContent.replace(/```(?:json)?\s*\n?\s*(\{[\s\S]*?\})\s*\n?```/g, (match, jsonContent) => {
+        try {
+          const parsed = JSON.parse(jsonContent);
+          // Hide if it contains tool_calls, function_call, or tools
+          if (parsed.tool_calls || parsed.function_call || parsed.tools ||
+              (Array.isArray(parsed) && parsed.some((item: any) => item.tool_calls || item.function_call))) {
+            return '';
+          }
+        } catch {
+          // Not valid JSON, keep it
+        }
+        return match;
+      });
+
+      const rawHtml = window.marked ? window.marked.parse(filteredContent) : filteredContent;
       const clean = window.DOMPurify ? window.DOMPurify.sanitize(rawHtml, {
         ALLOWED_ATTR: ['href','target','rel','src','alt','class','title','id','name','lang'],
       }) : rawHtml;
