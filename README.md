@@ -1,5 +1,45 @@
-# Crewzx
-Crewzx is a project to enable users to chat with LLMs using CrewAI crews and flows. The project aims to create a drag‑and‑drop frontend with an elastic backend that can be deployed on Kubernetes.
+# CrewAI Platform (Crewzx)
+
+A production-ready platform for building and executing CrewAI workflows with a visual drag-and-drop interface.
+
+## 🚀 Quick Start
+
+**Get up and running in 5 minutes:**
+
+```bash
+# Start services
+docker-compose up -d
+
+# Create default examples
+docker-compose exec backend python3 scripts/create_defaults.py
+
+# Open the platform
+open http://localhost:3001
+```
+
+**See detailed guide:** [QUICK_START.md](./QUICK_START.md)
+
+## 📚 Documentation
+
+- **[Quick Start Guide](./QUICK_START.md)** - Get started in 5 minutes
+- **[Default Examples](./DEFAULT_EXAMPLES.md)** - Working flows, crews, and agents
+- **[Implementation Guide](./DEFAULT_EXAMPLES_IMPLEMENTATION.md)** - Technical details
+- **[UI Features](./README_UI_FIXES.md)** - Platform capabilities
+- **[Testing Guide](./TESTING_GUIDE.md)** - Manual testing procedures
+
+## ✨ Features
+
+- ✅ Visual flow builder with drag-and-drop
+- ✅ Pre-configured agents (Research Analyst, Content Writer, Travel Expert)
+- ✅ Default tools (Web Search, File Reader, Calculator)
+- ✅ Real-time execution monitoring
+- ✅ Metrics dashboard with auto-refresh
+- ✅ Multi-tenant architecture
+- ✅ Production-ready with Docker Compose
+
+## 🏗️ Architecture
+
+Crewzx is a full-stack platform for creating and executing CrewAI workflows with a visual interface and elastic backend that can be deployed on Kubernetes.
 
 ## Debugging the Backend
 
