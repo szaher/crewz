@@ -94,7 +94,7 @@ export default function ProvidersPage() {
 
   return (
     <ProtectedRoute>
-      <div className="flex h-screen bg-gray-50">
+      <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
         <Navigation />
         <div className="flex-1 overflow-auto">
           <div className="max-w-5xl mx-auto p-6 space-y-6">
@@ -131,10 +131,10 @@ export default function ProvidersPage() {
         ) : error ? (
           <div className="py-12 text-center text-red-600">{error}</div>
         ) : (
-          <div className="rounded-lg border border-gray-200 bg-white relative h-[70vh] overflow-y-auto">
+          <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 relative h-[70vh] overflow-y-auto">
             <table className="w-full text-sm table-fixed">
               <thead>
-                <tr className="bg-gray-50 text-gray-600 sticky top-0 z-10">
+                <tr className="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 sticky top-0 z-10">
                   <th className="px-4 py-2 text-left">Name</th>
                   <th className="px-4 py-2 text-left">Type</th>
                   <th className="px-4 py-2 text-left">Model</th>
@@ -144,9 +144,9 @@ export default function ProvidersPage() {
                   <th className="px-4 py-2 text-left">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {providers.map((p) => (
-                  <tr key={p.id} className="odd:bg-white even:bg-gray-50 hover:bg-gray-100">
+                  <tr key={p.id} className="odd:bg-white dark:odd:bg-gray-900 even:bg-gray-50 dark:even:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700">
                     <td className="px-4 py-2 truncate max-w-[240px]">
                       <Tooltip content={p.name}><span>{p.name}</span></Tooltip>
                     </td>
@@ -185,19 +185,19 @@ export default function ProvidersPage() {
                           aria-haspopup="menu"
                           aria-expanded={openMenuId === p.id}
                           title="Actions"
-                          className="h-8 w-8 flex items-center justify-center rounded hover:bg-gray-100 border border-gray-200 bg-white"
+                          className="h-8 w-8 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
                         >
                           ⋮
                         </button>
                         {openMenuId === p.id && (
                           <div
-                            className="absolute right-0 mt-2 w-44 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 z-50"
+                            className="absolute right-0 mt-2 w-44 origin-top-right rounded-md bg-white dark:bg-gray-900 shadow-lg ring-1 ring-black/5 dark:ring-white/10 z-50 border border-gray-200 dark:border-gray-700"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <div className="py-1 text-sm">
                               <button
                                 onClick={() => { setOpenMenuId(null); setShowUsageFor(p); }}
-                                className="w-full px-3 py-2 text-left hover:bg-gray-50"
+                                className="w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-800"
                                 title="Where used"
                               >
                                 🔍 Where used
@@ -205,21 +205,21 @@ export default function ProvidersPage() {
                               <button
                                 onClick={() => { setOpenMenuId(null); void handleTest(p.id); }}
                                 disabled={testingId === p.id}
-                                className={`w-full px-3 py-2 text-left hover:bg-gray-50 ${testingId === p.id ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                className={`w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-800 ${testingId === p.id ? 'opacity-60 cursor-not-allowed' : ''}`}
                                 title="Test"
                               >
                                 🧪 Test
                               </button>
                               <button
                                 onClick={() => { setOpenMenuId(null); setEditing(p); }}
-                                className="w-full px-3 py-2 text-left hover:bg-gray-50"
+                                className="w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-800"
                                 title="Edit"
                               >
                                 ✏️ Edit
                               </button>
                               <button
                                 onClick={() => { setOpenMenuId(null); setReassignFor(p); }}
-                                className="w-full px-3 py-2 text-left hover:bg-gray-50"
+                                className="w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-800"
                                 title="Reassign dependents"
                               >
                                 🔁 Reassign
@@ -236,7 +236,7 @@ export default function ProvidersPage() {
                               <button
                                 onClick={() => { setOpenMenuId(null); void handleDelete(p.id); }}
                                 disabled={!!cannotDelete[p.id]}
-                                className={`w-full px-3 py-2 text-left hover:bg-red-50 ${cannotDelete[p.id] ? 'opacity-60 cursor-not-allowed' : 'text-red-700'}`}
+                                className={`w-full px-3 py-2 text-left hover:bg-red-50 dark:hover:bg-red-900/20 ${cannotDelete[p.id] ? 'opacity-60 cursor-not-allowed' : 'text-red-700 dark:text-red-400'}`}
                                 title={cannotDelete[p.id] || 'Delete'}
                               >
                                 🗑️ Delete
@@ -708,7 +708,7 @@ function WhereUsedModal({ provider, counts, onClose }: { provider: ProviderItem;
         <div className="space-y-3 text-sm">
           <div className="flex items-center justify-between">
             <span>Agents</span>
-            <a href={`/crews?llm_provider_id=${provider.id}`} className="text-blue-600 hover:underline">{counts.agents}</a>
+            <a href={`/agents?llm_provider_id=${provider.id}`} className="text-blue-600 hover:underline">{counts.agents}</a>
           </div>
           <div className="flex items-center justify-between">
             <span>Crews (manager)</span>

@@ -84,8 +84,8 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - ENCRYPTION_KEY=QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=
       - ALLOWED_ORIGINS=http://localhost:3001,http://localhost:3000,http://frontend:3000
-      - ALLOWED_ORIGIN_REGEX=${ALLOWED_ORIGIN_REGEX:-^https?://(localhost|127\.0\.0\.1|frontend|192\.168\.1\.*)(:[0-9]+)?$}
-      - ALLOW_ALL_ORIGINS=${ALLOW_ALL_ORIGINS:-false}
+      - ALLOWED_ORIGIN_REGEX=${ALLOWED_ORIGIN_REGEX:-^https?://(localhost|127\.0\.0\.1|frontend|192\.168\.[0-9]+\.[0-9]+)(:[0-9]+)?$}
+      - ALLOW_ALL_ORIGINS=${ALLOW_ALL_ORIGINS:-true}
       - CLICKHOUSE_HOST=clickhouse
       - CLICKHOUSE_PORT=9000
       - CLICKHOUSE_USER=crewai
@@ -124,7 +124,6 @@ services:
       target: development
     container_name: crewai-frontend
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
       - NEXT_PUBLIC_WS_URL=ws://localhost:8000
       - API_URL=http://backend:8000
       - HOST=0.0.0.0

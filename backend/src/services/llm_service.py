@@ -7,7 +7,7 @@ import litellm
 from litellm import acompletion, completion_cost
 
 from ..models import LLMProvider
-from ..utils.encryption import decrypt_api_key, encrypt_api_key
+from .encryption_service import get_encryption_service
 
 
 class LLMService:
@@ -70,9 +70,17 @@ class LLMService:
             "model": provider.model_name,
         }
 
-        # Decrypt API key if present
+        # Decrypt API key if present (use the same encryption service as provider CRUD)
         if provider.api_key:
-            params["api_key"] = decrypt_api_key(provider.api_key)
+            try:
+                enc = get_encryption_service()
+                params["api_key"] = enc.decrypt(provider.api_key)
+            except Exception as e:
+                # Provide a clearer error upstream
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="LLM provider credentials invalid or cannot be decrypted",
+                )
 
         # Set API base for custom providers
         if provider.api_base:
@@ -212,10 +220,11 @@ class LLMService:
         Raises:
             HTTPException: If creation fails
         """
-        # Encrypt API key if provided
+        # Encrypt API key if provided (consistent with provider service)
         encrypted_key = None
         if api_key:
-            encrypted_key = encrypt_api_key(api_key)
+            enc = get_encryption_service()
+            encrypted_key = enc.encrypt(api_key)
 
         provider = LLMProvider(
             name=name,

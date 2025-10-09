@@ -1,18 +1,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAgentStore, useCrewStore, useToolStore } from '@/lib/store';
+import { useAgentStore, useCrewStore, useToolStore, useFlowStore } from '@/lib/store';
 import { apiClient } from '@/lib/api-client';
 
 interface PropertyPanelProps {
   selectedNode: any | null;
   onUpdateNode: (nodeId: string, data: any) => void;
+  onClearSelection?: () => void;
 }
 
-export default function PropertyPanel({ selectedNode, onUpdateNode }: PropertyPanelProps) {
+export default function PropertyPanel({ selectedNode, onUpdateNode, onClearSelection }: PropertyPanelProps) {
   const { agents, addAgent } = useAgentStore();
   const { crews } = useCrewStore();
   const { tools } = useToolStore();
+  const { currentFlow, updateFlow } = useFlowStore();
 
   const [nodeData, setNodeData] = useState<any>({});
   const [showCreateAgent, setShowCreateAgent] = useState(false);
@@ -53,6 +55,28 @@ export default function PropertyPanel({ selectedNode, onUpdateNode }: PropertyPa
     setNodeData(updatedData);
     onUpdateNode(selectedNode.id, updatedData);
   };
+
+  const handleDeleteNode = () => {
+    if (!currentFlow || !selectedNode) return;
+    if (!confirm('Delete this node? Connected edges will be removed.')) return;
+
+    const nodeId = selectedNode.id;
+    const newNodes = (currentFlow.nodes || []).filter((n: any) => n.id !== nodeId);
+    const newEdges = (currentFlow.edges || []).filter(
+      (e: any) => e.source !== nodeId && e.target !== nodeId
+    );
+    updateFlow(currentFlow.id, { nodes: newNodes, edges: newEdges });
+    // clear selection in editor
+    onClearSelection?.();
+  };
+
+  // Layout controls (width slider) — available for all node types
+  const minWidth = 260;
+  const defaultWidth = selectedNode?.type === 'input' ? 300 : 260;
+  const effectiveWidth = (typeof nodeData.width === 'number'
+    ? nodeData.width
+    : (selectedNode?.style?.width as number | undefined)) ?? defaultWidth;
+  const maxWidth = 1000;
 
   const handleCreateAgent = async (formData: any) => {
     try {
@@ -541,12 +565,44 @@ export default function PropertyPanel({ selectedNode, onUpdateNode }: PropertyPa
       </h3>
 
       <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-        <p className="text-sm font-medium text-gray-700">
-          Type: <span className="text-blue-600">{selectedNode.type}</span>
-        </p>
-        <p className="text-xs text-gray-500 mt-1">
-          ID: {selectedNode.id}
-        </p>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-sm font-medium text-gray-700">
+              Type: <span className="text-blue-600">{selectedNode.type}</span>
+            </p>
+            <p className="text-xs text-gray-500 mt-1">ID: {selectedNode.id}</p>
+          </div>
+          <button
+            onClick={handleDeleteNode}
+            className="inline-flex items-center justify-center text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+            title="Delete node"
+            aria-label="Delete node"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+              <path d="M9 3a1 1 0 0 0-1 1v1H5.5a1 1 0 1 0 0 2H6v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7h.5a1 1 0 1 0 0-2H16V4a1 1 0 0 0-1-1H9zm2 4a1 1 0 1 0-2 0v10a1 1 0 1 0 2 0V7zm4 0a1 1 0 1 0-2 0v10a1 1 0 1 0 2 0V7zM9 5h6v1H9V5z" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Layout */}
+      <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Width: <span className="text-gray-600">{effectiveWidth}px</span>
+        </label>
+        <input
+          type="range"
+          min={minWidth}
+          max={maxWidth}
+          step={10}
+          value={effectiveWidth}
+          onChange={(e) => handleUpdate('width', parseInt(e.target.value))}
+          className="w-full"
+        />
+        <div className="flex justify-between text-[10px] text-gray-500 mt-1">
+          <span>{minWidth}px</span>
+          <span>{maxWidth}px</span>
+        </div>
       </div>
 
       {selectedNode.type === 'agent' && renderAgentProperties()}

@@ -7,6 +7,7 @@ import { apiClient } from '@/lib/api-client';
 import type { FlowUpdate } from '@/types/api';
 import FlowNameEditor from './FlowNameEditor';
 import Breadcrumbs from '../navigation/Breadcrumbs';
+import ExecuteFlowModal from './ExecuteFlowModal';
 
 interface FlowToolbarProps {
   flowId?: number;
@@ -21,6 +22,7 @@ export default function FlowToolbar({ flowId, onSave, onExecute, onDiscard, onOp
   const { currentFlow, updateFlow } = useFlowStore();
   const [saving, setSaving] = useState(false);
   const [executing, setExecuting] = useState(false);
+  const [showExecuteModal, setShowExecuteModal] = useState(false);
 
   const handleSave = async () => {
     if (!currentFlow) return;
@@ -40,6 +42,8 @@ export default function FlowToolbar({ flowId, onSave, onExecute, onDiscard, onOp
         alert(`Save failed: ${response.error}`);
       } else {
         onSave?.();
+        // Navigate back to flows list after successful save
+        router.push('/flows');
       }
     } catch (error) {
       console.error('Save error:', error);
@@ -49,13 +53,32 @@ export default function FlowToolbar({ flowId, onSave, onExecute, onDiscard, onOp
     }
   };
 
-  const handleExecute = async () => {
+  const getInputVariables = () => {
+    if (!currentFlow) return [];
+
+    // Find input nodes in the flow
+    const inputNodes = currentFlow.nodes.filter((node) => node.type === 'input');
+
+    // Collect all input variables from input nodes
+    const allInputs: Array<{ name: string; type: string; required?: boolean }> = [];
+    inputNodes.forEach((node) => {
+      if (node.data.inputs && Array.isArray(node.data.inputs)) {
+        allInputs.push(...node.data.inputs);
+      }
+    });
+
+    return allInputs;
+  };
+
+  const handleExecuteWithInputs = async (inputs: Record<string, any>) => {
     if (!currentFlow) return;
 
     setExecuting(true);
+    setShowExecuteModal(false);
+
     try {
       const response = await apiClient.post(`/api/v1/flows/${currentFlow.id}/execute`, {
-        inputs: {},
+        inputs,
       });
 
       if (response.error) {
@@ -98,12 +121,12 @@ export default function FlowToolbar({ flowId, onSave, onExecute, onDiscard, onOp
 
   const handleNameUpdate = (newName: string) => {
     if (currentFlow) {
-      updateFlow({ ...currentFlow, name: newName });
+      updateFlow(currentFlow.id, { name: newName });
     }
   };
 
   return (
-    <div className="bg-white border-b border-gray-200 px-4 py-3">
+    <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3">
       <Breadcrumbs />
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -140,14 +163,13 @@ export default function FlowToolbar({ flowId, onSave, onExecute, onDiscard, onOp
 
         <button
           onClick={() => {
-            if (confirm('Are you sure you want to discard all changes? This cannot be undone.')) {
+            if (confirm('Are you sure you want to delete this workflow? This action cannot be undone.')) {
               onDiscard?.();
-              router.push('/flows');
             }
           }}
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+          className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
         >
-          Discard
+          Delete
         </button>
 
         <button
@@ -166,7 +188,7 @@ export default function FlowToolbar({ flowId, onSave, onExecute, onDiscard, onOp
         </button>
 
         <button
-          onClick={handleExecute}
+          onClick={() => setShowExecuteModal(true)}
           disabled={executing}
           className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
@@ -174,6 +196,15 @@ export default function FlowToolbar({ flowId, onSave, onExecute, onDiscard, onOp
         </button>
         </div>
       </div>
+
+      {/* Execute Flow Modal */}
+      <ExecuteFlowModal
+        isOpen={showExecuteModal}
+        onClose={() => setShowExecuteModal(false)}
+        onExecute={handleExecuteWithInputs}
+        inputVariables={getInputVariables()}
+        flowName={currentFlow?.name}
+      />
     </div>
   );
 }

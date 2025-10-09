@@ -113,11 +113,15 @@ export default function FlowForm({
             id="flow-variables"
             {...register('variables', {
               setValueAs: (value) => {
-                if (!value || value.trim() === '') return {};
+                // Allow both string (from textarea) and object (from defaultValues)
+                if (value == null) return {};
+                if (typeof value !== 'string') return value;
+                const str = value as string;
+                if (str.trim() === '') return {};
                 try {
-                  return JSON.parse(value);
+                  return JSON.parse(str);
                 } catch {
-                  return value;
+                  return str;
                 }
               },
             })}

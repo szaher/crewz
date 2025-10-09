@@ -1,0 +1,21 @@
+{
+  "/_not-found": "app/_not-found.js",
+  "/accept-invite/page": "app/accept-invite/page.js",
+  "/agents/page": "app/agents/page.js",
+  "/chat/page": "app/chat/page.js",
+  "/crews/page": "app/crews/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/executions/[id]/page": "app/executions/[id]/page.js",
+  "/executions/page": "app/executions/page.js",
+  "/flows/[id]/page": "app/flows/[id]/page.js",
+  "/flows/page": "app/flows/page.js",
+  "/login/page": "app/login/page.js",
+  "/observability/page": "app/observability/page.js",
+  "/page": "app/page.js",
+  "/profile/page": "app/profile/page.js",
+  "/providers/page": "app/providers/page.js",
+  "/register/page": "app/register/page.js",
+  "/settings/page": "app/settings/page.js",
+  "/tools/page": "app/tools/page.js",
+  "/users/page": "app/users/page.js"
+}

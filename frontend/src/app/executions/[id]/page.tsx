@@ -7,31 +7,33 @@ import Navigation from '@/components/shared/Navigation';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import ExecutionDetail from '@/components/executions/ExecutionDetail';
 import ExecutionLogs from '@/components/executions/ExecutionLogs';
-import { apiClient } from '@/lib/api-client';
-import type { Execution } from '@/types/api';
+import { useExecutions, type Execution } from '@/lib/hooks/useExecutions';
 
 export default function ExecutionPage() {
   const params = useParams();
   const router = useRouter();
   const executionId = Number(params.id);
 
+  const { getExecution, cancelExecution } = useExecutions();
   const [execution, setExecution] = useState<Execution | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
 
   const loadExecution = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const response = await apiClient.get(`/api/v1/executions/${executionId}`);
-      if (response.data) {
-        setExecution(response.data.execution);
-      }
-    } catch (error) {
-      console.error('Failed to load execution:', error);
+      const data = await getExecution(executionId);
+      setExecution(data);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load execution';
+      setError(message);
+      console.error('Failed to load execution:', err);
     } finally {
       setLoading(false);
     }
-  }, [executionId]);
+  }, [executionId, getExecution]);
 
   useEffect(() => {
     void loadExecution();
@@ -42,12 +44,11 @@ export default function ExecutionPage() {
 
     setCancelling(true);
     try {
-      const response = await apiClient.post(`/api/v1/executions/${executionId}/cancel`, {});
-      if (response.data) {
-        setExecution(response.data.execution);
-      }
-    } catch (error) {
-      console.error('Failed to cancel execution:', error);
+      await cancelExecution(executionId);
+      // Reload execution to get updated status
+      await loadExecution();
+    } catch (err) {
+      console.error('Failed to cancel execution:', err);
     } finally {
       setCancelling(false);
     }
@@ -56,7 +57,7 @@ export default function ExecutionPage() {
   if (loading) {
     return (
       <ProtectedRoute>
-        <div className="flex h-screen bg-gray-50">
+        <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
           <Navigation />
           <div className="flex-1 overflow-auto">
             <div className="min-h-screen flex items-center justify-center">
@@ -68,21 +69,32 @@ export default function ExecutionPage() {
     );
   }
 
-  if (!execution) {
+  if (error || (!loading && !execution)) {
     return (
       <ProtectedRoute>
-        <div className="flex h-screen bg-gray-50">
+        <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
           <Navigation />
           <div className="flex-1 overflow-auto">
             <div className="min-h-screen flex items-center justify-center">
-              <div className="text-center">
-                <p className="text-gray-500">Execution not found</p>
-                <button
-                  onClick={() => router.push('/dashboard')}
-                  className="mt-4 text-blue-600 hover:text-blue-700"
-                >
-                  Go to Dashboard
-                </button>
+              <div className="text-center max-w-md">
+                <div className="text-5xl mb-4">⚠️</div>
+                <p className="text-red-600 mb-4">
+                  {error || 'Execution not found'}
+                </p>
+                <div className="flex gap-2 justify-center">
+                  <button
+                    onClick={() => loadExecution()}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                  >
+                    Retry
+                  </button>
+                  <button
+                    onClick={() => router.push('/executions')}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                  >
+                    Go to Executions
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -93,7 +105,7 @@ export default function ExecutionPage() {
 
   return (
     <ProtectedRoute>
-      <div className="flex h-screen bg-gray-50">
+      <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
         <Navigation />
         <div className="flex-1 overflow-auto">
           <div className="max-w-7xl mx-auto p-6">

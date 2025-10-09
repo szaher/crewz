@@ -194,7 +194,7 @@ export default function FlowPropertiesPanel({
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Describe this flow..."
-                  rows={4}
+                  rows={3}
                 />
               </div>
             </>
@@ -217,7 +217,7 @@ export default function FlowPropertiesPanel({
                   variablesError ? 'border-red-500' : 'border-gray-300'
                 }`}
                 placeholder='{"key": "value"}'
-                rows={15}
+                rows={8}
               />
               {variablesError && (
                 <p className="mt-2 text-sm text-red-600">{variablesError}</p>

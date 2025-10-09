@@ -3,11 +3,14 @@ import { Handle, Position, NodeProps } from 'reactflow';
 
 export default memo(function ConditionNode({ data, selected }: NodeProps) {
   return (
-    <div className={`
-      px-4 py-3 shadow-md rounded-lg border-2 bg-yellow-50 min-w-[200px]
-      ${selected ? 'border-yellow-500' : 'border-yellow-300'}
-    `}>
-      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-yellow-500" />
+    <div
+      className={`
+        px-4 py-3 shadow-lg rounded-2xl border-2 bg-gradient-to-br from-yellow-50 to-amber-100 dark:from-amber-900/20 dark:to-amber-900/10 min-w-[260px] max-w-none overflow-auto ${data?.__ui?.readOnly ? '' : 'resize-x'}
+        ${selected ? 'border-yellow-600 ring-2 ring-yellow-200' : 'border-yellow-400 dark:border-amber-700'}
+      `}
+      style={data?.width ? { width: data.width } : undefined}
+    >
+      <Handle type="target" position={Position.Top} className="w-4 h-4 bg-yellow-500 border-2 border-white shadow-md" />
 
       <div className="flex items-center gap-2">
         <span className="text-2xl">🔀</span>
@@ -17,7 +20,7 @@ export default memo(function ConditionNode({ data, selected }: NodeProps) {
       </div>
 
       {data.expression && (
-        <div className="mt-2 text-xs font-mono text-gray-600 truncate max-w-[180px]">
+        <div className="mt-2 text-xs font-mono text-gray-600 truncate">
           {data.expression}
         </div>
       )}
@@ -27,14 +30,14 @@ export default memo(function ConditionNode({ data, selected }: NodeProps) {
           type="source"
           position={Position.Bottom}
           id="true"
-          className="w-3 h-3 bg-green-500"
+          className="w-4 h-4 bg-green-500 border-2 border-white shadow-md"
           style={{ left: '30%' }}
         />
         <Handle
           type="source"
           position={Position.Bottom}
           id="false"
-          className="w-3 h-3 bg-red-500"
+          className="w-4 h-4 bg-red-500 border-2 border-white shadow-md"
           style={{ left: '70%' }}
         />
       </div>

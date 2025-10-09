@@ -65,8 +65,8 @@
 
 ### Flow Creation API Integration
 - [x] T020 Test API POST /api/v1/flows endpoint exists
-- [ ] T021 [P] Add flow creation tests in `frontend/tests/components/CreateFlowModal.test.tsx`
-- [ ] T022 [P] Add E2E test for flow creation in `frontend/tests/e2e/flow-creation.spec.ts`
+- [x] T021 [P] Add flow creation tests in `frontend/tests/components/CreateFlowModal.test.tsx`
+- [x] T022 [P] Add E2E test for flow creation in `frontend/tests/e2e/flow-creation.spec.ts`
 
 ### Flow List Display
 - [x] T023 Update Dashboard to display flows list with newly created flows
@@ -191,35 +191,35 @@
 
 ### Execution Monitoring Integration
 - [x] T102 [P] Create useExecutions hook in `frontend/src/lib/hooks/useExecutions.ts`
-- [ ] T103 Update execution list page to use useExecutions hook
+- [x] T103 Update execution list page to use useExecutions hook
 - [x] T104 Add fetchExecutionDetails function
 - [x] T105 Add fetchExecutionLogs function (SSE streaming)
 - [x] T106 Add cancelExecution function
-- [ ] T107 Fix execution list display
-- [ ] T108 Fix execution details page
-- [ ] T109 Implement real-time log streaming
-- [ ] T110 Add loading/error/empty states to execution UI
+- [x] T107 Fix execution list display
+- [x] T108 Fix execution details page
+- [x] T109 Implement real-time log streaming
+- [x] T110 Add loading/error/empty states to execution UI
 
 ### Form Error Handling
-- [ ] T111 Update all forms to display backend validation errors
-- [ ] T112 Add inline field errors (aria-describedby)
-- [ ] T113 Add form-level error summary
-- [ ] T114 Add retry logic for network errors
-- [ ] T115 Add toast notifications for all API operations
+- [x] T111 Update all forms to display backend validation errors
+- [x] T112 Add inline field errors (aria-describedby)
+- [x] T113 Add form-level error summary
+- [x] T114 Add retry logic for network errors
+- [x] T115 Add toast notifications for all API operations
 
 ---
 
 ## Phase 6: Testing & Polish (T116-T140)
 
 ### Unit Tests
-- [ ] T116 [P] Write tests for CreateFlowModal in `frontend/tests/components/CreateFlowModal.test.tsx`
-- [ ] T117 [P] Write tests for FlowNameEditor in `frontend/tests/components/FlowNameEditor.test.tsx`
-- [ ] T118 [P] Write tests for FlowPropertiesPanel in `frontend/tests/components/FlowPropertiesPanel.test.tsx`
-- [ ] T119 [P] Write tests for MetricsDashboard in `frontend/tests/components/MetricsDashboard.test.tsx`
-- [ ] T120 [P] Write tests for all custom hooks (useFlows, useMetrics, etc.)
+- [x] T116 [P] Write tests for CreateFlowModal in `frontend/tests/components/CreateFlowModal.test.tsx`
+- [x] T117 [P] Write tests for FlowNameEditor in `frontend/tests/components/FlowNameEditor.test.tsx`
+- [x] T118 [P] Write tests for FlowPropertiesPanel in `frontend/tests/components/FlowPropertiesPanel.test.tsx`
+- [x] T119 [P] Write tests for MetricsDashboard in `frontend/tests/components/MetricsDashboard.test.tsx`
+- [x] T120 [P] Write tests for all custom hooks (useFlows, useMetrics, etc.)
 
 ### E2E Tests
-- [ ] T121 [P] Write E2E test for flow creation in `frontend/tests/e2e/flow-creation.spec.ts`
+- [x] T121 [P] Write E2E test for flow creation in `frontend/tests/e2e/flow-creation.spec.ts`
 - [ ] T122 [P] Write E2E test for flow editing in `frontend/tests/e2e/flow-editing.spec.ts`
 - [ ] T123 [P] Write E2E test for navigation in `frontend/tests/e2e/navigation.spec.ts`
 - [ ] T124 [P] Write E2E test for observability dashboard in `frontend/tests/e2e/observability.spec.ts`

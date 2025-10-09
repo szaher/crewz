@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { useToolStore } from '@/lib/store';
+import { useToolStore, useUIStore } from '@/lib/store';
 import { apiClient } from '@/lib/api-client';
 import type { ToolCreate } from '@/types/api';
 
@@ -20,6 +20,7 @@ interface ToolFormProps {
 
 export default function ToolForm({ toolId, onSave, onCancel }: ToolFormProps) {
   const { tools, addTool, updateTool } = useToolStore();
+  const { theme } = useUIStore();
   const existingTool = toolId ? tools.find((t) => t.id === toolId) : null;
 
   const [formData, setFormData] = useState<ToolCreate>({
@@ -37,6 +38,12 @@ export default function ToolForm({ toolId, onSave, onCancel }: ToolFormProps) {
   const [codeError, setCodeError] = useState<string | null>(null);
   const [showExampleModal, setShowExampleModal] = useState(false);
   const [pythonExtension, setPythonExtension] = useState<any>(null);
+  const isDark = (() => {
+    if (typeof window === 'undefined') return false;
+    if (theme === 'dark') return true;
+    if (theme === 'light') return false;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  })();
 
   // Load python extension dynamically
   useMemo(() => {
@@ -280,7 +287,7 @@ def perform_search(query: str, limit: int) -> list:
                   setFormData({ ...formData, code: value });
                   setCodeError(null);
                 }}
-                theme="light"
+                theme={isDark ? 'dark' : 'light'}
                 basicSetup={{
                   lineNumbers: true,
                   highlightActiveLineGutter: true,
@@ -404,7 +411,7 @@ def perform_search(query: str, limit: int) -> list:
                       height="400px"
                       extensions={[pythonExtension]}
                       editable={false}
-                      theme="light"
+                      theme={isDark ? 'dark' : 'light'}
                       basicSetup={{
                         lineNumbers: true,
                         highlightActiveLineGutter: false,

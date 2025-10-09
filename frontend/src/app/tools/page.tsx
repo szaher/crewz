@@ -31,10 +31,13 @@ export default function ToolsPage() {
   if (showForm) {
     return (
       <ProtectedRoute>
-        <div className="flex h-screen bg-gray-50">
+        <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
           <Navigation />
           <div className="flex-1 overflow-auto">
             <div className="max-w-4xl mx-auto p-6">
+              <div className="mb-4">
+                <Breadcrumbs />
+              </div>
               <h2 className="text-2xl font-bold text-gray-900 mb-6">
                 {editingToolId ? 'Edit Tool' : 'Create New Tool'}
               </h2>
@@ -52,7 +55,7 @@ export default function ToolsPage() {
 
   return (
     <ProtectedRoute>
-      <div className="flex h-screen bg-gray-50">
+      <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
         <Navigation />
         <div className="flex-1 overflow-auto">
           <div className="max-w-7xl mx-auto p-6">

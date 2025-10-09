@@ -3,11 +3,14 @@ import { Handle, Position, NodeProps } from 'reactflow';
 
 export default memo(function ToolNode({ data, selected }: NodeProps) {
   return (
-    <div className={`
-      px-4 py-3 shadow-md rounded-lg border-2 bg-purple-50 min-w-[200px]
-      ${selected ? 'border-purple-500' : 'border-purple-300'}
-    `}>
-      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-purple-500" />
+    <div
+      className={`
+        px-4 py-3 shadow-lg rounded-2xl border-2 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-900/10 min-w-[260px] max-w-none overflow-auto ${data?.__ui?.readOnly ? '' : 'resize-x'}
+        ${selected ? 'border-purple-600 ring-2 ring-purple-200' : 'border-purple-400 dark:border-purple-700'}
+      `}
+      style={data?.width ? { width: data.width } : undefined}
+    >
+      <Handle type="target" position={Position.Top} className="w-4 h-4 bg-purple-500 border-2 border-white shadow-md" />
 
       <div className="flex items-center gap-2">
         <span className="text-2xl">🔧</span>
@@ -25,7 +28,7 @@ export default memo(function ToolNode({ data, selected }: NodeProps) {
         </div>
       )}
 
-      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-purple-500" />
+      <Handle type="source" position={Position.Bottom} className="w-4 h-4 bg-purple-500 border-2 border-white shadow-md" />
     </div>
   );
 });

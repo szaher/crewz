@@ -43,7 +43,7 @@ export default function Dashboard() {
       {/* Welcome */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-500 mt-1">Welcome to your CrewAI orchestration platform</p>
+        <p className="text-gray-500 mt-1">Welcome to your automation orchestration platform</p>
       </div>
 
       {/* Stats Grid */}

@@ -78,8 +78,8 @@ if _debug_modules:
 
 # Create FastAPI application
 app = FastAPI(
-    title="CrewAI Orchestration Platform API",
-    description="Multi-tenant platform for creating, managing, and executing AI crew workflows",
+    title="Automation Platform API",
+    description="Multi-tenant platform for creating, managing, and executing AI workflows",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
@@ -200,7 +200,7 @@ async def health_check():
 async def root():
     """Root endpoint - API information"""
     return {
-        "message": "CrewAI Orchestration Platform API",
+        "message": "Automation Platform API",
         "version": "1.0.0",
         "docs": "/docs",
         "health": "/health"

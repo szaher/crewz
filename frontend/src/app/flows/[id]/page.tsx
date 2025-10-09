@@ -11,6 +11,7 @@ import PropertyPanel from '@/components/flows/PropertyPanel';
 import FlowPropertiesPanel from '@/components/flows/FlowPropertiesPanel';
 import { useFlowStore } from '@/lib/store';
 import { apiClient } from '@/lib/api-client';
+import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 
 export default function FlowEditorPage() {
   const params = useParams();
@@ -78,8 +79,17 @@ export default function FlowEditorPage() {
   }, [flowId, isNew, creating, setCurrentFlow, router]);
 
   const handleUpdateNode = (nodeId: string, data: any) => {
-    // Node updates are handled by FlowCanvas and PropertyPanel
-    console.log('Node updated:', nodeId, data);
+    if (!currentFlow) return;
+
+    // Update the node in the current flow
+    const updatedNodes = currentFlow.nodes.map((node) =>
+      node.id === nodeId ? { ...node, data } : node
+    );
+
+    setCurrentFlow({
+      ...currentFlow,
+      nodes: updatedNodes,
+    });
   };
 
   const handleNodeSelect = (node: any) => {
@@ -95,19 +105,20 @@ export default function FlowEditorPage() {
       return;
     }
 
-    // Reload the flow from the backend to discard local changes
+    // Delete the flow from the backend
+    if (!confirm('Are you sure you want to delete this workflow? This action cannot be undone.')) {
+      return;
+    }
+
     setLoading(true);
     try {
-      const response = await apiClient.get(`/api/v1/flows/${flowId}`);
-      if (response.data) {
-        setCurrentFlow(response.data);
-        setSelectedNode(null);
-      }
-    } catch (error) {
-      console.error('Failed to reload flow:', error);
-      // If reload fails, navigate away
+      await apiClient.delete(`/api/v1/flows/${flowId}`);
+      setCurrentFlow(null);
+      setSelectedNode(null);
       router.push('/flows');
-    } finally {
+    } catch (error) {
+      console.error('Failed to delete flow:', error);
+      alert('Failed to delete workflow. Please try again.');
       setLoading(false);
     }
   };
@@ -115,9 +126,12 @@ export default function FlowEditorPage() {
   if (loading) {
     return (
       <ProtectedRoute>
-        <div className="flex h-screen bg-gray-50">
+        <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
           <Navigation />
           <div className="flex-1 overflow-auto">
+            <div className="px-6 pt-4">
+              <Breadcrumbs />
+            </div>
             <div className="min-h-screen flex items-center justify-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
             </div>
@@ -130,9 +144,12 @@ export default function FlowEditorPage() {
   if (!isNew && (!flowId || isNaN(flowId))) {
     return (
       <ProtectedRoute>
-        <div className="flex h-screen bg-gray-50">
+        <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
           <Navigation />
           <div className="flex-1 overflow-auto">
+            <div className="px-6 pt-4">
+              <Breadcrumbs />
+            </div>
             <div className="min-h-screen flex items-center justify-center">
               <div className="text-center">
                 <h1 className="text-2xl font-bold text-gray-900 mb-2">Invalid Flow ID</h1>
@@ -153,7 +170,8 @@ export default function FlowEditorPage() {
 
   return (
     <ProtectedRoute>
-      <div className="flex h-screen bg-gray-50">
+      <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+        {/* Keep menu visible for normal editing, hidden only during creation/loading */}
         <Navigation />
         <div className="flex-1 overflow-auto">
           <div className="h-screen flex flex-col">
@@ -173,6 +191,7 @@ export default function FlowEditorPage() {
           <PropertyPanel
             selectedNode={selectedNode}
             onUpdateNode={handleUpdateNode}
+            onClearSelection={() => setSelectedNode(null)}
           />
         </div>
 

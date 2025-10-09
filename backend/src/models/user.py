@@ -1,9 +1,10 @@
 """User model for authentication and authorization."""
 
-from sqlalchemy import Column, String, Boolean, Integer, ForeignKey, Enum
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, String, Boolean, Integer, ForeignKey, Enum, DateTime
+from sqlalchemy.orm import relationship, deferred
 from .base import BaseModel
 import enum
+from datetime import datetime
 
 
 class UserRole(str, enum.Enum):
@@ -29,6 +30,10 @@ class User(BaseModel):
     full_name = Column(String(255), nullable=False)
     role = Column(Enum(UserRole), nullable=False, default=UserRole.MEMBER)
     is_active = Column(Boolean, nullable=False, default=True)
+    # Invitation / password reset
+    password_reset_token = deferred(Column(String(255), nullable=True))
+    password_reset_expires = deferred(Column(DateTime, nullable=True))
+    require_password_change = deferred(Column(Boolean, nullable=False, default=False))
 
     # Relationships
     tenant = relationship("Tenant", back_populates="users")

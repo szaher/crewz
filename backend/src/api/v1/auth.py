@@ -11,6 +11,10 @@ from ...schemas.auth import (
     LoginResponse,
 )
 from ...services.auth_service import AuthService
+from pydantic import BaseModel, Field
+from typing import Optional
+from datetime import datetime
+from ...models import User
 
 router = APIRouter()
 
@@ -86,3 +90,30 @@ async def refresh_token(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
         )
+
+
+class AcceptInviteRequest(BaseModel):
+    token: str = Field(..., min_length=10)
+    password: str = Field(..., min_length=8)
+
+
+@router.post("/accept-invite")
+async def accept_invite(
+    body: AcceptInviteRequest,
+    db: Session = Depends(get_db),
+):
+    """Accept an invitation by setting a password using the invite token."""
+    user: Optional[User] = db.query(User).filter(User.password_reset_token == body.token).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired token")
+
+    if not user.password_reset_expires or datetime.utcnow() > user.password_reset_expires:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token expired")
+
+    user.password_hash = AuthService.hash_password(body.password)
+    user.password_reset_token = None
+    user.password_reset_expires = None
+    user.require_password_change = False
+    db.commit()
+
+    return {"message": "Invitation accepted. You can now log in."}
