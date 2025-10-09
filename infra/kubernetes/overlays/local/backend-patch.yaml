@@ -22,4 +22,6 @@ spec:
         - name: FRONTEND_URL
           value: "http://localhost:3000"
         - name: ALLOWED_ORIGINS
-          value: "http://localhost:3000,http://127.0.0.1:3000"
+          value: "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001"
+        - name: ALLOWED_ORIGIN_REGEX
+          value: "^http://localhost(:[0-9]+)?$"

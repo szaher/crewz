@@ -1,18 +1,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAgentStore, useCrewStore, useToolStore } from '@/lib/store';
+import { useAgentStore, useCrewStore, useToolStore, useFlowStore } from '@/lib/store';
 import { apiClient } from '@/lib/api-client';
 
 interface PropertyPanelProps {
   selectedNode: any | null;
   onUpdateNode: (nodeId: string, data: any) => void;
+  onClearSelection?: () => void;
 }
 
-export default function PropertyPanel({ selectedNode, onUpdateNode }: PropertyPanelProps) {
+export default function PropertyPanel({ selectedNode, onUpdateNode, onClearSelection }: PropertyPanelProps) {
   const { agents, addAgent } = useAgentStore();
   const { crews } = useCrewStore();
   const { tools } = useToolStore();
+  const { currentFlow, updateFlow } = useFlowStore();
 
   const [nodeData, setNodeData] = useState<any>({});
   const [showCreateAgent, setShowCreateAgent] = useState(false);
@@ -53,6 +55,28 @@ export default function PropertyPanel({ selectedNode, onUpdateNode }: PropertyPa
     setNodeData(updatedData);
     onUpdateNode(selectedNode.id, updatedData);
   };
+
+  const handleDeleteNode = () => {
+    if (!currentFlow || !selectedNode) return;
+    if (!confirm('Delete this node? Connected edges will be removed.')) return;
+
+    const nodeId = selectedNode.id;
+    const newNodes = (currentFlow.nodes || []).filter((n: any) => n.id !== nodeId);
+    const newEdges = (currentFlow.edges || []).filter(
+      (e: any) => e.source !== nodeId && e.target !== nodeId
+    );
+    updateFlow(currentFlow.id, { nodes: newNodes, edges: newEdges });
+    // clear selection in editor
+    onClearSelection?.();
+  };
+
+  // Layout controls (width slider) — available for all node types
+  const minWidth = 260;
+  const defaultWidth = selectedNode?.type === 'input' ? 300 : 260;
+  const effectiveWidth = (typeof nodeData.width === 'number'
+    ? nodeData.width
+    : (selectedNode?.style?.width as number | undefined)) ?? defaultWidth;
+  const maxWidth = 1000;
 
   const handleCreateAgent = async (formData: any) => {
     try {
@@ -276,6 +300,229 @@ export default function PropertyPanel({ selectedNode, onUpdateNode }: PropertyPa
     </div>
   );
 
+  const renderInputNodeProperties = () => {
+    const inputs = nodeData.inputs || [];
+
+    const addInput = () => {
+      const newInputs = [...inputs, { name: `input_${inputs.length + 1}`, type: 'string', required: false }];
+      handleUpdate('inputs', newInputs);
+    };
+
+    const removeInput = (index: number) => {
+      const newInputs = inputs.filter((_: any, i: number) => i !== index);
+      handleUpdate('inputs', newInputs);
+    };
+
+    const updateInput = (index: number, field: string, value: any) => {
+      const newInputs = [...inputs];
+      newInputs[index] = { ...newInputs[index], [field]: value };
+      handleUpdate('inputs', newInputs);
+    };
+
+    return (
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Node Label
+          </label>
+          <input
+            type="text"
+            value={nodeData.label || ''}
+            onChange={(e) => handleUpdate('label', e.target.value)}
+            placeholder="Flow Input"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Description
+          </label>
+          <textarea
+            value={nodeData.description || ''}
+            onChange={(e) => handleUpdate('description', e.target.value)}
+            rows={2}
+            placeholder="Describe what inputs this flow expects..."
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+          />
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Input Variables
+            </label>
+            <button
+              onClick={addInput}
+              className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              + Add Input
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {inputs.map((input: any, index: number) => (
+              <div key={index} className="p-3 bg-gray-50 rounded border border-gray-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-gray-600">Input {index + 1}</span>
+                  <button
+                    onClick={() => removeInput(index)}
+                    className="text-xs text-red-600 hover:text-red-800"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={input.name || ''}
+                    onChange={(e) => updateInput(index, 'name', e.target.value)}
+                    placeholder="Variable name"
+                    className="w-full rounded border border-gray-300 px-2 py-1 text-xs"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      value={input.type || 'string'}
+                      onChange={(e) => updateInput(index, 'type', e.target.value)}
+                      className="rounded border border-gray-300 px-2 py-1 text-xs"
+                    >
+                      <option value="string">String</option>
+                      <option value="number">Number</option>
+                      <option value="boolean">Boolean</option>
+                      <option value="object">Object</option>
+                      <option value="array">Array</option>
+                    </select>
+                    <label className="flex items-center text-xs">
+                      <input
+                        type="checkbox"
+                        checked={input.required || false}
+                        onChange={(e) => updateInput(index, 'required', e.target.checked)}
+                        className="mr-1"
+                      />
+                      Required
+                    </label>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {inputs.length === 0 && (
+            <p className="text-xs text-gray-500 text-center py-4">
+              No input variables defined. Click "Add Input" to add one.
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderOutputNodeProperties = () => {
+    const outputs = nodeData.outputs || [];
+
+    const addOutput = () => {
+      const newOutputs = [...outputs, { name: `output_${outputs.length + 1}`, type: 'string' }];
+      handleUpdate('outputs', newOutputs);
+    };
+
+    const removeOutput = (index: number) => {
+      const newOutputs = outputs.filter((_: any, i: number) => i !== index);
+      handleUpdate('outputs', newOutputs);
+    };
+
+    const updateOutput = (index: number, field: string, value: any) => {
+      const newOutputs = [...outputs];
+      newOutputs[index] = { ...newOutputs[index], [field]: value };
+      handleUpdate('outputs', newOutputs);
+    };
+
+    return (
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Node Label
+          </label>
+          <input
+            type="text"
+            value={nodeData.label || ''}
+            onChange={(e) => handleUpdate('label', e.target.value)}
+            placeholder="Flow Output"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Description
+          </label>
+          <textarea
+            value={nodeData.description || ''}
+            onChange={(e) => handleUpdate('description', e.target.value)}
+            rows={2}
+            placeholder="Describe what outputs this flow produces..."
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+          />
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Output Variables
+            </label>
+            <button
+              onClick={addOutput}
+              className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+            >
+              + Add Output
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {outputs.map((output: any, index: number) => (
+              <div key={index} className="p-3 bg-gray-50 rounded border border-gray-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-gray-600">Output {index + 1}</span>
+                  <button
+                    onClick={() => removeOutput(index)}
+                    className="text-xs text-red-600 hover:text-red-800"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={output.name || ''}
+                    onChange={(e) => updateOutput(index, 'name', e.target.value)}
+                    placeholder="Variable name"
+                    className="w-full rounded border border-gray-300 px-2 py-1 text-xs"
+                  />
+                  <select
+                    value={output.type || 'string'}
+                    onChange={(e) => updateOutput(index, 'type', e.target.value)}
+                    className="w-full rounded border border-gray-300 px-2 py-1 text-xs"
+                  >
+                    <option value="string">String</option>
+                    <option value="number">Number</option>
+                    <option value="boolean">Boolean</option>
+                    <option value="object">Object</option>
+                    <option value="array">Array</option>
+                  </select>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {outputs.length === 0 && (
+            <p className="text-xs text-gray-500 text-center py-4">
+              No output variables defined. Click "Add Output" to add one.
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const renderGenericProperties = () => (
     <div className="space-y-4">
       <div>
@@ -318,18 +565,52 @@ export default function PropertyPanel({ selectedNode, onUpdateNode }: PropertyPa
       </h3>
 
       <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-        <p className="text-sm font-medium text-gray-700">
-          Type: <span className="text-blue-600">{selectedNode.type}</span>
-        </p>
-        <p className="text-xs text-gray-500 mt-1">
-          ID: {selectedNode.id}
-        </p>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-sm font-medium text-gray-700">
+              Type: <span className="text-blue-600">{selectedNode.type}</span>
+            </p>
+            <p className="text-xs text-gray-500 mt-1">ID: {selectedNode.id}</p>
+          </div>
+          <button
+            onClick={handleDeleteNode}
+            className="inline-flex items-center justify-center text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+            title="Delete node"
+            aria-label="Delete node"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+              <path d="M9 3a1 1 0 0 0-1 1v1H5.5a1 1 0 1 0 0 2H6v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7h.5a1 1 0 1 0 0-2H16V4a1 1 0 0 0-1-1H9zm2 4a1 1 0 1 0-2 0v10a1 1 0 1 0 2 0V7zm4 0a1 1 0 1 0-2 0v10a1 1 0 1 0 2 0V7zM9 5h6v1H9V5z" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Layout */}
+      <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Width: <span className="text-gray-600">{effectiveWidth}px</span>
+        </label>
+        <input
+          type="range"
+          min={minWidth}
+          max={maxWidth}
+          step={10}
+          value={effectiveWidth}
+          onChange={(e) => handleUpdate('width', parseInt(e.target.value))}
+          className="w-full"
+        />
+        <div className="flex justify-between text-[10px] text-gray-500 mt-1">
+          <span>{minWidth}px</span>
+          <span>{maxWidth}px</span>
+        </div>
       </div>
 
       {selectedNode.type === 'agent' && renderAgentProperties()}
       {selectedNode.type === 'crew' && renderCrewProperties()}
       {selectedNode.type === 'tool' && renderToolProperties()}
-      {!['agent', 'crew', 'tool'].includes(selectedNode.type) && renderGenericProperties()}
+      {selectedNode.type === 'input' && renderInputNodeProperties()}
+      {selectedNode.type === 'output' && renderOutputNodeProperties()}
+      {!['agent', 'crew', 'tool', 'input', 'output'].includes(selectedNode.type) && renderGenericProperties()}
     </div>
   );
 }

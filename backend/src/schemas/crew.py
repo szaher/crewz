@@ -3,6 +3,7 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
+from ..models.crew import CrewProcess
 
 
 class CrewCreate(BaseModel):
@@ -10,10 +11,14 @@ class CrewCreate(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
-    process: str = "sequential"  # sequential or hierarchical
+    process: CrewProcess = CrewProcess.SEQUENTIAL
     verbose: bool = False
+    memory: bool = False
     agent_ids: List[int] = Field(default_factory=list)
     manager_llm_provider_id: Optional[int] = None
+    # Compatibility with older frontend payloads
+    process_type: Optional[CrewProcess] = None
+    agents: Optional[List[int]] = None
 
 
 class CrewUpdate(BaseModel):
@@ -21,23 +26,37 @@ class CrewUpdate(BaseModel):
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
-    process: Optional[str] = None
+    process: Optional[CrewProcess] = None
     verbose: Optional[bool] = None
     agent_ids: Optional[List[int]] = None
     manager_llm_provider_id: Optional[int] = None
+    # Compatibility with older frontend payloads
+    process_type: Optional[CrewProcess] = None
+    agents: Optional[List[int]] = None
 
 
-class CrewResponse(BaseModel):
-    """Schema for crew response."""
+class CrewOut(BaseModel):
+    """Schema representing a crew."""
 
-    crew: dict
+    id: int
+    name: str
+    description: Optional[str] = None
+    process: CrewProcess
+    verbose: bool
+    memory: bool
+    manager_llm_provider_id: Optional[int] = None
+    agent_ids: List[int] = []
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
 
 
-class CrewListResponse(BaseModel):
-    """Schema for list of crews."""
+class CrewResponse(BaseModel):
+    crew: CrewOut
 
-    crews: List[dict]
+
+class CrewListResponse(BaseModel):
+    crews: List[CrewOut]
     total: int

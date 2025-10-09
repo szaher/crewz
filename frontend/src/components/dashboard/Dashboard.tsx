@@ -4,12 +4,15 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { useFlowStore, useExecutionStore, useCrewStore } from '@/lib/store';
+import CreateFlowModal from '../flows/CreateFlowModal';
 
 export default function Dashboard() {
   const router = useRouter();
   const { flows } = useFlowStore();
   const { executions } = useExecutionStore();
   const { crews } = useCrewStore();
+
+  const [isCreateFlowModalOpen, setIsCreateFlowModalOpen] = useState(false);
 
   const [stats, setStats] = useState({
     totalFlows: 0,
@@ -31,12 +34,16 @@ export default function Dashboard() {
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 5);
 
+  const recentFlows = flows
+    .sort((a, b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime())
+    .slice(0, 6);
+
   return (
     <div className="space-y-6">
       {/* Welcome */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-500 mt-1">Welcome to your CrewAI orchestration platform</p>
+        <p className="text-gray-500 mt-1">Welcome to your automation orchestration platform</p>
       </div>
 
       {/* Stats Grid */}
@@ -97,12 +104,12 @@ export default function Dashboard() {
       {/* Quick Actions */}
       <div className="bg-white p-6 rounded-lg border border-gray-200">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <button
-            onClick={() => router.push('/flows/new')}
+            onClick={() => setIsCreateFlowModalOpen(true)}
             className="p-4 text-center border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
           >
-            <div className="text-2xl mb-2">➕</div>
+            <div className="text-2xl mb-2">🔀</div>
             <p className="text-sm font-medium text-gray-700">Create Flow</p>
           </button>
 
@@ -123,6 +130,22 @@ export default function Dashboard() {
           </button>
 
           <button
+            onClick={() => router.push('/providers')}
+            className="p-4 text-center border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
+          >
+            <div className="text-2xl mb-2">🔌</div>
+            <p className="text-sm font-medium text-gray-700">Add Provider</p>
+          </button>
+
+          <button
+            onClick={() => router.push('/observability')}
+            className="p-4 text-center border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
+          >
+            <div className="text-2xl mb-2">📈</div>
+            <p className="text-sm font-medium text-gray-700">Observability</p>
+          </button>
+
+          <button
             onClick={() => router.push('/chat')}
             className="p-4 text-center border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
           >
@@ -130,6 +153,69 @@ export default function Dashboard() {
             <p className="text-sm font-medium text-gray-700">Start Chat</p>
           </button>
         </div>
+      </div>
+
+      {/* Recent Flows */}
+      <div className="bg-white p-6 rounded-lg border border-gray-200">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-gray-900">Recent Flows</h2>
+          <button
+            onClick={() => router.push('/flows')}
+            className="text-sm text-blue-600 hover:text-blue-700"
+          >
+            View all →
+          </button>
+        </div>
+
+        {flows.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="text-5xl mb-4">🔀</div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No flows yet</h3>
+            <p className="text-sm text-gray-500 mb-4">Create your first flow to get started</p>
+            <button
+              onClick={() => setIsCreateFlowModalOpen(true)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Create Flow
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {recentFlows.map((flow) => (
+              <div
+                key={flow.id}
+                onClick={() => router.push(`/flows/${flow.id}`)}
+                className="p-4 border border-gray-200 rounded-lg hover:shadow-md hover:border-blue-300 cursor-pointer transition-all"
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <h3 className="font-semibold text-gray-900 truncate flex-1">{flow.name}</h3>
+                  <span className={`ml-2 px-2 py-1 text-xs font-medium rounded ${
+                    flow.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {flow.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+
+                {flow.description && (
+                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">{flow.description}</p>
+                )}
+
+                <div className="flex items-center gap-4 text-xs text-gray-500">
+                  <span>
+                    {flow.nodes?.length || 0} nodes
+                  </span>
+                  <span>
+                    {flow.edges?.length || 0} connections
+                  </span>
+                </div>
+
+                <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500">
+                  Updated {new Date(flow.updated_at || flow.created_at).toLocaleDateString()}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Recent Executions */}
@@ -178,6 +264,12 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* Create Flow Modal */}
+      <CreateFlowModal
+        isOpen={isCreateFlowModalOpen}
+        onClose={() => setIsCreateFlowModalOpen(false)}
+      />
     </div>
   );
 }

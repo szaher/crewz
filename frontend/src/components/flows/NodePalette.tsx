@@ -25,8 +25,8 @@ export default function NodePalette() {
   };
 
   return (
-    <div className="bg-white border-r border-gray-200 p-4 w-64 overflow-y-auto">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Node Palette</h3>
+    <div className="bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 p-4 w-64 overflow-y-auto">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Node Palette</h3>
 
       <div className="space-y-2">
         {nodeTypes.map((nodeType) => (
@@ -34,19 +34,19 @@ export default function NodePalette() {
             key={nodeType.type}
             draggable
             onDragStart={(e) => onDragStart(e, nodeType.type)}
-            className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200 cursor-move hover:bg-gray-100 hover:border-blue-300 transition-colors"
+            className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 cursor-move hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-blue-300 transition-colors"
           >
             <span className="text-2xl">{nodeType.icon}</span>
             <div className="flex-1">
-              <p className="font-medium text-gray-900 text-sm">{nodeType.label}</p>
-              <p className="text-xs text-gray-500">{nodeType.description}</p>
+              <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">{nodeType.label}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{nodeType.description}</p>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="mt-6 p-3 bg-blue-50 rounded-lg border border-blue-200">
-        <p className="text-xs text-blue-800">
+      <div className="mt-6 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800/50">
+        <p className="text-xs text-blue-800 dark:text-blue-300">
           Drag nodes onto the canvas to build your flow. Connect them to create a workflow.
         </p>
       </div>

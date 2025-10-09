@@ -25,7 +25,9 @@ class WebSocketClient {
   private socket: Socket | null = null;
   private baseUrl: string;
 
-  constructor(baseUrl: string = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000') {
+  constructor(baseUrl: string = process.env.NEXT_PUBLIC_WS_URL || (typeof window !== 'undefined'
+    ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.hostname}:8000`
+    : 'ws://localhost:8000')) {
     this.baseUrl = baseUrl;
   }
 

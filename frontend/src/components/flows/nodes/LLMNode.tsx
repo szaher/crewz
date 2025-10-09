@@ -3,11 +3,14 @@ import { Handle, Position, NodeProps } from 'reactflow';
 
 export default memo(function LLMNode({ data, selected }: NodeProps) {
   return (
-    <div className={`
-      px-4 py-3 shadow-md rounded-lg border-2 bg-green-50 min-w-[200px]
-      ${selected ? 'border-green-500' : 'border-green-300'}
-    `}>
-      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-green-500" />
+    <div
+      className={`
+        px-4 py-3 shadow-lg rounded-2xl border-2 bg-gradient-to-br from-green-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-900/10 min-w-[260px] max-w-none overflow-auto ${data?.__ui?.readOnly ? '' : 'resize-x'}
+        ${selected ? 'border-green-600 ring-2 ring-green-200' : 'border-green-400 dark:border-green-700'}
+      `}
+      style={data?.width ? { width: data.width } : undefined}
+    >
+      <Handle type="target" position={Position.Top} className="w-4 h-4 bg-green-500 border-2 border-white shadow-md" />
 
       <div className="flex items-center gap-2">
         <span className="text-2xl">🧠</span>
@@ -20,12 +23,12 @@ export default memo(function LLMNode({ data, selected }: NodeProps) {
       </div>
 
       {data.prompt && (
-        <div className="mt-2 text-xs text-gray-600 truncate max-w-[180px]">
+        <div className="mt-2 text-xs text-gray-600 truncate">
           {data.prompt}
         </div>
       )}
 
-      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-green-500" />
+      <Handle type="source" position={Position.Bottom} className="w-4 h-4 bg-green-500 border-2 border-white shadow-md" />
     </div>
   );
 });

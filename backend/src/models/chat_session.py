@@ -32,6 +32,8 @@ class ChatSession(BaseModel):
     # Relationships
     user = relationship("User", back_populates="chat_sessions")
     llm_provider = relationship("LLMProvider")
+    folder_id = Column(Integer, ForeignKey("chat_folders.id"), nullable=True, index=True)
+    folder = relationship("ChatFolder", back_populates="sessions")
 
     def __repr__(self):
         return f"<ChatSession(id={self.id}, user_id={self.user_id}, active={self.is_active})>"

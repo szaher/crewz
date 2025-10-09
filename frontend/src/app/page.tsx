@@ -40,7 +40,7 @@ export default function HomePage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
       <div className="text-center">
         <div className="animate-spin-slow inline-block w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full"></div>
-        <p className="mt-4 text-gray-600">Loading CrewAI Platform...</p>
+        <p className="mt-4 text-gray-600">Loading Automation Platform...</p>
       </div>
     </div>
   );

@@ -1,8 +1,10 @@
-'use client';
+"use client";
 
 import { useState, useEffect } from 'react';
-import { useCrewStore, useAgentStore } from '@/lib/store';
-import { apiClient } from '@/lib/api-client';
+import { useRouter } from 'next/navigation';
+import { useCrews } from '@/lib/hooks/useCrews';
+import { useAgents } from '@/lib/hooks/useAgents';
+import { useLLMProviders } from '@/lib/hooks/useLLMProviders';
 import type { CrewCreate, CrewUpdate } from '@/types/api';
 import AgentCard from './AgentCard';
 
@@ -12,8 +14,10 @@ interface CrewBuilderProps {
 }
 
 export default function CrewBuilder({ crewId, onSave }: CrewBuilderProps) {
-  const { crews, addCrew, updateCrew } = useCrewStore();
-  const { agents } = useAgentStore();
+  const router = useRouter();
+  const { crews, createCrew, updateCrew: updateCrewHook, getCrew } = useCrews();
+  const { agents, loading: agentsLoading, error: agentsError, refetch: refetchAgents } = useAgents();
+  const { providers, loading: providersLoading } = useLLMProviders();
 
   const existingCrew = crewId ? crews.find((c) => c.id === crewId) : null;
 
@@ -30,6 +34,12 @@ export default function CrewBuilder({ crewId, onSave }: CrewBuilderProps) {
   const [selectedAgents, setSelectedAgents] = useState<number[]>(existingCrew?.agent_ids || []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [providerFilter, setProviderFilter] = useState<number | 'all'>('all');
+
+  useEffect(() => {
+    // Ensure agents are loaded when opening the builder
+    refetchAgents();
+  }, [refetchAgents]);
 
   useEffect(() => {
     if (existingCrew) {
@@ -69,22 +79,12 @@ export default function CrewBuilder({ crewId, onSave }: CrewBuilderProps) {
     try {
       if (crewId) {
         // Update existing crew
-        const response = await apiClient.put(`/api/v1/crews/${crewId}`, formData);
-        if (response.error) {
-          setError(response.error);
-        } else if (response.data) {
-          updateCrew(crewId, response.data.crew);
-          onSave?.(crewId);
-        }
+        const updatedCrew = await updateCrewHook(crewId, formData);
+        onSave?.(updatedCrew.id);
       } else {
         // Create new crew
-        const response = await apiClient.post('/api/v1/crews', formData);
-        if (response.error) {
-          setError(response.error);
-        } else if (response.data) {
-          addCrew(response.data.crew);
-          onSave?.(response.data.crew.id);
-        }
+        const newCrew = await createCrew(formData);
+        onSave?.(newCrew.id);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save crew');
@@ -179,11 +179,42 @@ export default function CrewBuilder({ crewId, onSave }: CrewBuilderProps) {
             Select Agents ({selectedAgents.length} selected)
           </h3>
 
-          {agents.length === 0 ? (
-            <p className="text-sm text-gray-500">No agents available. Create agents first.</p>
+          {/* Provider Filter */}
+          <div className="flex items-center gap-3 mb-4">
+            <label className="text-sm text-gray-700">Filter by provider</label>
+            <select
+              value={providerFilter}
+              onChange={(e) => setProviderFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+            >
+              <option value="all">All providers</option>
+              {!providersLoading && providers.map((p) => (
+                <option key={p.id} value={p.id}>{p.name} ({p.provider_type})</option>
+              ))}
+            </select>
+          </div>
+
+          {agentsError ? (
+            <div className="text-sm text-red-600">Failed to load agents: {agentsError}</div>
+          ) : agentsLoading ? (
+            <div className="text-sm text-gray-500">Loading agents…</div>
+          ) : agents.length === 0 ? (
+            <div>
+              <p className="text-sm text-gray-500 mb-3">No agents available. Create your first agent to get started.</p>
+              <button
+                type="button"
+                onClick={() => router.push('/agents')}
+                className="px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+              >
+                Create Agent
+              </button>
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {agents.map((agent) => (
+              {(providerFilter === 'all'
+                ? agents
+                : agents.filter((a: any) => (a as any).llm_provider_id === Number(providerFilter))
+              ).map((agent) => (
                 <AgentCard
                   key={agent.id}
                   agent={agent}

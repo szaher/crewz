@@ -1,7 +1,7 @@
 """Tenant model for multi-tenancy."""
 
-from sqlalchemy import Column, String, Boolean, Integer, Enum
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, String, Boolean, Integer, Enum, JSON
+from sqlalchemy.orm import relationship, deferred
 from .base import BaseModel
 import enum
 
@@ -32,6 +32,9 @@ class Tenant(BaseModel):
     max_users = Column(Integer, nullable=False, default=10)
     max_agents = Column(Integer, nullable=False, default=50)
     max_flows = Column(Integer, nullable=False, default=100)
+
+    # Optional structured settings
+    settings = deferred(Column(JSON, nullable=False, default=dict))
 
     # Relationships
     users = relationship("User", back_populates="tenant", cascade="all, delete-orphan")

@@ -11,7 +11,6 @@ from ...schemas.agents import (
     AgentListResponse,
 )
 from ...services.agent_service import AgentService
-from ...services.crew_service import CrewService
 from ...services.versioning_service import VersioningService
 from ...api.middleware.auth import require_auth
 
@@ -174,69 +173,4 @@ async def rollback_agent(
         )
 
 
-# Crew endpoints
-@router.get("/crews", response_model=dict)
-async def list_crews(
-    page: int = 1,
-    page_size: int = 10,
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(require_auth),
-):
-    """List crews with pagination."""
-    if page_size > 100:
-        page_size = 100
-
-    crew_service = CrewService(db)
-    return await crew_service.list_crews(page=page, page_size=page_size)
-
-
-@router.post("/crews", status_code=status.HTTP_201_CREATED)
-async def create_crew(
-    name: str,
-    description: str,
-    process: str,
-    agent_ids: list[int],
-    verbose: bool = False,
-    memory: bool = False,
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(require_auth),
-):
-    """
-    Create a new crew.
-
-    - **name**: Crew name
-    - **description**: Crew description
-    - **process**: Collaboration pattern (sequential, hierarchical)
-    - **agent_ids**: List of agent IDs to include
-    - **verbose**: Enable verbose logging
-    - **memory**: Enable crew memory
-    """
-    crew_service = CrewService(db)
-    crew = await crew_service.create_crew(
-        name=name,
-        description=description,
-        process=process,
-        agent_ids=agent_ids,
-        verbose=verbose,
-        memory=memory,
-    )
-    return crew
-
-
-@router.post("/crews/{crew_id}/test")
-async def test_crew(
-    crew_id: int,
-    input_data: dict,
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(require_auth),
-):
-    """
-    Test a crew with sample input.
-
-    Placeholder for future crew testing functionality.
-    """
-    return {
-        "message": "Crew test endpoint not yet implemented",
-        "crew_id": crew_id,
-        "input": input_data,
-    }
+# Note: Crew endpoints live in backend/src/api/v1/crews.py

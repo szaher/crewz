@@ -1,15 +1,14 @@
 'use client';
 
-import { useToolStore } from '@/lib/store';
 import type { Tool } from '@/types/api';
 
 interface ToolRegistryProps {
+  tools: Tool[];
   onEditTool: (toolId: number) => void;
   onCreateTool: () => void;
 }
 
-export default function ToolRegistry({ onEditTool, onCreateTool }: ToolRegistryProps) {
-  const { tools } = useToolStore();
+export default function ToolRegistry({ tools, onEditTool, onCreateTool }: ToolRegistryProps) {
 
   const getToolTypeIcon = (toolType: string) => {
     switch (toolType) {

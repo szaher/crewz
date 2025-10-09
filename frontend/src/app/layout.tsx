@@ -4,12 +4,15 @@ import './globals.css';
 import ErrorBoundary from '@/components/shared/ErrorBoundary';
 import { ToastProvider } from '@/components/shared/Toast';
 import { AuthProvider } from '@/components/providers/AuthProvider';
+import { ThemeProvider } from '@/components/providers/ThemeProvider';
+import InitialThemeScript from '@/components/providers/InitialThemeScript';
+import { HighlightProvider } from '@/components/providers/HighlightProvider';
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'CrewAI Platform',
-  description: 'Dynamic CrewAI Orchestration Platform',
+  title: 'Automation Platform',
+  description: 'Dynamic Automation Orchestration Platform',
 };
 
 export default function RootLayout({
@@ -18,14 +21,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
+        <InitialThemeScript />
         <AuthProvider>
-          <ErrorBoundary>
-            <ToastProvider>
-              {children}
-            </ToastProvider>
-          </ErrorBoundary>
+          <ThemeProvider>
+            <HighlightProvider>
+              <ErrorBoundary>
+                <ToastProvider>
+                  {children}
+                </ToastProvider>
+              </ErrorBoundary>
+            </HighlightProvider>
+          </ThemeProvider>
         </AuthProvider>
       </body>
     </html>
