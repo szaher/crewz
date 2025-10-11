@@ -183,3 +183,128 @@ export const categoryApi = {
     return apiClient.post<PromptCategory>('/api/v1/prompts/categories', data);
   },
 };
+
+/**
+ * Suggestion Operations
+ */
+export interface PromptSuggestionItem {
+  prompt_id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  confidence: number;
+  tags: string[];
+  average_rating: number;
+  total_executions: number;
+  reason: string;
+}
+
+export interface SuggestionResponse {
+  suggestions: PromptSuggestionItem[];
+  context_type: string;
+  total: number;
+}
+
+export const suggestionApi = {
+  /**
+   * Suggest prompts for agent configuration
+   */
+  async suggestForAgent(
+    agentName: string,
+    agentRole: string,
+    agentGoal: string,
+    agentBackstory?: string,
+    limit: number = 5,
+    minConfidence: number = 0.1
+  ) {
+    const params = new URLSearchParams({
+      agent_name: agentName,
+      agent_role: agentRole,
+      agent_goal: agentGoal,
+      limit: String(limit),
+      min_confidence: String(minConfidence),
+    });
+
+    if (agentBackstory) {
+      params.append('agent_backstory', agentBackstory);
+    }
+
+    return apiClient.post<SuggestionResponse>(
+      `/api/v1/prompts/suggest/agent?${params.toString()}`,
+      {}
+    );
+  },
+
+  /**
+   * Suggest prompts for crew configuration
+   */
+  async suggestForCrew(
+    crewName: string,
+    crewDescription: string,
+    crewProcessType: string = 'sequential',
+    limit: number = 5,
+    minConfidence: number = 0.1
+  ) {
+    const params = new URLSearchParams({
+      crew_name: crewName,
+      crew_description: crewDescription,
+      crew_process_type: crewProcessType,
+      limit: String(limit),
+      min_confidence: String(minConfidence),
+    });
+
+    return apiClient.post<SuggestionResponse>(
+      `/api/v1/prompts/suggest/crew?${params.toString()}`,
+      {}
+    );
+  },
+
+  /**
+   * Suggest prompts for task configuration
+   */
+  async suggestForTask(
+    taskName: string,
+    taskDescription: string,
+    taskExpectedOutput?: string,
+    limit: number = 5,
+    minConfidence: number = 0.1
+  ) {
+    const params = new URLSearchParams({
+      task_name: taskName,
+      task_description: taskDescription,
+      limit: String(limit),
+      min_confidence: String(minConfidence),
+    });
+
+    if (taskExpectedOutput) {
+      params.append('task_expected_output', taskExpectedOutput);
+    }
+
+    return apiClient.post<SuggestionResponse>(
+      `/api/v1/prompts/suggest/task?${params.toString()}`,
+      {}
+    );
+  },
+
+  /**
+   * Suggest prompts for flow configuration
+   */
+  async suggestForFlow(
+    flowName: string,
+    flowDescription: string,
+    limit: number = 5,
+    minConfidence: number = 0.1
+  ) {
+    const params = new URLSearchParams({
+      flow_name: flowName,
+      flow_description: flowDescription,
+      limit: String(limit),
+      min_confidence: String(minConfidence),
+    });
+
+    return apiClient.post<SuggestionResponse>(
+      `/api/v1/prompts/suggest/flow?${params.toString()}`,
+      {}
+    );
+  },
+};

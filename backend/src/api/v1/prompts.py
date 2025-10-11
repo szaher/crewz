@@ -24,6 +24,7 @@ from ...schemas.prompt import (
 )
 from ...services.prompt_service import PromptService
 from ...services.chat_command_handler import ChatCommandHandler
+from ...services.prompt_suggestion_service import PromptSuggestionService
 from ...api.middleware.auth import require_auth
 
 router = APIRouter()
@@ -325,4 +326,157 @@ async def list_categories(
     return {
         "categories": [PromptCategoryResponse.from_orm(c) for c in categories],
         "total": len(categories),
+    }
+
+# ==================== Suggestions ====================
+
+@router.post("/suggest/agent")
+async def suggest_prompts_for_agent(
+    agent_name: str,
+    agent_role: str,
+    agent_goal: str,
+    agent_backstory: Optional[str] = None,
+    limit: int = Query(5, ge=1, le=20),
+    min_confidence: float = Query(0.1, ge=0.0, le=1.0),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Suggest prompts for agent configuration based on context.
+    
+    Analyzes agent attributes and returns ranked prompt suggestions with confidence scores.
+    
+    - **agent_name**: Name of the agent
+    - **agent_role**: Role/function of the agent
+    - **agent_goal**: Primary objective of the agent
+    - **agent_backstory**: Optional backstory/context
+    - **limit**: Maximum number of suggestions (default 5)
+    - **min_confidence**: Minimum confidence threshold (default 0.1)
+    """
+    suggestion_service = PromptSuggestionService(db)
+    suggestions = await suggestion_service.suggest_prompts_for_agent(
+        agent_name=agent_name,
+        agent_role=agent_role,
+        agent_goal=agent_goal,
+        agent_backstory=agent_backstory,
+        tenant_id=current_user["tenant_id"],
+        limit=limit,
+        min_confidence=min_confidence,
+    )
+    
+    return {
+        "suggestions": suggestions,
+        "context_type": "agent",
+        "total": len(suggestions),
+    }
+
+
+@router.post("/suggest/crew")
+async def suggest_prompts_for_crew(
+    crew_name: str,
+    crew_description: str,
+    crew_process_type: str = "sequential",
+    limit: int = Query(5, ge=1, le=20),
+    min_confidence: float = Query(0.1, ge=0.0, le=1.0),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Suggest prompts for crew configuration based on context.
+    
+    Analyzes crew attributes and returns ranked prompt suggestions with confidence scores.
+    
+    - **crew_name**: Name of the crew
+    - **crew_description**: Description of crew's purpose
+    - **crew_process_type**: Process type (sequential, hierarchical, etc.)
+    - **limit**: Maximum number of suggestions (default 5)
+    - **min_confidence**: Minimum confidence threshold (default 0.1)
+    """
+    suggestion_service = PromptSuggestionService(db)
+    suggestions = await suggestion_service.suggest_prompts_for_crew(
+        crew_name=crew_name,
+        crew_description=crew_description,
+        crew_process_type=crew_process_type,
+        tenant_id=current_user["tenant_id"],
+        limit=limit,
+        min_confidence=min_confidence,
+    )
+    
+    return {
+        "suggestions": suggestions,
+        "context_type": "crew",
+        "total": len(suggestions),
+    }
+
+
+@router.post("/suggest/task")
+async def suggest_prompts_for_task(
+    task_name: str,
+    task_description: str,
+    task_expected_output: Optional[str] = None,
+    limit: int = Query(5, ge=1, le=20),
+    min_confidence: float = Query(0.1, ge=0.0, le=1.0),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Suggest prompts for task configuration based on context.
+    
+    Analyzes task attributes and returns ranked prompt suggestions with confidence scores.
+    
+    - **task_name**: Name of the task
+    - **task_description**: Description of what the task does
+    - **task_expected_output**: Expected output format/type
+    - **limit**: Maximum number of suggestions (default 5)
+    - **min_confidence**: Minimum confidence threshold (default 0.1)
+    """
+    suggestion_service = PromptSuggestionService(db)
+    suggestions = await suggestion_service.suggest_prompts_for_task(
+        task_name=task_name,
+        task_description=task_description,
+        task_expected_output=task_expected_output,
+        tenant_id=current_user["tenant_id"],
+        limit=limit,
+        min_confidence=min_confidence,
+    )
+    
+    return {
+        "suggestions": suggestions,
+        "context_type": "task",
+        "total": len(suggestions),
+    }
+
+
+@router.post("/suggest/flow")
+async def suggest_prompts_for_flow(
+    flow_name: str,
+    flow_description: str,
+    limit: int = Query(5, ge=1, le=20),
+    min_confidence: float = Query(0.1, ge=0.0, le=1.0),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Suggest prompts for flow configuration based on context.
+    
+    Analyzes flow attributes and returns ranked prompt suggestions with confidence scores.
+    
+    - **flow_name**: Name of the flow
+    - **flow_description**: Description of flow's purpose
+    - **limit**: Maximum number of suggestions (default 5)
+    - **min_confidence**: Minimum confidence threshold (default 0.1)
+    """
+    suggestion_service = PromptSuggestionService(db)
+    suggestions = await suggestion_service.suggest_prompts_for_flow(
+        flow_name=flow_name,
+        flow_description=flow_description,
+        tenant_id=current_user["tenant_id"],
+        limit=limit,
+        min_confidence=min_confidence,
+    )
+    
+    return {
+        "suggestions": suggestions,
+        "context_type": "flow",
+        "total": len(suggestions),
     }
