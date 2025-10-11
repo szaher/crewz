@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { promptApi, categoryApi, type PromptListParams } from '../api/prompts';
 import type { PromptTemplate, PromptCategory } from '../store';
 
@@ -7,6 +7,19 @@ export function usePrompts(params?: PromptListParams) {
   const [categories, setCategories] = useState<PromptCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Stringify params to avoid infinite loop from object reference changes
+  const paramsKey = useMemo(() => JSON.stringify(params || {}), [
+    params?.category_id,
+    params?.tags,
+    params?.search,
+    params?.public_only,
+    params?.min_rating,
+    params?.sort_by,
+    params?.sort_order,
+    params?.page,
+    params?.page_size,
+  ]);
 
   const fetchPrompts = useCallback(async () => {
     setLoading(true);
@@ -24,7 +37,7 @@ export function usePrompts(params?: PromptListParams) {
     } finally {
       setLoading(false);
     }
-  }, [params]);
+  }, [paramsKey]); // Use stringified key instead of params object
 
   const fetchCategories = useCallback(async () => {
     try {
@@ -40,8 +53,11 @@ export function usePrompts(params?: PromptListParams) {
 
   useEffect(() => {
     fetchPrompts();
+  }, [fetchPrompts]);
+
+  useEffect(() => {
     fetchCategories();
-  }, [fetchPrompts, fetchCategories]);
+  }, [fetchCategories]);
 
   return {
     prompts,
