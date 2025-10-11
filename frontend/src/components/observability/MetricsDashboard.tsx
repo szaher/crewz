@@ -9,6 +9,7 @@ import TimeRangeFilter from './TimeRangeFilter';
 
 export default function MetricsDashboard() {
   const [timeRange, setTimeRange] = useState('24h');
+  const [activeTab, setActiveTab] = useState<'tasks' | 'tools' | 'flows' | 'crews'>('tasks');
   const { summary, trends, loading, error, refetch } = useMetrics(timeRange, true);
 
   if (loading && !summary) {
@@ -121,6 +122,188 @@ export default function MetricsDashboard() {
           color="yellow"
           subtitle="For completed executions"
         />
+      </div>
+
+      {/* Execution Type Breakdown */}
+      {summary.executionsByType && (
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Executions by Type</h2>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {summary.executionsByType.flow >= 0 && (
+              <div className="text-center p-4 bg-blue-50 rounded-lg">
+                <div className="text-3xl mb-2">🔀</div>
+                <div className="text-2xl font-bold text-gray-900">{summary.executionsByType.flow}</div>
+                <div className="text-sm text-gray-600">Flows</div>
+              </div>
+            )}
+            {summary.executionsByType.crew > 0 && (
+              <div className="text-center p-4 bg-purple-50 rounded-lg">
+                <div className="text-3xl mb-2">👥</div>
+                <div className="text-2xl font-bold text-gray-900">{summary.executionsByType.crew}</div>
+                <div className="text-sm text-gray-600">Crews</div>
+              </div>
+            )}
+            {summary.executionsByType.agent > 0 && (
+              <div className="text-center p-4 bg-green-50 rounded-lg">
+                <div className="text-3xl mb-2">🤖</div>
+                <div className="text-2xl font-bold text-gray-900">{summary.executionsByType.agent}</div>
+                <div className="text-sm text-gray-600">Agents</div>
+              </div>
+            )}
+            {summary.executionsByType.tool >= 0 && (
+              <div className="text-center p-4 bg-orange-50 rounded-lg">
+                <div className="text-3xl mb-2">🔧</div>
+                <div className="text-2xl font-bold text-gray-900">{summary.executionsByType.tool}</div>
+                <div className="text-sm text-gray-600">Tools</div>
+              </div>
+            )}
+            {summary.executionsByType.task >= 0 && (
+              <div className="text-center p-4 bg-yellow-50 rounded-lg">
+                <div className="text-3xl mb-2">📋</div>
+                <div className="text-2xl font-bold text-gray-900">{summary.executionsByType.task}</div>
+                <div className="text-sm text-gray-600">Tasks</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Stats Tabs: Tasks, Tools, Flows, Crews */}
+      <div className="bg-white rounded-lg border border-gray-200 p-0">
+        <div
+          className="border-b border-gray-200 flex items-center gap-2 px-3 pt-2 bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800"
+        >
+          {[
+            { key: 'tasks', label: 'Task Stats', icon: '📋' },
+            { key: 'tools', label: 'Tool Stats', icon: '🔧' },
+            { key: 'flows', label: 'Flow Stats', icon: '🔀' },
+            { key: 'crews', label: 'Crew Stats', icon: '👥' },
+          ].map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key as any)}
+              className={`relative inline-flex items-center gap-1 px-4 py-2 text-sm font-medium rounded-t-lg border transition-all duration-150 select-none
+                ${
+                  activeTab === t.key
+                    ? 'bg-gradient-to-b from-gray-100 to-white dark:from-gray-700 dark:to-gray-800 text-blue-700 dark:text-blue-300 border-blue-600 dark:border-blue-500 shadow-inner translate-y-[2px]'
+                    : 'bg-gradient-to-b from-white to-gray-100 dark:from-gray-800 dark:to-gray-700 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 shadow-md hover:shadow-lg hover:-translate-y-0.5 active:translate-y-[1px]'
+                }
+              `}
+            >
+              <span className="mr-1">{t.icon}</span>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="p-6">
+          {activeTab === 'tasks' && summary.taskStats && (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center p-4 bg-yellow-50 rounded-lg">
+                  <div className="text-3xl mb-2">📋</div>
+                  <div className="text-2xl font-bold text-gray-900">{summary.taskStats.total}</div>
+                  <div className="text-sm text-gray-600">Total Task Runs</div>
+                </div>
+                <div className="text-center p-4 bg-green-50 rounded-lg">
+                  <div className="text-3xl mb-2">✅</div>
+                  <div className="text-2xl font-bold text-gray-900">{summary.taskStats.success}</div>
+                  <div className="text-sm text-gray-600">Succeeded</div>
+                </div>
+                <div className="text-center p-4 bg-red-50 rounded-lg">
+                  <div className="text-3xl mb-2">❌</div>
+                  <div className="text-2xl font-bold text-gray-900">{summary.taskStats.failed}</div>
+                  <div className="text-sm text-gray-600">Failed</div>
+                </div>
+                <div className="text-center p-4 bg-blue-50 rounded-lg">
+                  <div className="text-3xl mb-2">⏱️</div>
+                  <div className="text-2xl font-bold text-gray-900">{summary.taskStats.avgDurationSec.toFixed(1)}s</div>
+                  <div className="text-sm text-gray-600">Avg Duration</div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {activeTab === 'tools' && summary.toolStats && (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center p-4 bg-orange-50 rounded-lg">
+                  <div className="text-3xl mb-2">🔧</div>
+                  <div className="text-2xl font-bold text-gray-900">{summary.toolStats.total}</div>
+                  <div className="text-sm text-gray-600">Total Tool Runs</div>
+                </div>
+                <div className="text-center p-4 bg-green-50 rounded-lg">
+                  <div className="text-3xl mb-2">✅</div>
+                  <div className="text-2xl font-bold text-gray-900">{summary.toolStats.success}</div>
+                  <div className="text-sm text-gray-600">Succeeded</div>
+                </div>
+                <div className="text-center p-4 bg-red-50 rounded-lg">
+                  <div className="text-3xl mb-2">❌</div>
+                  <div className="text-2xl font-bold text-gray-900">{summary.toolStats.failed}</div>
+                  <div className="text-sm text-gray-600">Failed</div>
+                </div>
+                <div className="text-center p-4 bg-yellow-50 rounded-lg">
+                  <div className="text-3xl mb-2">⏱️</div>
+                  <div className="text-2xl font-bold text-gray-900">{summary.toolStats.avgDurationSec.toFixed(1)}s</div>
+                  <div className="text-sm text-gray-600">Avg Duration</div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {activeTab === 'flows' && summary.flowStats && (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center p-4 bg-blue-50 rounded-lg">
+                  <div className="text-3xl mb-2">🔀</div>
+                  <div className="text-2xl font-bold text-gray-900">{summary.flowStats.total}</div>
+                  <div className="text-sm text-gray-600">Total Flow Runs</div>
+                </div>
+                <div className="text-center p-4 bg-green-50 rounded-lg">
+                  <div className="text-3xl mb-2">✅</div>
+                  <div className="text-2xl font-bold text-gray-900">{summary.flowStats.success}</div>
+                  <div className="text-sm text-gray-600">Succeeded</div>
+                </div>
+                <div className="text-center p-4 bg-red-50 rounded-lg">
+                  <div className="text-3xl mb-2">❌</div>
+                  <div className="text-2xl font-bold text-gray-900">{summary.flowStats.failed}</div>
+                  <div className="text-sm text-gray-600">Failed</div>
+                </div>
+                <div className="text-center p-4 bg-purple-50 rounded-lg">
+                  <div className="text-3xl mb-2">⏱️</div>
+                  <div className="text-2xl font-bold text-gray-900">{summary.flowStats.avgDurationSec.toFixed(1)}s</div>
+                  <div className="text-sm text-gray-600">Avg Duration</div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {activeTab === 'crews' && summary.crewStats && (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center p-4 bg-purple-50 rounded-lg">
+                  <div className="text-3xl mb-2">👥</div>
+                  <div className="text-2xl font-bold text-gray-900">{summary.crewStats.total}</div>
+                  <div className="text-sm text-gray-600">Total Crew Runs</div>
+                </div>
+                <div className="text-center p-4 bg-green-50 rounded-lg">
+                  <div className="text-3xl mb-2">✅</div>
+                  <div className="text-2xl font-bold text-gray-900">{summary.crewStats.success}</div>
+                  <div className="text-sm text-gray-600">Succeeded</div>
+                </div>
+                <div className="text-center p-4 bg-red-50 rounded-lg">
+                  <div className="text-3xl mb-2">❌</div>
+                  <div className="text-2xl font-bold text-gray-900">{summary.crewStats.failed}</div>
+                  <div className="text-sm text-gray-600">Failed</div>
+                </div>
+                <div className="text-center p-4 bg-yellow-50 rounded-lg">
+                  <div className="text-3xl mb-2">⏱️</div>
+                  <div className="text-2xl font-bold text-gray-900">{summary.crewStats.avgDurationSec.toFixed(1)}s</div>
+                  <div className="text-sm text-gray-600">Avg Duration</div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Execution Trend Chart */}

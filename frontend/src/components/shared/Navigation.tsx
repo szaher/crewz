@@ -3,6 +3,7 @@
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore, useTenantStore, useUIStore } from '@/lib/store';
 import SidebarToggle from '../navigation/SidebarToggle';
+import NotificationsBell from '../navigation/NotificationsBell';
 import { apiClient } from '@/lib/api-client';
 import UserProfileMenu from '../navigation/UserProfileMenu';
 
@@ -43,14 +44,17 @@ export default function Navigation() {
   return (
     <nav className="bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 w-64 min-h-screen flex flex-col">
       {/* Logo/Brand + Toggle */}
-      <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
-        <div>
+      <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between gap-2">
+        <div className="min-w-0">
           <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Automation Platform</h1>
           {currentTenant && (
             <p className="text-sm text-gray-500 dark:text-gray-400">{currentTenant.name}</p>
           )}
         </div>
-        <SidebarToggle />
+        <div className="flex items-center gap-2">
+          <NotificationsBell />
+          <SidebarToggle />
+        </div>
       </div>
 
       {/* Navigation Items */}

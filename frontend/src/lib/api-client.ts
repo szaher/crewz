@@ -23,6 +23,7 @@ interface ApiClientOptions {
   body?: any;
   headers?: Record<string, string>;
   skipAuth?: boolean;
+  timeout?: number; // ms
 }
 
 interface ApiResponse<T = any> {
@@ -86,7 +87,7 @@ class ApiClient {
     endpoint: string,
     options: ApiClientOptions = {}
   ): Promise<ApiResponse<T>> {
-    const { method = 'GET', body, headers = {}, skipAuth = false } = options;
+    const { method = 'GET', body, headers = {}, skipAuth = false, timeout } = options;
 
     const url = `${this.baseUrl}${endpoint}`;
 
@@ -100,9 +101,11 @@ class ApiClient {
       requestHeaders['Authorization'] = `Bearer ${this.token}`;
     }
 
+    const controller = new AbortController();
     const requestOptions: RequestInit = {
       method,
       headers: requestHeaders,
+      signal: controller.signal,
     };
 
     if (body && method !== 'GET') {
@@ -110,7 +113,14 @@ class ApiClient {
     }
 
     try {
+      // Apply timeout if provided
+      let to: number | undefined;
+      if (typeof timeout === 'number' && timeout > 0) {
+        to = window.setTimeout(() => controller.abort(), timeout);
+      }
+
       const response = await fetch(url, requestOptions);
+      if (to) window.clearTimeout(to);
 
       const contentType = response.headers.get('content-type') || '';
       const isNoContent = response.status === 204 || response.status === 205 || response.headers.get('content-length') === '0';
@@ -158,7 +168,7 @@ class ApiClient {
       };
     } catch (error) {
       return {
-        error: error instanceof Error ? error.message : 'Network error',
+        error: error instanceof Error ? (error.name === 'AbortError' ? 'Request timed out' : error.message) : 'Network error',
         status: 0,
       };
     }

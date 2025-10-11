@@ -15,6 +15,7 @@ class CrewCreate(BaseModel):
     verbose: bool = False
     memory: bool = False
     agent_ids: List[int] = Field(default_factory=list)
+    task_ids: List[int] = Field(default_factory=list)
     manager_llm_provider_id: Optional[int] = None
     # Compatibility with older frontend payloads
     process_type: Optional[CrewProcess] = None
@@ -30,6 +31,7 @@ class CrewUpdate(BaseModel):
     verbose: Optional[bool] = None
     memory: Optional[bool] = None
     agent_ids: Optional[List[int]] = None
+    task_ids: Optional[List[int]] = None
     manager_llm_provider_id: Optional[int] = None
     # Compatibility with older frontend payloads
     process_type: Optional[CrewProcess] = None

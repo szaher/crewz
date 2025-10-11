@@ -211,11 +211,42 @@ class FlowExecutor:
             # Merge node config inputs with runtime inputs
             merged_inputs = {**tool_inputs, **input_data}
 
-            # Execute tool via Docker service
+            # Load tool from DB
+            from ..db import SessionLocal
+            from ..models.tool import Tool
             from ..services.docker_service import DockerService
-            docker_service = DockerService()
-            result = await docker_service.execute_tool(tool_id, merged_inputs)
-            return {"result": result, "metadata": {"tool_id": tool_id}}
+            from ..crewai.tool_adapter import ToolAdapter
+            import json
+            db = SessionLocal()
+            try:
+                db_tool = db.query(Tool).filter(Tool.id == tool_id).first()
+                if not db_tool:
+                    raise ValueError(f"Tool not found: {tool_id}")
+
+                # Prepare input payload as string
+                try:
+                    input_str = json.dumps(merged_inputs)
+                except Exception:
+                    input_str = str(merged_inputs)
+
+                if db_tool.tool_type == "docker":
+                    docker_service = DockerService()
+                    result = await docker_service.execute_tool(
+                        tool_id=db_tool.id,
+                        input_data=input_str,
+                        docker_image=db_tool.docker_image,
+                        docker_command=getattr(db_tool, 'docker_command', None),
+                    )
+                else:
+                    # Use ToolAdapter for builtin/custom tools
+                    adapter = ToolAdapter(DockerService())
+                    crew_tool = await adapter.from_db_model(db_tool)
+                    maybe = crew_tool.run(input_str) if hasattr(crew_tool, 'run') else crew_tool(input_str)
+                    result = await maybe if hasattr(maybe, '__await__') else maybe
+
+                return {"result": result, "metadata": {"tool_id": tool_id}}
+            finally:
+                db.close()
 
         elif node_type == "llm":
             # Direct LLM call node

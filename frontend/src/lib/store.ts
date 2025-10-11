@@ -291,3 +291,31 @@ export const useUIStore = create<UIState>()(
     }
   )
 );
+
+// Notifications State
+export interface AppNotification {
+  id?: number;
+  type: 'success' | 'error' | 'info' | 'warning';
+  title: string;
+  message?: string;
+  data?: Record<string, any>;
+  created_at?: string;
+  is_read?: boolean;
+}
+
+interface NotificationState {
+  unreadCount: number;
+  recent: AppNotification[];
+  setUnread: (count: number) => void;
+  pushNotification: (n: AppNotification) => void;
+  clear: () => void;
+}
+
+export const useNotificationStore = create<NotificationState>((set) => ({
+  unreadCount: 0,
+  recent: [],
+  setUnread: (count) => set({ unreadCount: count }),
+  pushNotification: (n) =>
+    set((state) => ({ recent: [n, ...state.recent].slice(0, 20), unreadCount: state.unreadCount + 1 })),
+  clear: () => set({ recent: [], unreadCount: 0 }),
+}));

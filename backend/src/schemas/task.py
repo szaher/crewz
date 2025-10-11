@@ -1,7 +1,7 @@
 """Task schemas for API validation."""
 
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from ..models.task import TaskOutputFormat
 
@@ -20,6 +20,7 @@ class TaskBase(BaseModel):
     output_file: Optional[str] = None
     context: Optional[str] = None
     tools_config: Optional[str] = None
+    variables: Optional[List[str]] = None
 
 
 class TaskCreate(TaskBase):
@@ -41,6 +42,7 @@ class TaskUpdate(BaseModel):
     output_file: Optional[str] = None
     context: Optional[str] = None
     tools_config: Optional[str] = None
+    variables: Optional[List[str]] = None
 
 
 class TaskResponse(TaskBase):

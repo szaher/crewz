@@ -38,7 +38,7 @@ export default function FlowEditorPage() {
             tags: [],
           });
 
-          const newFlowId = response.data?.id || response.id;
+          const newFlowId = response.data?.id;
           if (newFlowId) {
             // Redirect to the actual flow ID
             router.replace(`/flows/${newFlowId}`);
@@ -176,7 +176,7 @@ export default function FlowEditorPage() {
         <div className="flex-1 overflow-auto">
           <div className="h-screen flex flex-col">
         <FlowToolbar
-          flowId={flowId}
+          flowId={flowId ?? undefined}
           onDiscard={handleDiscard}
           onOpenProperties={() => setIsPropertiesPanelOpen(true)}
         />
@@ -185,7 +185,7 @@ export default function FlowEditorPage() {
           <NodePalette />
 
           <div className="flex-1">
-            <FlowCanvas flowId={flowId} onNodeSelect={handleNodeSelect} />
+            <FlowCanvas flowId={flowId ?? undefined} onNodeSelect={handleNodeSelect} />
           </div>
 
           <PropertyPanel

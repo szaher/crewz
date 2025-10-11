@@ -440,7 +440,7 @@ def perform_search(query: str, limit: int) -> list:
 
               <div className="bg-blue-50 p-4 rounded-md">
                 <p className="text-sm text-blue-800">
-                  <strong>Tip:</strong> The schema defines the structure of your tool's inputs and outputs. Parameters are available in the <code className="px-1 py-0.5 bg-blue-100 rounded">params</code> dictionary.
+                  <strong>Tip:</strong> The schema defines the structure of your tool&apos;s inputs and outputs. Parameters are available in the <code className="px-1 py-0.5 bg-blue-100 rounded">params</code> dictionary.
                 </p>
               </div>
             </div>

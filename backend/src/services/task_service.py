@@ -3,6 +3,7 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from fastapi import HTTPException, status
+import re
 
 from ..models.task import Task
 from ..models.agent import Agent
@@ -15,6 +16,23 @@ class TaskService:
 
     def __init__(self, db: Session):
         self.db = db
+
+    @staticmethod
+    def extract_variables(text: str) -> List[str]:
+        """
+        Extract variables from text in {variable_name} format.
+
+        Args:
+            text: Text to extract variables from
+
+        Returns:
+            List of unique variable names found in the text
+        """
+        # Find all {variable_name} patterns
+        pattern = r'\{([a-zA-Z_][a-zA-Z0-9_]*)\}'
+        matches = re.findall(pattern, text)
+        # Return unique variable names
+        return list(set(matches))
 
     async def list_tasks(
         self,
@@ -118,6 +136,16 @@ class TaskService:
                     detail=f"Crew with id {task_data.crew_id} not found",
                 )
 
+        # Extract variables from description and expected_output
+        variables = []
+        variables.extend(self.extract_variables(task_data.description))
+        variables.extend(self.extract_variables(task_data.expected_output))
+        if task_data.context:
+            variables.extend(self.extract_variables(task_data.context))
+
+        # Get unique variables
+        unique_variables = list(set(variables)) if variables else None
+
         # Create task
         task = Task(
             name=task_data.name,
@@ -131,6 +159,7 @@ class TaskService:
             output_file=task_data.output_file,
             context=task_data.context,
             tools_config=task_data.tools_config,
+            variables=unique_variables,
         )
 
         self.db.add(task)
@@ -190,6 +219,15 @@ class TaskService:
         for field, value in update_data.items():
             setattr(task, field, value)
 
+        # Re-extract variables if description, expected_output, or context changed
+        if any(field in update_data for field in ['description', 'expected_output', 'context']):
+            variables = []
+            variables.extend(self.extract_variables(task.description))
+            variables.extend(self.extract_variables(task.expected_output))
+            if task.context:
+                variables.extend(self.extract_variables(task.context))
+            task.variables = list(set(variables)) if variables else None
+
         self.db.commit()
         self.db.refresh(task)
 
@@ -208,6 +246,28 @@ class TaskService:
         task = await self.get_task(task_id)
         self.db.delete(task)
         self.db.commit()
+
+    async def unassign_from_crew(self, task_id: int) -> Task:
+        """
+        Unassign a task from its crew (set crew_id to NULL).
+
+        This preserves the task but removes it from the crew,
+        allowing it to be reused or reassigned later.
+
+        Args:
+            task_id: Task ID
+
+        Returns:
+            Updated Task model
+
+        Raises:
+            HTTPException: If task not found
+        """
+        task = await self.get_task(task_id)
+        task.crew_id = None
+        self.db.commit()
+        self.db.refresh(task)
+        return task
 
     async def get_crew_tasks(self, crew_id: int) -> List[Task]:
         """

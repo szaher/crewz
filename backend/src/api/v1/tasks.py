@@ -111,6 +111,23 @@ async def delete_task(
     await task_service.delete_task(task_id)
 
 
+@router.put("/{task_id}/unassign", response_model=TaskResponse)
+async def unassign_task_from_crew(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Unassign a task from its crew.
+
+    This removes the task from the crew (sets crew_id to NULL) but preserves the task,
+    allowing it to be reused or reassigned to a different crew later.
+    """
+    task_service = TaskService(db)
+    task = await task_service.unassign_from_crew(task_id)
+    return TaskResponse.from_orm(task)
+
+
 @router.get("/crew/{crew_id}/tasks", response_model=list[TaskResponse])
 async def get_crew_tasks(
     crew_id: int,

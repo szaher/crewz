@@ -14,6 +14,7 @@ from .llm_provider import LLMProvider
 from .agent_version import AgentVersion
 from .provider_version import ProviderVersion
 from .feedback import Feedback
+from .notification import Notification
 
 __all__ = [
     "Tenant",
@@ -29,4 +30,5 @@ __all__ = [
     "AgentVersion",
     "ProviderVersion",
     "Feedback",
+    "Notification",
 ]

@@ -23,7 +23,7 @@ export default function LoginForm() {
     setLoading(true);
 
     try {
-      const response = await apiClient.post<LoginResponse>('/api/v1/auth/login', formData);
+      const response = await apiClient.post<LoginResponse>('/api/v1/auth/login', formData, { timeout: 12000, skipAuth: true });
 
       if (response.error) {
         setError(response.error);

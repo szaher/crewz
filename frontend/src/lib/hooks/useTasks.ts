@@ -10,6 +10,7 @@ interface UseTasksResult {
   createTask: (task: TaskCreate) => Promise<Task | null>;
   updateTask: (id: number, task: TaskUpdate) => Promise<Task | null>;
   deleteTask: (id: number) => Promise<boolean>;
+  unassignFromCrew: (id: number) => Promise<Task | null>;
   reorderCrewTasks: (crewId: number, taskOrders: Record<number, number>) => Promise<Task[]>;
 }
 
@@ -105,6 +106,27 @@ export function useTasks(): UseTasksResult {
     }
   }, []);
 
+  const unassignFromCrew = useCallback(async (id: number): Promise<Task | null> => {
+    setError(null);
+
+    try {
+      const response = await apiClient.put<Task>(`/api/v1/tasks/${id}/unassign`, {});
+
+      if (response.data) {
+        setTasks(prev => prev.map(t => (t.id === id ? response.data! : t)));
+        return response.data;
+      } else if (response.error) {
+        setError(response.error);
+        return null;
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to unassign task from crew');
+      return null;
+    }
+
+    return null;
+  }, []);
+
   const reorderCrewTasks = useCallback(async (
     crewId: number,
     taskOrders: Record<number, number>
@@ -150,6 +172,7 @@ export function useTasks(): UseTasksResult {
     createTask,
     updateTask,
     deleteTask,
+    unassignFromCrew,
     reorderCrewTasks,
   };
 }

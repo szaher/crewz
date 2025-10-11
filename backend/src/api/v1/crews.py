@@ -8,6 +8,7 @@ from ...db.postgres import get_db
 from ...api.middleware.auth import require_auth
 from ...services.crew_service import CrewService
 from ...schemas.crew import CrewCreate, CrewUpdate, CrewListResponse, CrewOut
+from ...schemas.executions import ExecutionCreate, ExecutionResponse
 
 router = APIRouter()
 
@@ -61,6 +62,7 @@ async def create_crew(
         description=crew_data.description,
         process=norm_process,
         agent_ids=norm_agents,
+        task_ids=crew_data.task_ids,
         verbose=crew_data.verbose,
         memory=crew_data.memory,
         manager_llm_provider_id=crew_data.manager_llm_provider_id
@@ -126,6 +128,7 @@ async def update_crew(
         description=crew_data.description,
         process=norm_process,
         agent_ids=norm_agents,
+        task_ids=crew_data.task_ids,
         verbose=crew_data.verbose,
         memory=crew_data.memory
     )
@@ -157,7 +160,37 @@ async def delete_crew(
     return None
 
 
-@router.post("/{crew_id}/execute")
+@router.get("/{crew_id}/variables")
+async def get_crew_variables(
+    crew_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Get variables required by the first task of a crew.
+
+    Returns a list of unique variable names found in the first task's description and expected_output.
+    These variables need to be provided as input before executing the crew.
+    """
+    from ...services.task_service import TaskService
+
+    task_service = TaskService(db)
+    tasks = await task_service.get_crew_tasks(crew_id)
+
+    # Get variables from the first task only
+    if tasks and len(tasks) > 0:
+        first_task = tasks[0]
+        if first_task.variables:
+            return {
+                "variables": sorted(list(first_task.variables)),
+                "task_name": first_task.name,
+                "task_description": first_task.description
+            }
+
+    return {"variables": [], "task_name": None, "task_description": None}
+
+
+@router.post("/{crew_id}/execute", response_model=ExecutionResponse, status_code=status.HTTP_201_CREATED)
 async def execute_crew(
     crew_id: int,
     input_data: dict,
@@ -165,152 +198,17 @@ async def execute_crew(
     current_user: dict = Depends(require_auth),
 ):
     """
-    Execute a crew with tasks.
+    Queue a crew execution and return an execution record.
 
-    If the crew has stored tasks, those will be used.
-    Otherwise, input should contain:
-    - tasks: List of task descriptions for the crew to perform
-    - context: Optional context or additional information
+    Execution runs asynchronously. Track status via /api/v1/executions.
     """
-    import time
-    from ...services.llm_service import LLMService
-    from ...services.docker_service import DockerService
-    from ...services.task_service import TaskService
-    from ...crewai.tool_adapter import ToolAdapter
-    from ...crewai.agent_factory import AgentFactory
-    from ...crewai.crew_factory import CrewFactory
-    from ...models.agent import Agent
+    from ...services.execution_service import ExecutionService
 
-    service = CrewService(db)
-    crew_model = await service.get_crew(crew_id)
+    # Create execution record and schedule async run
+    execution_service = ExecutionService(db, None, None)
+    execution = await execution_service.create_execution_async(
+        ExecutionCreate(execution_type="crew", crew_id=crew_id, input_data=input_data),
+        user_id=current_user["id"],
+    )
 
-    start_time = time.time()
-
-    try:
-        # Initialize dependencies
-        llm_service = LLMService(db)
-        docker_service = DockerService()
-        tool_adapter = ToolAdapter(docker_service)
-        agent_factory = AgentFactory(llm_service, tool_adapter)
-        crew_factory = CrewFactory(agent_factory)
-
-        # Create CrewAI crew
-        crewai_crew = await crew_factory.from_db_model(crew_model)
-
-        # Get stored tasks for this crew
-        task_service = TaskService(db)
-        stored_tasks = await task_service.get_crew_tasks(crew_id)
-
-        # Create tasks for the crew
-        from crewai import Task
-        import json
-        tasks = []
-        task_map = {}  # Map to track tasks for context references
-
-        if stored_tasks:
-            # Use stored tasks - create them in order
-            for db_task in stored_tasks:
-                # Get the agent for this task
-                agent = None
-                if db_task.agent_id:
-                    # Find the agent in the crew's agents
-                    agent_model = db.query(Agent).filter(Agent.id == db_task.agent_id).first()
-                    if agent_model:
-                        agent = await agent_factory.from_db_model(agent_model)
-                else:
-                    # If no specific agent, use first agent in crew
-                    agents = crewai_crew.agents
-                    agent = agents[0] if agents else None
-
-                # Parse context if it references other tasks
-                context_tasks = []
-                if db_task.context:
-                    try:
-                        context_data = json.loads(db_task.context) if isinstance(db_task.context, str) else db_task.context
-                        if isinstance(context_data, dict) and 'task_ids' in context_data:
-                            # Context references other task IDs
-                            for task_id in context_data['task_ids']:
-                                if task_id in task_map:
-                                    context_tasks.append(task_map[task_id])
-                    except (json.JSONDecodeError, TypeError):
-                        # Context is just a text string, not JSON
-                        pass
-
-                # Get tools for this task
-                task_tools = []
-                if db_task.tools_config:
-                    try:
-                        tools_config = json.loads(db_task.tools_config) if isinstance(db_task.tools_config, str) else db_task.tools_config
-                        if isinstance(tools_config, dict) and 'tool_ids' in tools_config:
-                            # Get the agent's tools and filter by tool_ids
-                            if agent and hasattr(agent, 'tools'):
-                                task_tools = agent.tools
-                    except (json.JSONDecodeError, TypeError):
-                        pass
-
-                # Create the CrewAI Task
-                task_kwargs = {
-                    'description': db_task.description,
-                    'agent': agent,
-                    'expected_output': db_task.expected_output,
-                    'async_execution': db_task.async_execution,
-                }
-
-                # Add optional parameters
-                if context_tasks:
-                    task_kwargs['context'] = context_tasks
-                if task_tools:
-                    task_kwargs['tools'] = task_tools
-                if db_task.output_file:
-                    task_kwargs['output_file'] = db_task.output_file
-
-                task = Task(**task_kwargs)
-                tasks.append(task)
-                task_map[db_task.id] = task
-        else:
-            # Fall back to dynamic tasks from input
-            tasks_input = input_data.get('tasks', [])
-            if not tasks_input:
-                # Default task if none provided
-                tasks_input = ['Complete the assigned objectives as a team']
-
-            agents = crewai_crew.agents
-            for i, task_desc in enumerate(tasks_input):
-                # Assign tasks round-robin to agents
-                agent = agents[i % len(agents)] if agents else None
-                task = Task(
-                    description=task_desc,
-                    agent=agent,
-                    expected_output=f"Completion of: {task_desc}"
-                )
-                tasks.append(task)
-
-        # Update crew with tasks
-        crewai_crew.tasks = tasks
-
-        # Execute the crew
-        result = crewai_crew.kickoff()
-
-        execution_time_ms = int((time.time() - start_time) * 1000)
-
-        return {
-            "crew_id": crew_id,
-            "crew_name": crew_model.name,
-            "input_data": input_data,
-            "tasks_used": "stored" if stored_tasks else "dynamic",
-            "task_count": len(tasks),
-            "status": "success",
-            "output": str(result),
-            "execution_time_ms": execution_time_ms
-        }
-
-    except Exception as e:
-        execution_time_ms = int((time.time() - start_time) * 1000)
-        return {
-            "crew_id": crew_id,
-            "crew_name": crew_model.name,
-            "input_data": input_data,
-            "status": "failed",
-            "error": str(e),
-            "execution_time_ms": execution_time_ms
-        }
+    return ExecutionResponse.from_orm(execution)

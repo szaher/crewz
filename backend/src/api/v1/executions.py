@@ -2,7 +2,7 @@
 
 import json
 import asyncio
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 import redis
@@ -10,7 +10,8 @@ import redis
 from ...db.postgres import get_db
 from ...schemas.executions import ExecutionResponse
 from ...services.execution_service import ExecutionService
-from ...api.middleware.auth import require_auth
+from ...api.middleware.auth import require_auth, get_optional_user
+from ...utils.jwt import verify_token
 
 router = APIRouter()
 
@@ -38,14 +39,37 @@ async def list_executions(
 
     results = []
     for e in executions:
+        # Normalize enums to values
         status_val = getattr(e.status, "value", e.status if e.status is not None else "unknown")
+        type_val = getattr(e.execution_type, "value", e.execution_type if e.execution_type is not None else None)
+
+        # Best-effort entity name
+        entity_name = None
+        try:
+            if type_val == "flow" and getattr(e, "flow", None):
+                entity_name = getattr(e.flow, "name", None)
+        except Exception:
+            entity_name = None
+
         results.append(
             {
                 "id": e.id,
-                "flow_id": e.flow_id,
+                "execution_type": type_val,
                 "status": status_val,
+                # Related ids
+                "flow_id": getattr(e, "flow_id", None),
+                "crew_id": getattr(e, "crew_id", None),
+                "agent_id": getattr(e, "agent_id", None),
+                "tool_id": getattr(e, "tool_id", None),
+                "task_id": getattr(e, "task_id", None),
+                # Entity name if available
+                "entity_name": entity_name,
+                # Timestamps and metrics (optional)
+                "created_at": e.created_at.isoformat() if getattr(e, "created_at", None) else None,
+                "updated_at": e.updated_at.isoformat() if getattr(e, "updated_at", None) else None,
                 "started_at": e.started_at.isoformat() if getattr(e, "started_at", None) else None,
                 "completed_at": e.completed_at.isoformat() if getattr(e, "completed_at", None) else None,
+                "execution_time_ms": getattr(e, "execution_time_ms", None),
             }
         )
     return {"executions": results, "total": len(results), "skip": skip, "limit": limit}
@@ -91,7 +115,8 @@ async def get_execution(
 @router.get("/{execution_id}/stream")
 async def stream_execution(
     execution_id: int,
-    current_user: dict = Depends(require_auth),
+    token: str | None = Query(None),
+    current_user: dict | None = Depends(get_optional_user),
 ):
     """
     Stream execution events via Server-Sent Events (SSE).
@@ -109,6 +134,23 @@ async def stream_execution(
     import os
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
     redis_client = redis.from_url(redis_url, decode_responses=True)
+
+    # Authenticate: allow Authorization header or token query param
+    user = current_user
+    if user is None and token:
+        try:
+            payload = verify_token(token)
+            # Minimal user context for downstream checks if needed
+            user = {
+                "id": int(payload.get("sub")) if payload.get("sub") else None,
+                "tenant_id": payload.get("tenant_id"),
+                "tenant_schema": payload.get("tenant_schema"),
+                "role": payload.get("role"),
+            }
+        except HTTPException:
+            user = None
+    if user is None:
+        raise HTTPException(status_code=403, detail="Forbidden")
 
     async def event_generator():
         """Generate SSE events from Redis Pub/Sub."""

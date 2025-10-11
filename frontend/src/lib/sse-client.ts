@@ -28,7 +28,7 @@ class SSEClient {
    * Connect to execution event stream
    */
   connect(executionId: number, token: string, onEvent: EventCallback, onError?: (error: Event) => void) {
-    const url = `${this.baseUrl}/api/v1/executions/${executionId}/stream`;
+    const url = `${this.baseUrl}/api/v1/executions/${executionId}/stream?token=${encodeURIComponent(token)}`;
 
     // Create EventSource with authorization header (not supported natively, so we append as query param alternative)
     // Note: For production, consider using a library that supports custom headers or implement token via query param

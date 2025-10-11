@@ -6,10 +6,11 @@ interface TaskListProps {
   tasks: Task[];
   onEdit: (task: Task) => void;
   onDelete: (taskId: number) => void;
+  onUnassign?: (taskId: number) => void;
   agentNames?: Record<number, string>;
 }
 
-export default function TaskList({ tasks, onEdit, onDelete, agentNames = {} }: TaskListProps) {
+export default function TaskList({ tasks, onEdit, onDelete, onUnassign, agentNames = {} }: TaskListProps) {
   if (tasks.length === 0) {
     return (
       <div className="text-center py-8 text-gray-500">
@@ -83,16 +84,29 @@ export default function TaskList({ tasks, onEdit, onDelete, agentNames = {} }: T
               >
                 Edit
               </button>
-              <button
-                onClick={() => {
-                  if (confirm(`Are you sure you want to delete task "${task.name}"?`)) {
-                    onDelete(task.id);
-                  }
-                }}
-                className="px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-50 rounded-md"
-              >
-                Delete
-              </button>
+              {task.crew_id && onUnassign ? (
+                <button
+                  onClick={() => {
+                    if (confirm(`Remove task "${task.name}" from crew? The task will not be deleted.`)) {
+                      onUnassign(task.id);
+                    }
+                  }}
+                  className="px-3 py-1 text-sm font-medium text-orange-600 hover:bg-orange-50 rounded-md"
+                >
+                  Remove from Crew
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    if (confirm(`Are you sure you want to delete task "${task.name}"?`)) {
+                      onDelete(task.id);
+                    }
+                  }}
+                  className="px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-50 rounded-md"
+                >
+                  Delete
+                </button>
+              )}
             </div>
           </div>
         </div>

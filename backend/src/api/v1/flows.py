@@ -152,7 +152,8 @@ async def execute_flow(
         input_data=input_data,
     )
 
-    execution = await execution_service.create_execution(
+    # Use async creation that accepts ExecutionCreate and schedules execution
+    execution = await execution_service.create_execution_async(
         execution_request,
         user_id=current_user["id"],
     )

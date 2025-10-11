@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { apiClient } from '@/lib/api-client';
 
 interface ExecutionInput {
@@ -42,6 +42,31 @@ export default function ExecuteModal({
   const [inputData, setInputData] = useState<Record<string, string | string[]>>({});
   const [executing, setExecuting] = useState(false);
   const [result, setResult] = useState<ExecutionResult | null>(null);
+  const [variables, setVariables] = useState<string[]>([]);
+  const [variableValues, setVariableValues] = useState<Record<string, string>>({});
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [taskContext, setTaskContext] = useState<{taskName?: string; taskDescription?: string}>({});
+
+  // Fetch variables for crew entities
+  useEffect(() => {
+    if (isOpen && entityType === 'crew') {
+      const fetchVariables = async () => {
+        const response = await apiClient.get(`/api/v1/crews/${entityId}/variables`);
+        if (response.data) {
+          setVariables(response.data.variables || []);
+          setTaskContext({
+            taskName: response.data.task_name,
+            taskDescription: response.data.task_description
+          });
+        }
+      };
+      void fetchVariables();
+    } else {
+      setVariables([]);
+      setVariableValues({});
+      setTaskContext({});
+    }
+  }, [isOpen, entityType, entityId]);
 
   if (!isOpen) return null;
 
@@ -49,9 +74,42 @@ export default function ExecuteModal({
     setInputData({ ...inputData, [key]: value });
   };
 
+  const validateInputs = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    // Validate required variables for crews
+    if (entityType === 'crew' && variables.length > 0) {
+      variables.forEach((varName) => {
+        const value = variableValues[varName]?.trim();
+        if (!value) {
+          errors[varName] = 'This variable is required';
+        }
+      });
+    }
+
+    // Validate required input fields
+    inputs.forEach((input) => {
+      if (input.required) {
+        const value = inputData[input.key];
+        if (!value || (typeof value === 'string' && !value.trim())) {
+          errors[input.key] = `${input.label} is required`;
+        }
+      }
+    });
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleExecute = async () => {
+    // Validate inputs first
+    if (!validateInputs()) {
+      return;
+    }
+
     setExecuting(true);
     setResult(null);
+    setValidationErrors({});
 
     try {
       // Process input data - convert tasks string to array for crews
@@ -65,11 +123,26 @@ export default function ExecuteModal({
         processedData.tasks = tasksArray;
       }
 
+      // Add variable values for crew execution
+      if (entityType === 'crew' && variables.length > 0) {
+        processedData.variables = variableValues;
+      }
+
       const endpoint = `/api/v1/${entityType}s/${entityId}/execute`;
       const response = await apiClient.post(endpoint, processedData);
 
       if (response.data) {
-        setResult(response.data as ExecutionResult);
+        const data: any = response.data;
+        // If backend returns an execution record (async pattern), show queued message
+        if (data && typeof data === 'object' && 'id' in data && 'status' in data && !('output' in data)) {
+          setResult({
+            status: 'success',
+            output: `Queued execution #${data.id} (status: ${String(data.status)}). Track progress in Executions.`,
+            execution_time_ms: 0,
+          });
+        } else {
+          setResult(data as ExecutionResult);
+        }
       } else if (response.error) {
         setResult({
           status: 'failed',
@@ -91,6 +164,8 @@ export default function ExecuteModal({
   const handleClose = () => {
     setInputData({});
     setResult(null);
+    setVariableValues({});
+    setValidationErrors({});
     onClose();
   };
 
@@ -122,36 +197,115 @@ export default function ExecuteModal({
             <p className="text-sm text-gray-700">{description}</p>
           </div>
 
-          {/* Input Fields */}
-          <div className="space-y-4 mb-6">
-            <h3 className="text-sm font-medium text-gray-900">Input Parameters</h3>
-            {inputs.map((input) => (
-              <div key={input.key}>
-                <label htmlFor={input.key} className="block text-sm font-medium text-gray-700 mb-1">
-                  {input.label} {input.required && <span className="text-red-500">*</span>}
-                </label>
-                {input.type === 'textarea' ? (
-                  <textarea
-                    id={input.key}
-                    rows={4}
-                    value={(inputData[input.key] as string) || ''}
-                    onChange={(e) => handleInputChange(input.key, e.target.value)}
-                    placeholder={input.placeholder}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  />
-                ) : (
-                  <input
-                    type="text"
-                    id={input.key}
-                    value={(inputData[input.key] as string) || ''}
-                    onChange={(e) => handleInputChange(input.key, e.target.value)}
-                    placeholder={input.placeholder}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  />
-                )}
+          {/* Variables Section (for crews) */}
+          {variables.length > 0 && (
+            <div className="space-y-4 mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-start gap-2">
+                <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="flex-1">
+                  <h3 className="text-sm font-medium text-blue-900">Required Variables for First Task</h3>
+                  {taskContext.taskName && (
+                    <p className="text-xs text-blue-800 mt-1 font-medium">Task: {taskContext.taskName}</p>
+                  )}
+                  <p className="text-xs text-blue-700 mt-1">These variables will be substituted in your task description. All fields are required.</p>
+                  {taskContext.taskDescription && (
+                    <div className="mt-2 p-2 bg-white border border-blue-200 rounded text-xs text-gray-700">
+                      <p className="font-medium text-gray-800 mb-1">Task Description:</p>
+                      <p className="italic">{taskContext.taskDescription}</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            ))}
-          </div>
+              <div className="space-y-3 mt-3">
+                {variables.map((varName) => (
+                  <div key={varName}>
+                    <label htmlFor={`var_${varName}`} className="block text-sm font-medium text-gray-700 mb-1">
+                      <span className="font-mono text-blue-600">{`{${varName}}`}</span> <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id={`var_${varName}`}
+                      value={variableValues[varName] || ''}
+                      onChange={(e) => {
+                        setVariableValues({ ...variableValues, [varName]: e.target.value });
+                        // Clear validation error on change
+                        if (validationErrors[varName]) {
+                          const newErrors = { ...validationErrors };
+                          delete newErrors[varName];
+                          setValidationErrors(newErrors);
+                        }
+                      }}
+                      placeholder={`Enter value for {${varName}}`}
+                      className={`w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500 ${
+                        validationErrors[varName] ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                      }`}
+                    />
+                    {validationErrors[varName] && (
+                      <p className="mt-1 text-xs text-red-600">{validationErrors[varName]}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Input Fields */}
+          {inputs.length > 0 && (
+            <div className="space-y-4 mb-6">
+              <h3 className="text-sm font-medium text-gray-900">Input Parameters</h3>
+              {inputs.map((input) => (
+                <div key={input.key}>
+                  <label htmlFor={input.key} className="block text-sm font-medium text-gray-700 mb-1">
+                    {input.label} {input.required && <span className="text-red-500">*</span>}
+                  </label>
+                  {input.type === 'textarea' ? (
+                    <textarea
+                      id={input.key}
+                      rows={4}
+                      value={(inputData[input.key] as string) || ''}
+                      onChange={(e) => {
+                        handleInputChange(input.key, e.target.value);
+                        // Clear validation error on change
+                        if (validationErrors[input.key]) {
+                          const newErrors = { ...validationErrors };
+                          delete newErrors[input.key];
+                          setValidationErrors(newErrors);
+                        }
+                      }}
+                      placeholder={input.placeholder}
+                      className={`w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500 ${
+                        validationErrors[input.key] ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                      }`}
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      id={input.key}
+                      value={(inputData[input.key] as string) || ''}
+                      onChange={(e) => {
+                        handleInputChange(input.key, e.target.value);
+                        // Clear validation error on change
+                        if (validationErrors[input.key]) {
+                          const newErrors = { ...validationErrors };
+                          delete newErrors[input.key];
+                          setValidationErrors(newErrors);
+                        }
+                      }}
+                      placeholder={input.placeholder}
+                      className={`w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500 ${
+                        validationErrors[input.key] ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                      }`}
+                    />
+                  )}
+                  {validationErrors[input.key] && (
+                    <p className="mt-1 text-xs text-red-600">{validationErrors[input.key]}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Execute Button */}
           <button

@@ -15,12 +15,14 @@ DATABASE_URL = os.getenv(
 )
 
 # Create engine with connection pooling
+CONNECT_TIMEOUT = int(os.getenv("DB_CONNECT_TIMEOUT", "3"))
 engine = create_engine(
     DATABASE_URL,
-    pool_size=20,
-    max_overflow=40,
+    pool_size=int(os.getenv("DB_POOL_SIZE", "20")),
+    max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "40")),
     pool_pre_ping=True,
     echo=os.getenv("SQL_ECHO", "false").lower() == "true",
+    connect_args={"connect_timeout": CONNECT_TIMEOUT},
 )
 
 # Session factory
@@ -40,6 +42,13 @@ def get_db() -> Generator[Session, None, None]:
         db = next(get_db())
     """
     db = SessionLocal()
+    # Apply optional statement timeout to prevent long-running queries from hanging requests
+    stmt_timeout = os.getenv("DB_STATEMENT_TIMEOUT_MS")
+    if stmt_timeout:
+        try:
+            db.execute(text(f"SET statement_timeout TO {int(stmt_timeout)}"))
+        except Exception:
+            pass
     try:
         yield db
     finally:

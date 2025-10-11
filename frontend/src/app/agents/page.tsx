@@ -6,7 +6,7 @@ import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Navigation from '@/components/shared/Navigation';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import AgentForm from '@/components/crews/AgentForm';
-import ExecuteModal from '@/components/shared/ExecuteModal';
+import AgentExecuteModal from '@/components/agents/AgentExecuteModal';
 import { useAgents } from '@/lib/hooks/useAgents';
 
 export default function AgentsPage() {
@@ -178,35 +178,9 @@ export default function AgentsPage() {
 
       {/* Execute Modal */}
       {executingAgent && (
-        <ExecuteModal
-          title="Execute Agent"
-          description={`Execute ${executingAgent.name} with a task. The agent will use its configured role, goal, and tools to complete the task.`}
-          entityType="agent"
-          entityId={executingAgent.id}
-          entityName={executingAgent.name}
-          inputs={[
-            {
-              label: 'Task Description',
-              key: 'task',
-              type: 'textarea',
-              placeholder: 'Describe the task you want the agent to perform...',
-              required: true
-            },
-            {
-              label: 'Expected Output',
-              key: 'expected_output',
-              type: 'text',
-              placeholder: 'What kind of output do you expect?',
-              required: false
-            },
-            {
-              label: 'Context (optional)',
-              key: 'context',
-              type: 'textarea',
-              placeholder: 'Any additional context or information...',
-              required: false
-            }
-          ]}
+        <AgentExecuteModal
+          agentId={executingAgent.id}
+          agentName={executingAgent.name}
           isOpen={!!executingAgent}
           onClose={() => setExecutingAgent(null)}
         />

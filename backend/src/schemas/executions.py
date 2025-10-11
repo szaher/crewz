@@ -21,6 +21,9 @@ class ExecutionType(str, Enum):
 
     FLOW = "flow"
     CREW = "crew"
+    AGENT = "agent"
+    TOOL = "tool"
+    TASK = "task"
 
 
 class ExecutionCreate(BaseModel):
@@ -29,6 +32,9 @@ class ExecutionCreate(BaseModel):
     execution_type: ExecutionType
     flow_id: Optional[int] = None
     crew_id: Optional[int] = None
+    agent_id: Optional[int] = None
+    tool_id: Optional[int] = None
+    task_id: Optional[int] = None
     input_data: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -40,10 +46,14 @@ class ExecutionResponse(BaseModel):
     status: ExecutionStatus
     flow_id: Optional[int]
     crew_id: Optional[int]
+    agent_id: Optional[int]
+    tool_id: Optional[int]
+    task_id: Optional[int]
     user_id: int
     input_data: Dict[str, Any]
     output_data: Optional[Dict[str, Any]]
     error: Optional[str]
+    execution_time_ms: Optional[int]
     created_at: datetime
     updated_at: datetime
 

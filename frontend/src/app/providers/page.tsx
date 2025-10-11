@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Navigation from '@/components/shared/Navigation';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
-import { useLLMProviders, type LLMProvider as ProviderItem } from '@/lib/hooks/useLLMProviders';
+import { useLLMProviders, type LLMProvider as ProviderItem, type ProviderType } from '@/lib/hooks/useLLMProviders';
 import { apiClient } from '@/lib/api-client';
 
 export default function ProvidersPage() {
@@ -356,7 +356,7 @@ function CreateProviderModal({ onClose, onCreated }: { onClose: () => void; onCr
           </div>
           <div>
             <label className="block text-sm font-medium">Provider Type</label>
-            <select value={form.provider_type} onChange={(e) => setForm({ ...form, provider_type: e.target.value })} className="mt-1 w-full border rounded px-3 py-2">
+            <select value={form.provider_type} onChange={(e) => setForm({ ...form, provider_type: e.target.value as ProviderType })} className="mt-1 w-full border rounded px-3 py-2">
               <option value="openai">OpenAI</option>
               <option value="anthropic">Anthropic</option>
               <option value="ollama">Ollama</option>
@@ -439,7 +439,7 @@ function EditProviderModal({ provider, onClose, onUpdated }: { provider: Provide
           </div>
           <div>
             <label className="block text-sm font-medium">Provider Type</label>
-            <select value={form.provider_type} onChange={(e) => setForm({ ...form, provider_type: e.target.value })} className="mt-1 w-full border rounded px-3 py-2">
+            <select value={form.provider_type} onChange={(e) => setForm({ ...form, provider_type: e.target.value as ProviderType })} className="mt-1 w-full border rounded px-3 py-2">
               <option value="openai">OpenAI</option>
               <option value="anthropic">Anthropic</option>
               <option value="ollama">Ollama</option>

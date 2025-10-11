@@ -30,17 +30,52 @@ export default function ExecutionList({ executions }: ExecutionListProps) {
     }
   };
 
-  const formatDuration = (startedAt?: string, completedAt?: string) => {
-    if (!startedAt) return '-';
-    if (!completedAt) return 'Running...';
+  const formatDuration = (execution: Execution) => {
+    // Use execution_time_ms if available (this is the primary source)
+    if (execution.execution_time_ms) {
+      const seconds = execution.execution_time_ms / 1000;
+      if (seconds < 60) return `${Math.round(seconds)}s`;
+      if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+      return `${Math.round(seconds / 3600)}h`;
+    }
 
-    const start = new Date(startedAt).getTime();
-    const end = new Date(completedAt).getTime();
-    const duration = (end - start) / 1000; // seconds
+    // For running executions, calculate from created_at to now
+    if (execution.status === 'running') {
+      const start = new Date(execution.created_at).getTime();
+      const now = Date.now();
+      if (!isNaN(start)) {
+        const duration = (now - start) / 1000;
+        if (duration < 60) return `${Math.round(duration)}s`;
+        if (duration < 3600) return `${Math.round(duration / 60)}m`;
+        return `${Math.round(duration / 3600)}h`;
+      }
+    }
 
-    if (duration < 60) return `${Math.round(duration)}s`;
-    if (duration < 3600) return `${Math.round(duration / 60)}m`;
-    return `${Math.round(duration / 3600)}h`;
+    // For completed/failed executions without execution_time_ms, try to calculate from timestamps
+    if (execution.completed_at && execution.started_at) {
+      const start = new Date(execution.started_at).getTime();
+      const end = new Date(execution.completed_at).getTime();
+
+      if (!isNaN(start) && !isNaN(end)) {
+        const duration = (end - start) / 1000;
+        if (duration < 60) return `${Math.round(duration)}s`;
+        if (duration < 3600) return `${Math.round(duration / 60)}m`;
+        return `${Math.round(duration / 3600)}h`;
+      }
+    }
+
+    return '-';
+  };
+
+  const formatStartedAt = (execution: Execution) => {
+    // Use started_at if available, otherwise use created_at
+    const dateStr = execution.started_at || execution.created_at;
+    if (!dateStr) return '-';
+
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return '-';
+
+    return date.toLocaleString();
   };
 
   if (executions.length === 0) {
@@ -50,6 +85,9 @@ export default function ExecutionList({ executions }: ExecutionListProps) {
       </div>
     );
   }
+
+  // Sort executions by ID descending (newest first)
+  const sortedExecutions = [...executions].sort((a, b) => b.id - a.id);
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -77,7 +115,7 @@ export default function ExecutionList({ executions }: ExecutionListProps) {
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {executions.map((execution) => (
+          {sortedExecutions.map((execution) => (
             <tr
               key={execution.id}
               className="hover:bg-gray-50 cursor-pointer"
@@ -98,12 +136,10 @@ export default function ExecutionList({ executions }: ExecutionListProps) {
                 </span>
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {formatDuration(execution.started_at, execution.completed_at)}
+                {formatDuration(execution)}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {execution.started_at
-                  ? new Date(execution.started_at).toLocaleString()
-                  : 'Not started'}
+                {formatStartedAt(execution)}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                 <button

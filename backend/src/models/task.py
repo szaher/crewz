@@ -1,6 +1,6 @@
 """Task model for CrewAI tasks."""
 
-from sqlalchemy import Column, String, Text, Boolean, Integer, ForeignKey, Enum
+from sqlalchemy import Column, String, Text, Boolean, Integer, ForeignKey, Enum, JSON
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 import enum
@@ -50,6 +50,9 @@ class Task(BaseModel):
 
     # Tool configuration
     tools_config = Column(Text, nullable=True)  # JSON string of tool-specific configs
+
+    # Variables extracted from description (stored as list of variable names)
+    variables = Column(JSON, nullable=True)  # List of variable names found in {variable} format
 
     # Relationships
     agent = relationship("Agent", backref="tasks")

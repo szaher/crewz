@@ -13,11 +13,68 @@ export default function ExecutionsPage() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
 
+  const getNormalizedType = (e: any): string => {
+    const rawCandidates = [
+      e.execution_type,
+      e.type,
+      e.kind,
+      e.entity_type,
+      e.target_type,
+      e.resource_type,
+      e.subject_type,
+      e.category,
+      e.context?.type,
+      e.metadata?.type,
+    ]
+      .filter(Boolean)
+      .map((v: any) => String(v).toLowerCase());
+
+    const normalizeToken = (t: string): string => {
+      if (!t) return '';
+      // Strip suffixes and plural forms
+      t = t.replace(/_?execution$/, '');
+      t = t.replace(/-?execution$/, '');
+      if (t.endsWith('s')) t = t.slice(0, -1);
+      // Map common synonyms
+      if (t.includes('flow')) return 'flow';
+      if (t.includes('crew')) return 'crew';
+      if (t.includes('agent')) return 'agent';
+      if (t.includes('tool')) return 'tool';
+      if (t.includes('task')) return 'task';
+      return t;
+    };
+
+    for (const r of rawCandidates) {
+      const n = normalizeToken(r);
+      if (['flow', 'crew', 'agent', 'tool', 'task'].includes(n)) return n;
+    }
+
+    // Infer from available IDs / names
+    const has = (prop: string) => Object.prototype.hasOwnProperty.call(e, prop) && e[prop] != null;
+    if (has('flow_id') || has('flowId') || has('flow') || e.flow_name) return 'flow';
+    if (has('crew_id') || has('crewId') || has('crew') || e.crew_name) return 'crew';
+    if (has('agent_id') || has('agentId') || has('agent') || e.agent_name) return 'agent';
+    if (has('tool_id') || has('toolId') || has('tool') || e.tool_name) return 'tool';
+    if (has('task_id') || has('taskId') || has('task') || e.task_name) return 'task';
+
+    // Heuristic: scan keys for '*agent*id' or '*crew*id' etc.
+    const keys = Object.keys(e).map((k) => k.toLowerCase());
+    if (keys.some((k) => k.includes('agent') && k.includes('id'))) return 'agent';
+    if (keys.some((k) => k.includes('crew') && k.includes('id'))) return 'crew';
+    if (keys.some((k) => k.includes('flow') && k.includes('id'))) return 'flow';
+    if (keys.some((k) => k.includes('tool') && k.includes('id'))) return 'tool';
+    if (keys.some((k) => k.includes('task') && k.includes('id'))) return 'task';
+
+    return 'execution';
+  };
+
   const filteredExecutions = executions.filter((execution) => {
     if (filterStatus !== 'all' && execution.status !== filterStatus) return false;
-    if (filterType !== 'all' && execution.execution_type !== filterType) return false;
+    if (filterType !== 'all' && getNormalizedType(execution) !== filterType) return false;
     return true;
-  });
+  })
+  // Sort by id descending (newest first)
+  .sort((a: any, b: any) => b.id - a.id);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -42,21 +99,68 @@ export default function ExecutionsPage() {
         return '🔀';
       case 'crew':
         return '👥';
+      case 'agent':
+        return '🤖';
+      case 'tool':
+        return '🔧';
+      case 'task':
+        return '📋';
       default:
         return '⚙️';
     }
   };
 
-  const formatDuration = (startedAt?: string, completedAt?: string) => {
-    if (!startedAt) return '-';
-    const start = new Date(startedAt).getTime();
-    const end = completedAt ? new Date(completedAt).getTime() : Date.now();
+  const safeDate = (value: any): Date | null => {
+    if (!value) return null;
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  const formatDuration = (execution: any) => {
+    // Check if execution_time_ms is available
+    if (typeof execution.execution_time_ms === 'number' && execution.execution_time_ms >= 0) {
+      const seconds = Math.floor(execution.execution_time_ms / 1000);
+      const ms = execution.execution_time_ms % 1000;
+      if (seconds < 60) return `${seconds}.${Math.floor(ms / 100)}s`;
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = seconds % 60;
+      return `${minutes}m ${remainingSeconds}s`;
+    }
+
+    // Fallback: compute from created_at -> updated_at (API may not return started_at/completed_at)
+    const startDate = safeDate(execution.created_at);
+    const endDate = safeDate(execution.updated_at);
+    if (!startDate) return '-';
+    const start = startDate.getTime();
+    const end = endDate ? endDate.getTime() : Date.now();
     const durationSeconds = Math.round((end - start) / 1000);
 
     if (durationSeconds < 60) return `${durationSeconds}s`;
     const minutes = Math.floor(durationSeconds / 60);
     const seconds = durationSeconds % 60;
     return `${minutes}m ${seconds}s`;
+  };
+
+  const getEntityName = (execution: any) => {
+    // Prefer generic entity name if provided by API
+    if (execution.entity_name) return execution.entity_name;
+    // Return entity name based on execution type
+    switch (getNormalizedType(execution)) {
+      case 'flow':
+        return execution.flow_name || `Flow #${execution.flow_id}`;
+      case 'crew':
+        return execution.crew_name || `Crew #${execution.crew_id}`;
+      case 'agent':
+        return execution.agent_name || `Agent #${execution.agent_id}`;
+      case 'tool':
+        return execution.tool_name || `Tool #${execution.tool_id}`;
+      case 'task':
+        return execution.task_name || `Task #${execution.task_id}`;
+      default:
+        // Try best-effort fallback
+        if (execution.name) return execution.name;
+        return execution.title || `#${execution.id}`;
+    }
   };
 
   return (
@@ -71,7 +175,7 @@ export default function ExecutionsPage() {
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">Executions</h1>
-                <p className="text-gray-500 mt-1">Monitor and review flow and crew executions</p>
+                <p className="text-gray-500 mt-1">Monitor and review all execution types: flows, crews, agents, tools, and tasks</p>
               </div>
               <button
                 onClick={refetch}
@@ -108,8 +212,11 @@ export default function ExecutionsPage() {
                     className="px-3 py-2 border border-gray-300 rounded-md text-sm"
                   >
                     <option value="all">All Types</option>
-                    <option value="flow">Flow</option>
-                    <option value="crew">Crew</option>
+                    <option value="flow">🔀 Flow</option>
+                    <option value="crew">👥 Crew</option>
+                    <option value="agent">🤖 Agent</option>
+                    <option value="tool">🔧 Tool</option>
+                    <option value="task">📋 Task</option>
                   </select>
                 </div>
 
@@ -170,9 +277,6 @@ export default function ExecutionsPage() {
                         Type
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Flow/Crew
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Status
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -198,12 +302,13 @@ export default function ExecutionsPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           <span className="flex items-center gap-2">
-                            <span className="text-lg">{getTypeIcon(execution.execution_type)}</span>
-                            <span className="capitalize">{execution.execution_type}</span>
+                            <span className="text-lg">{getTypeIcon(getNormalizedType(execution))}</span>
+                            <span>{(() => {
+                              const t = getNormalizedType(execution);
+                              if (!t || t === 'unknown') return 'Unknown';
+                              return t.charAt(0).toUpperCase() + t.slice(1);
+                            })()}</span>
                           </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {execution.flow_name || `ID: ${execution.flow_id}`}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span
@@ -215,12 +320,13 @@ export default function ExecutionsPage() {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {formatDuration(execution.started_at, execution.completed_at)}
+                          {formatDuration(execution)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {execution.started_at
-                            ? new Date(execution.started_at).toLocaleString()
-                            : new Date(execution.created_at).toLocaleString()}
+                          {(() => {
+                            const d = safeDate(execution.created_at);
+                            return d ? d.toLocaleString() : '-';
+                          })()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           <button

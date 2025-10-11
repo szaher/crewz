@@ -16,33 +16,34 @@ export default function DashboardPage() {
 
   const [loading, setLoading] = useState(true);
 
-  const loadDashboardData = useCallback(async () => {
-    setLoading(true);
-    try {
-      // Load all data in parallel
-      const [flowsRes, crewsRes, agentsRes, toolsRes, executionsRes] = await Promise.all([
-        apiClient.get('/api/v1/flows'),
-        apiClient.get('/api/v1/crews'),
-        apiClient.get('/api/v1/agents'),
-        apiClient.get('/api/v1/tools'),
-        apiClient.get('/api/v1/executions'),
-      ]);
-
-      if (flowsRes.data) setFlows(flowsRes.data.flows || []);
-      if (crewsRes.data) setCrews(crewsRes.data.crews || []);
-      if (agentsRes.data) setAgents(agentsRes.data.agents || []);
-      if (toolsRes.data) setTools(toolsRes.data.tools || []);
-      if (executionsRes.data) setExecutions(executionsRes.data.executions || []);
-    } catch (error) {
-      console.error('Failed to load dashboard data:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [setAgents, setCrews, setExecutions, setFlows, setTools]);
-
   useEffect(() => {
+    const loadDashboardData = async () => {
+      setLoading(true);
+      try {
+        // Load all data in parallel
+        const [flowsRes, crewsRes, agentsRes, toolsRes, executionsRes] = await Promise.all([
+          apiClient.get('/api/v1/flows'),
+          apiClient.get('/api/v1/crews'),
+          apiClient.get('/api/v1/agents'),
+          apiClient.get('/api/v1/tools'),
+          apiClient.get('/api/v1/executions'),
+        ]);
+
+        if (flowsRes.data) setFlows(flowsRes.data.flows || []);
+        if (crewsRes.data) setCrews(crewsRes.data.crews || []);
+        if (agentsRes.data) setAgents(agentsRes.data.agents || []);
+        if (toolsRes.data) setTools(toolsRes.data.tools || []);
+        if (executionsRes.data) setExecutions(executionsRes.data.executions || []);
+      } catch (error) {
+        console.error('Failed to load dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     void loadDashboardData();
-  }, [loadDashboardData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <ProtectedRoute>

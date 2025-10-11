@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Navigation from '@/components/shared/Navigation';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
+import { useUIStore } from '@/lib/store';
 import ChatWindow from '@/components/chat/ChatWindow';
 import { apiClient } from '@/lib/api-client';
 import Markdown from '@/components/shared/Markdown';
@@ -14,6 +15,10 @@ import Modal from '@/components/shared/Modal';
 export default function ChatPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  // Ensure sidebar is closed on entering chat
+  const { sidebarOpen, toggleSidebar } = useUIStore();
+  const [newFolderInline, setNewFolderInline] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,10 +44,20 @@ export default function ChatPage() {
   const [folderMenuFor, setFolderMenuFor] = useState<number | null>(null);
   const [manageTools, setManageTools] = useState<{open:boolean, toolIds?: number[]}>({open:false});
   const [manageToolsAll, setManageToolsAll] = useState<any[]>([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     loadSessions();
     loadFolders();
+    // Show sidebar briefly, then auto-close
+    try {
+      // Ensure sidebar is visible immediately
+      if (!sidebarOpen) toggleSidebar();
+      const t = setTimeout(() => {
+        if (useUIStore.getState().sidebarOpen) toggleSidebar();
+      }, 1500);
+      return () => clearTimeout(t);
+    } catch {}
   }, []);
 
   useEffect(() => {
@@ -60,7 +75,13 @@ export default function ChatPage() {
       if (selectedFolderId !== null) params.set('folder_id', String(selectedFolderId));
       const response = await apiClient.get(`/api/v1/chat/sessions${params.toString() ? `?${params.toString()}` : ''}`);
       // API returns array directly, not wrapped in {sessions: [...]}
-      const sessions = Array.isArray(response.data) ? response.data : [];
+      let sessions = Array.isArray(response.data) ? response.data : [];
+      // Order sessions by updated_at desc, then created_at desc
+      sessions = sessions.sort((a: any, b: any) => {
+        const au = a.updated_at || a.created_at || '';
+        const bu = b.updated_at || b.created_at || '';
+        return new Date(bu).getTime() - new Date(au).getTime();
+      });
       setSessions(sessions);
       // Prefer session from URL if provided
       const sessionParam = searchParams?.get('session');
@@ -90,7 +111,7 @@ export default function ChatPage() {
   const loadProviders = async () => {
     setLoadingProviders(true);
     try {
-      const res = await apiClient.get('/api/v1/llm-providers', { params: { page: 1, page_size: 100, is_active: true } });
+      const res = await apiClient.get('/api/v1/llm-providers?page=1&page_size=100&is_active=true');
       if (res.data) {
         setProviders(res.data.providers || []);
       }
@@ -202,7 +223,7 @@ export default function ChatPage() {
             </div>
             <div className="flex-1 flex overflow-hidden">
           {/* Sidebar - Sessions List */}
-          <div className="w-72 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col">
+          <div className="w-72 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col overflow-y-auto">
             <div className="p-4 border-b border-gray-200 dark:border-gray-800">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Chat Sessions</h2>
             </div>
@@ -218,13 +239,13 @@ export default function ChatPage() {
           </div>
 
           <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-800">
-            <div className="flex items-center justify-between mb-2">
+            <div className="group flex items-center justify-between mb-2">
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Folders</span>
               <button
-                className="p-1 border rounded hover:bg-gray-100 dark:hover:bg-gray-800 dark:border-gray-700"
+                className="p-1 border rounded hover:bg-gray-100 dark:hover:bg-gray-800 dark:border-gray-700 opacity-0 group-hover:opacity-100 transition-opacity"
                 aria-label="New folder"
                 title="New folder"
-                onClick={() => setFolderModal({ open:true, mode:'create', folder:null, name:'' })}
+                onClick={() => { setNewFolderInline(true); setNewFolderName(''); }}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
                   <path d="M12 4.5a.75.75 0 01.75.75V11h5.75a.75.75 0 010 1.5H12.75v5.75a.75.75 0 01-1.5 0V12.5H5.5a.75.75 0 010-1.5h5.75V5.25A.75.75 0 0112 4.5z" />
@@ -232,18 +253,64 @@ export default function ChatPage() {
               </button>
             </div>
             <div className="space-y-1">
+              {newFolderInline && (
+                <div className="flex items-center gap-2 p-1">
+                  <input
+                    autoFocus
+                    value={newFolderName}
+                    onChange={(e) => setNewFolderName(e.target.value)}
+                    onKeyDown={async (e) => {
+                      if (e.key === 'Enter') {
+                        const name = newFolderName.trim();
+                        if (!name) return;
+                        const res = await apiClient.post('/api/v1/chat/folders', { name });
+                        if (!res.error) {
+                          setNewFolderInline(false);
+                          setNewFolderName('');
+                          await loadFolders();
+                        }
+                      } else if (e.key === 'Escape') {
+                        setNewFolderInline(false); setNewFolderName('');
+                      }
+                    }}
+                    placeholder="Folder name"
+                    className="flex-1 px-2 py-1 border border-gray-300 dark:border-gray-700 rounded text-sm bg-white dark:bg-gray-900"
+                  />
+                  <button
+                    className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                    onClick={async () => {
+                      const name = newFolderName.trim();
+                      if (!name) return;
+                      const res = await apiClient.post('/api/v1/chat/folders', { name });
+                      if (!res.error) {
+                        setNewFolderInline(false);
+                        setNewFolderName('');
+                        await loadFolders();
+                      }
+                    }}
+                  >
+                    Save
+                  </button>
+                  <button
+                    className="px-2 py-1 text-xs border rounded"
+                    onClick={() => { setNewFolderInline(false); setNewFolderName(''); }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
               <button
                 onClick={() => { setSelectedFolderId(null); void loadSessions(); }}
                 className={`w-full text-left px-3 py-1.5 rounded ${selectedFolderId===null ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}
               >All</button>
               {folders.map((f) => (
-                <div key={f.id} className="flex items-center gap-1">
+                <div key={f.id} className="group flex items-center gap-1">
                   <button
                     onClick={() => { setSelectedFolderId(f.id); void loadSessions(); }}
                     className={`flex-1 text-left px-3 py-1.5 rounded ${selectedFolderId===f.id ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}
                   >{f.name}</button>
                   <button
-                    className="p-1 border rounded hover:bg-gray-100 dark:hover:bg-gray-800 dark:border-gray-700"
+                    className="p-1 border rounded hover:bg-gray-100 dark:hover:bg-gray-800 dark:border-gray-700 opacity-0 group-hover:opacity-100 transition-opacity"
                     aria-label="Rename folder"
                     title="Rename"
                     onClick={() => setFolderModal({ open:true, mode:'rename', folder:f, name:f.name })}
@@ -254,7 +321,7 @@ export default function ChatPage() {
                     </svg>
                   </button>
                   <button
-                    className="p-1 border rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:border-gray-700"
+                    className="p-1 border rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:border-gray-700 opacity-0 group-hover:opacity-100 transition-opacity"
                     aria-label="Delete folder"
                     title="Delete"
                     onClick={() => setFolderDeleteModal({ open:true, folder:f })}
@@ -281,7 +348,7 @@ export default function ChatPage() {
                 ) : (
                   <div className="p-1 space-y-0.5">
                     {sessions.map((session: any) => (
-                  <div key={session.id} className={`rounded-md px-2 py-1 text-sm ${activeSessionId===session.id ? 'bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-300' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200'}`}>
+                  <div key={session.id} className={`group rounded-md px-2 py-1 text-sm ${activeSessionId===session.id ? 'bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-300' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200'}`}>
                     <div className="flex items-center justify-between">
                       {editingSessionId === session.id ? (
                         <div className="flex items-center gap-2 flex-1">
@@ -315,7 +382,7 @@ export default function ChatPage() {
                           <button className="font-medium truncate text-left flex-1" onClick={() => setActiveSessionId(session.id)}>
                             {session.title || 'Untitled'}
                           </button>
-                          <div className="flex items-center gap-1 relative">
+                          <div className="flex items-center gap-1 relative opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
                               className="p-1 border rounded hover:bg-gray-100 dark:hover:bg-gray-800 dark:border-gray-700"
                               onClick={() => { setEditingSessionId(session.id); setEditingTitle(session.title || ''); }}
@@ -388,20 +455,28 @@ export default function ChatPage() {
             )}
           </div>
 
-          {/* New Session Button */}
-          <div className="p-4 border-t border-gray-200">
-            <div className="flex gap-2">
+          {/* New Session / Refresh Icons */}
+          <div className="p-3 border-t border-gray-200 dark:border-gray-800">
+            <div className="flex items-center justify-between">
               <button
                 onClick={() => setShowNewSessionForm(true)}
-                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                className="p-2 rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800"
+                title="New Session"
+                aria-label="New Session"
               >
-                New Session
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                  <path d="M12 4.5a.75.75 0 01.75.75V11h5.75a.75.75 0 010 1.5H12.75v5.75a.75.75 0 01-1.5 0V12.5H5.5a.75.75 0 010-1.5h5.75V5.25A.75.75 0 0112 4.5z" />
+                </svg>
               </button>
               <button
                 onClick={() => void loadSessions()}
-                className="px-3 py-2 text-sm border rounded"
+                className="p-2 rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800"
+                title="Refresh"
+                aria-label="Refresh"
               >
-                Refresh
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                  <path d="M4.5 12a7.5 7.5 0 1112.864 5.303l1.768 1.768a.75.75 0 01-1.06 1.06l-2.828-2.828a.75.75 0 01-.22-.53V12a.75.75 0 011.5 0v3.035A6 6 0 106 12h1.5z" />
+                </svg>
               </button>
             </div>
           </div>
@@ -410,15 +485,70 @@ export default function ChatPage() {
         {/* Main Chat Area */}
         <div className="flex-1 flex flex-col">
           {activeSessionId && activeSession ? (
-            <ChatWindow
-              sessionId={activeSessionId}
-              sessionTitle={(activeSession as any).title || 'Untitled'}
-              crewId={activeSession.crew_id || undefined}
-              onManageTools={() => setManageTools({ open:true })}
-              onTitleUpdate={(newTitle) => {
-                setSessions((prev) => prev.map((s) => s.id === activeSessionId ? { ...s, title: newTitle } as any : s));
-              }}
-            />
+            <div className="flex-1 flex overflow-hidden relative">
+              <div className="w-full h-full flex flex-col bg-white dark:bg-gray-900">
+                <ChatWindow
+                  sessionId={activeSessionId}
+                  sessionTitle={(activeSession as any).title || 'Untitled'}
+                  crewId={activeSession.crew_id || undefined}
+                  onManageTools={() => setSettingsOpen(true)}
+                  onStreamingStart={() => setSettingsOpen(false)}
+                  onTitleUpdate={(newTitle) => {
+                    setSessions((prev) => prev.map((s) => s.id === activeSessionId ? { ...s, title: newTitle } as any : s));
+                  }}
+                />
+              </div>
+              {/* Right Settings Drawer */}
+              {settingsOpen && (
+                <div className="absolute right-0 top-0 h-full w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-lg z-30 flex flex-col">
+                  <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+                    <div className="font-semibold">Session Settings</div>
+                    <button className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800" onClick={() => setSettingsOpen(false)} aria-label="Close settings">✕</button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-3 space-y-4">
+                    <div>
+                      <div className="text-sm font-medium mb-2">Allowed Tools</div>
+                      <div className="max-h-64 overflow-y-auto border rounded">
+                        {manageToolsAll.length === 0 ? (
+                          <div className="p-3 text-sm text-gray-500">No tools available</div>
+                        ) : (
+                          manageToolsAll.map((t: any) => (
+                            <label key={t.id} className="flex items-center gap-2 p-2 border-b last:border-b-0">
+                              <input
+                                type="checkbox"
+                                checked={(manageTools.toolIds || []).includes(t.id)}
+                                onChange={(e) => {
+                                  const selected = new Set(manageTools.toolIds || []);
+                                  if (e.target.checked) selected.add(t.id); else selected.delete(t.id);
+                                  setManageTools({ open:true, toolIds: Array.from(selected) });
+                                }}
+                              />
+                              <div>
+                                <div className="text-sm font-medium">{t.name} <span className="text-xs text-gray-500">({t.tool_type})</span></div>
+                                <div className="text-xs text-gray-500">{t.description}</div>
+                              </div>
+                            </label>
+                          ))
+                        )}
+                      </div>
+                      <div className="mt-2 flex justify-end gap-2">
+                        <button onClick={() => setSettingsOpen(false)} className="px-3 py-1.5 border rounded">Close</button>
+                        <button
+                          onClick={async () => {
+                            if (!activeSessionId) return;
+                            const res = await apiClient.put(`/api/v1/chat/sessions/${activeSessionId}/tools`, { tool_ids: manageTools.toolIds || [] });
+                            if (!res.error) setSettingsOpen(false);
+                          }}
+                          className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           ) : (
             <QuickChat
               onCreateSession={() => setShowNewSessionForm(true)}
@@ -627,7 +757,7 @@ export default function ChatPage() {
           size="sm"
         >
           <div className="text-sm text-gray-800">
-            Delete folder "{folderDeleteModal.folder?.name}"? Sessions will be moved out of this folder.
+            Delete folder &quot;{folderDeleteModal.folder?.name}&quot;? Sessions will be moved out of this folder.
           </div>
           <div className="mt-4 flex justify-end gap-2">
             <button onClick={() => setFolderDeleteModal({ open:false, folder:null })} className="px-4 py-2 border rounded">Cancel</button>
@@ -700,7 +830,7 @@ export default function ChatPage() {
       )}
       {deleteModal.open && (
         <Modal isOpen={deleteModal.open} onClose={() => setDeleteModal({ open:false, session:null })} title="Delete Session" size="sm">
-          <div className="text-sm text-gray-800">Are you sure you want to delete the session "{deleteModal.session?.title || 'Untitled'}"?</div>
+          <div className="text-sm text-gray-800">Are you sure you want to delete the session &quot;{deleteModal.session?.title || 'Untitled'}&quot;?</div>
           <div className="mt-4 flex justify-end gap-2">
             <button onClick={() => setDeleteModal({ open:false, session:null })} className="px-4 py-2 border rounded">Cancel</button>
             <button
@@ -832,10 +962,21 @@ function QuickChat({ onCreateSession, onGoConfigure, onAutoCreateSession }: { on
           <p className="text-gray-500 dark:text-gray-400">Say hello to start chatting.</p>
         ) : (
           messages.map((m, i) => (
-            <div key={i} className={m.role === 'user' ? 'text-right' : 'text-left'}>
+            <div
+              key={i}
+              className={`animate-messageSlideIn ${m.role === 'user' ? 'text-right' : 'text-left'}`}
+              style={{ animationDelay: `${Math.min(i * 50, 300)}ms` }}
+            >
               <div className={`inline-block px-3 py-2 rounded-xl max-w-[75%] text-left border shadow-sm ${m.role === 'user' ? 'bg-gradient-to-b from-sky-50 to-sky-100 text-slate-800 border-sky-200 dark:bg-transparent dark:text-slate-100/90 dark:border-slate-700' : 'bg-white text-slate-800 border-slate-200 dark:bg-transparent dark:text-slate-200 dark:border-slate-700'}`}>
                 <div className={`${m.role === 'user' ? 'prose prose-slate dark:prose-invert' : 'prose prose-slate dark:prose-invert'} max-w-none leading-relaxed text-[15px] prose-a:text-blue-600 dark:prose-a:text-blue-300 prose-code:text-emerald-700 dark:prose-code:text-emerald-200`}>
                   <Markdown content={m.content} />
+                  {sending && i === messages.length - 1 && m.role === 'user' && (
+                    <div className="mt-2 inline-flex items-center gap-1 text-xs text-gray-500">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

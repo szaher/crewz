@@ -19,12 +19,12 @@ class DockerService:
             self.client = docker.from_env()
             self.available = True
         except Exception as e:
-            # Docker not available - this is OK for basic operations
-            # Tools that require Docker will fail gracefully
+            # Docker not available — acceptable when no Docker-based tools are used.
+            # We log at INFO to avoid alarming warnings in environments without Docker.
             self.client = None
             self.available = False
             import logging
-            logging.warning(f"Docker service not available: {str(e)}")
+            logging.info(f"Docker service not available: {str(e)}")
 
     async def execute_tool(
         self,

@@ -14,7 +14,7 @@ import type { Task, TaskCreate, TaskUpdate } from '@/types/task';
 
 export default function TasksPage() {
   const router = useRouter();
-  const { tasks, loading, error, fetchTasks, createTask, updateTask, deleteTask } = useTasks();
+  const { tasks, loading, error, fetchTasks, createTask, updateTask, deleteTask, unassignFromCrew } = useTasks();
   const { agents, refetch: refetchAgents } = useAgents();
   const { crews, refetch: refetchCrews } = useCrews();
 
@@ -60,6 +60,15 @@ export default function TasksPage() {
       fetchTasks();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to delete task');
+    }
+  };
+
+  const handleUnassignTask = async (taskId: number) => {
+    try {
+      await unassignFromCrew(taskId);
+      fetchTasks();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to unassign task from crew');
     }
   };
 
@@ -206,6 +215,7 @@ export default function TasksPage() {
                   tasks={filteredTasks}
                   onEdit={handleEditTask}
                   onDelete={handleDeleteTask}
+                  onUnassign={handleUnassignTask}
                   agentNames={agentNames}
                 />
               </div>

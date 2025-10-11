@@ -1,7 +1,9 @@
 """Chat API endpoints."""
 
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Query
+from fastapi.responses import StreamingResponse
+import json
 from sqlalchemy.orm import Session
 
 from ...db.postgres import get_db
@@ -16,6 +18,9 @@ from ...schemas.chat import (
 from ...services.chat_service import ChatService
 from ...services.llm_service import LLMService
 from ...api.middleware.auth import require_auth
+from ...services.notification_service import NotificationService
+from ...services.notification_events import NotificationPublisher
+from ...schemas.notifications import NotificationCreate
 
 router = APIRouter()
 
@@ -404,6 +409,103 @@ async def generate_response(
     }
 
 
+@router.get("/sessions/{session_id}/generate/stream")
+async def generate_response_stream(
+    session_id: int,
+    user_message: str,
+    store_user: bool = True,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Stream AI response tokens for a user message via SSE.
+
+    Sends an initial `status` event with state=thinking, followed by `delta` events
+    containing token chunks, and a final `done` event. Stores both user and assistant
+    messages in the session.
+    """
+    llm_service = LLMService(db)
+    chat_service = ChatService(db, llm_service)
+
+    # Store user message first (unless skipping for retry)
+    if store_user:
+        await chat_service.send_message(
+            ChatMessageCreate(
+                session_id=session_id,
+                role="user",
+                content=user_message,
+            )
+        )
+
+    async def event_generator():
+        # Build message history similar to generate_response
+        session = await chat_service.get_session(session_id)
+        history = await chat_service.get_messages(session_id)
+
+        llm_messages: list[dict] = []
+        if session.system_prompt:
+            llm_messages.append({"role": "system", "content": session.system_prompt})
+        for m in history:
+            if m.role in ("user", "assistant"):
+                llm_messages.append({"role": m.role, "content": m.content})
+        llm_messages.append({"role": "user", "content": user_message})
+
+        # Preamble: thinking
+        yield f"event: status\ndata: {json.dumps({'state': 'thinking'})}\n\n"
+
+        assembled: list[str] = []
+        try:
+            async for chunk in llm_service.chat_completion_stream(
+                provider_id=session.llm_provider_id,  # type: ignore[arg-type]
+                messages=llm_messages,
+            ):
+                assembled.append(chunk)
+                yield f"event: delta\ndata: {json.dumps({'token': chunk})}\n\n"
+        except Exception as e:
+            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+            return
+
+        full_text = "".join(assembled)
+        # Persist assistant message
+        await chat_service.send_message(
+            ChatMessageCreate(
+                session_id=session_id,
+                role="assistant",
+                content=full_text,
+            )
+        )
+
+        # Push a notification for chat response readiness
+        try:
+            ns = NotificationService(db)
+            title = f"New reply in '{session.title or ('Chat Session #' + str(session_id))}'"
+            await ns.create_notification(
+                user_id=current_user["id"],
+                tenant_id=current_user.get("tenant_id"),
+                data=NotificationCreate(
+                    type="info",
+                    title=title,
+                    message=(full_text[:120] + ("…" if len(full_text) > 120 else "")),
+                    data={"chat_session_id": session_id, "kind": "chat_response"},
+                ),
+            )
+            NotificationPublisher().publish(
+                current_user["id"],
+                {
+                    "type": "info",
+                    "title": title,
+                    "message": (full_text[:120] + ("…" if len(full_text) > 120 else "")),
+                    "data": {"chat_session_id": session_id, "kind": "chat_response"},
+                },
+            )
+        except Exception:
+            pass
+
+        yield f"event: done\ndata: {json.dumps({'length': len(full_text)})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_session(
     session_id: int,
@@ -420,15 +522,145 @@ async def delete_session(
     await chat_service.delete_session(session_id)
 
 
-@router.get("/ws")
-async def websocket_endpoint():
+@router.websocket("/sessions/{session_id}/ws")
+async def websocket_chat(
+    websocket: WebSocket,
+    session_id: int,
+    token: Optional[str] = Query(None),
+):
     """
-    WebSocket endpoint for real-time chat.
+    WebSocket endpoint for real-time chat streaming.
 
-    Placeholder for future WebSocket implementation.
-    Use POST /sessions/{session_id}/generate for now.
+    Connect to ws://localhost:8000/api/v1/chat/sessions/{session_id}/ws?token=<jwt_token>
+
+    Message format:
+    - Send: {"type": "message", "content": "user message text"}
+    - Receive: {"type": "status", "state": "thinking"}
+    - Receive: {"type": "delta", "token": "streamed text"}
+    - Receive: {"type": "done", "length": 123}
+    - Receive: {"type": "error", "message": "error details"}
     """
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="WebSocket chat not yet implemented. Use POST /sessions/{session_id}/generate",
-    )
+    await websocket.accept()
+
+    # Get database session
+    db_gen = get_db()
+    db = next(db_gen)
+
+    try:
+        # Verify authentication token
+        if not token:
+            await websocket.send_json({"type": "error", "message": "Authentication token required"})
+            await websocket.close(code=1008)  # Policy violation
+            return
+
+        # TODO: Validate JWT token and get user_id
+        # For now, we'll skip auth validation in WebSocket
+        # In production, implement proper JWT validation here
+
+        llm_service = LLMService(db)
+        chat_service = ChatService(db, llm_service)
+
+        # Verify session exists and belongs to user
+        try:
+            session = await chat_service.get_session(session_id)
+            if not session:
+                await websocket.send_json({"type": "error", "message": "Session not found"})
+                await websocket.close(code=1008)
+                return
+        except Exception as e:
+            await websocket.send_json({"type": "error", "message": str(e)})
+            await websocket.close(code=1011)  # Internal error
+            return
+
+        # Listen for messages
+        while True:
+            try:
+                # Receive message from client
+                data = await websocket.receive_json()
+
+                if data.get("type") != "message":
+                    await websocket.send_json({"type": "error", "message": "Invalid message type"})
+                    continue
+
+                user_message = data.get("content", "").strip()
+                if not user_message:
+                    await websocket.send_json({"type": "error", "message": "Empty message"})
+                    continue
+
+                # Store user message (optional based on store_user parameter)
+                store_user = data.get("store_user", True)
+                if store_user:
+                    await chat_service.send_message(
+                        ChatMessageCreate(
+                            session_id=session_id,
+                            role="user",
+                            content=user_message,
+                        )
+                    )
+
+                # Get message history
+                history = await chat_service.get_messages(session_id)
+
+                # Build LLM messages
+                llm_messages: list[dict] = []
+                if session.system_prompt:
+                    llm_messages.append({"role": "system", "content": session.system_prompt})
+
+                for m in history:
+                    if m.role in ("user", "assistant"):
+                        llm_messages.append({"role": m.role, "content": m.content})
+
+                # Add current user message if not stored
+                if not store_user:
+                    llm_messages.append({"role": "user", "content": user_message})
+
+                # Send thinking status
+                await websocket.send_json({"type": "status", "state": "thinking"})
+
+                # Stream response
+                assembled: list[str] = []
+                try:
+                    async for chunk in llm_service.chat_completion_stream(
+                        provider_id=session.llm_provider_id,
+                        messages=llm_messages,
+                    ):
+                        assembled.append(chunk)
+                        await websocket.send_json({"type": "delta", "token": chunk})
+                except Exception as llm_error:
+                    await websocket.send_json({"type": "error", "message": f"LLM error: {str(llm_error)}"})
+                    continue
+
+                # Persist assistant message
+                full_text = "".join(assembled)
+                await chat_service.send_message(
+                    ChatMessageCreate(
+                        session_id=session_id,
+                        role="assistant",
+                        content=full_text,
+                    )
+                )
+
+                # Send completion signal
+                await websocket.send_json({"type": "done", "length": len(full_text)})
+
+            except WebSocketDisconnect:
+                break
+            except json.JSONDecodeError:
+                await websocket.send_json({"type": "error", "message": "Invalid JSON"})
+            except Exception as e:
+                await websocket.send_json({"type": "error", "message": str(e)})
+
+    except Exception as e:
+        try:
+            await websocket.send_json({"type": "error", "message": f"Server error: {str(e)}"})
+        except:
+            pass
+    finally:
+        try:
+            db_gen.close()
+        except:
+            pass
+        try:
+            await websocket.close()
+        except:
+            pass

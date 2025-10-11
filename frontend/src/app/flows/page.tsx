@@ -52,8 +52,8 @@ export default function FlowsPage() {
 
       console.log('Create flow response:', response);
 
-      // The backend returns the flow object directly, not nested in .data
-      const flowId = response.data?.id || response.id;
+      // The backend returns the flow object in .data
+      const flowId = response.data?.id;
 
       if (flowId) {
         console.log('Redirecting to flow:', flowId);

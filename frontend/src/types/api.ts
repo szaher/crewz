@@ -279,6 +279,7 @@ export interface CrewCreate {
   description: string;
   process_type: 'sequential' | 'hierarchical' | 'consensus';
   agent_ids: number[];
+  task_ids?: number[];
   task_delegation_enabled?: boolean;
   verbose?: boolean;
   config?: Record<string, any>;
@@ -289,6 +290,7 @@ export interface CrewUpdate {
   description?: string;
   process_type?: 'sequential' | 'hierarchical' | 'consensus';
   agent_ids?: number[];
+  task_ids?: number[];
   task_delegation_enabled?: boolean;
   verbose?: boolean;
   config?: Record<string, any>;
@@ -374,14 +376,17 @@ export interface ToolExecuteResponse {
 export interface Execution {
   id: number;
   tenant_id: number;
-  execution_type: 'flow' | 'crew' | 'agent';
+  execution_type: 'flow' | 'crew' | 'agent' | 'tool' | 'task';
   flow_id?: number;
   crew_id?: number;
   agent_id?: number;
+  tool_id?: number;
+  task_id?: number;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
   input_data: Record<string, any>;
   output_data?: Record<string, any>;
   error?: string;
+  execution_time_ms?: number;
   started_at?: string;
   completed_at?: string;
   created_at: string;
@@ -389,10 +394,12 @@ export interface Execution {
 }
 
 export interface ExecutionCreate {
-  execution_type: 'flow' | 'crew' | 'agent';
+  execution_type: 'flow' | 'crew' | 'agent' | 'tool' | 'task';
   flow_id?: number;
   crew_id?: number;
   agent_id?: number;
+  tool_id?: number;
+  task_id?: number;
   input_data: Record<string, any>;
 }
 

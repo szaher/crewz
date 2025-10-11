@@ -7,7 +7,8 @@ import Navigation from '@/components/shared/Navigation';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import ExecutionDetail from '@/components/executions/ExecutionDetail';
 import ExecutionLogs from '@/components/executions/ExecutionLogs';
-import { useExecutions, type Execution } from '@/lib/hooks/useExecutions';
+import { useExecutions } from '@/lib/hooks/useExecutions';
+import type { Execution } from '@/types/api';
 
 export default function ExecutionPage() {
   const params = useParams();
@@ -35,7 +36,7 @@ export default function ExecutionPage() {
     setError(null);
     try {
       const data = await getExecution(executionId);
-      setExecution(data);
+      setExecution(data as Execution);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load execution';
       setError(message);
@@ -130,7 +131,7 @@ export default function ExecutionPage() {
             ← Back
           </button>
 
-          {execution.status === 'running' && (
+          {execution?.status === 'running' && (
             <button
               onClick={handleCancel}
               disabled={cancelling}
@@ -142,7 +143,7 @@ export default function ExecutionPage() {
         </div>
 
         {/* Execution Detail */}
-        <ExecutionDetail execution={execution} />
+        {execution && <ExecutionDetail execution={execution} />}
 
         {/* Live Logs */}
         <div className="mt-6">

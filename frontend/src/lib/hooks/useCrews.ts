@@ -6,7 +6,12 @@ export interface Crew {
   name: string;
   description?: string;
   process_type: 'sequential' | 'hierarchical';
-  agents: number[];
+  process?: 'sequential' | 'hierarchical';
+  agent_ids: number[];
+  task_count?: number;
+  verbose?: boolean;
+  memory?: boolean;
+  manager_llm_provider_id?: number;
   created_at: string;
   updated_at: string;
 }
