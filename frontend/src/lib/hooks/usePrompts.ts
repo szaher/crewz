@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { promptApi, categoryApi, type PromptListParams } from '../api/prompts';
+import { promptApi, categoryApi, type PromptListParams, type CategoryListResponse } from '../api/prompts';
 import type { PromptTemplate, PromptCategory } from '../store';
 
 export function usePrompts(params?: PromptListParams) {
@@ -43,8 +43,7 @@ export function usePrompts(params?: PromptListParams) {
     try {
       const response = await categoryApi.list();
       if (response.error) throw new Error(response.error);
-      // API returns { categories: [], total: number }
-      const data = response.data as any;
+      const data = response.data as CategoryListResponse | undefined;
       setCategories(data?.categories || []);
     } catch (err) {
       console.error('Failed to fetch categories:', err);

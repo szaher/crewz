@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { promptApi, categoryApi, type PromptCreateRequest } from '@/lib/api/prompts';
+import { promptApi, categoryApi, type PromptCreateRequest, type CategoryListResponse } from '@/lib/api/prompts';
 import type { PromptTemplate, PromptCategory, ModelParameters, PromptVariable } from '@/lib/store';
 import ModelParametersEditor from './ModelParametersEditor';
 
@@ -44,9 +44,8 @@ export default function PromptEditor({ promptId, onSave, onCancel }: PromptEdito
   const loadCategories = async () => {
     try {
       const response = await categoryApi.list();
-      if (response.data) {
-        setCategories(response.data);
-      }
+      const data = response.data as CategoryListResponse | undefined;
+      setCategories(data?.categories || []);
     } catch (err) {
       console.error('Failed to load categories:', err);
     }

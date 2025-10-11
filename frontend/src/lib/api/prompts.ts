@@ -80,6 +80,12 @@ export interface CommandInfo {
   variables: PromptVariable[];
 }
 
+// Category responses
+export interface CategoryListResponse {
+  categories: PromptCategory[];
+  total: number;
+}
+
 /**
  * Prompt CRUD Operations
  */
@@ -173,7 +179,8 @@ export const categoryApi = {
    * List all categories
    */
   async list() {
-    return apiClient.get<PromptCategory[]>('/api/v1/prompts/categories/list');
+    // Backend returns: { categories: PromptCategory[], total: number }
+    return apiClient.get<CategoryListResponse>('/api/v1/prompts/categories/list');
   },
 
   /**
