@@ -15,6 +15,13 @@ from .agent_version import AgentVersion
 from .provider_version import ProviderVersion
 from .feedback import Feedback
 from .notification import Notification
+from .prompt_category import PromptCategory
+from .prompt_template import PromptTemplate
+from .prompt_version import PromptVersion
+from .prompt_favorite import PromptFavorite
+from .prompt_rating import PromptRating
+from .prompt_feedback import PromptFeedback
+from .prompt_execution import PromptExecution
 
 __all__ = [
     "Tenant",
@@ -31,4 +38,11 @@ __all__ = [
     "ProviderVersion",
     "Feedback",
     "Notification",
+    "PromptCategory",
+    "PromptTemplate",
+    "PromptVersion",
+    "PromptFavorite",
+    "PromptRating",
+    "PromptFeedback",
+    "PromptExecution",
 ]
