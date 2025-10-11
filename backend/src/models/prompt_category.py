@@ -1,6 +1,6 @@
 """Prompt category model for organizing prompts."""
 
-from sqlalchemy import Column, String, Text, Integer, ForeignKey
+from sqlalchemy import Column, String, Text, Integer, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from .base import Base
@@ -19,8 +19,8 @@ class PromptCategory(Base):
     description = Column(Text, nullable=True)
     icon = Column(String(50), nullable=True)
     color = Column(String(20), nullable=True)
-    created_at = Column(String, nullable=False, default=lambda: datetime.utcnow().isoformat())
-    updated_at = Column(String, nullable=False, default=lambda: datetime.utcnow().isoformat(), onupdate=lambda: datetime.utcnow().isoformat())
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     prompts = relationship("PromptTemplate", back_populates="category")

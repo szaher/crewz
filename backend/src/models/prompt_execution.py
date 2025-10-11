@@ -1,6 +1,6 @@
 """Prompt execution model for tracking usage."""
 
-from sqlalchemy import Column, String, Text, Boolean, Integer, ForeignKey
+from sqlalchemy import Column, String, Text, Boolean, Integer, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from .base import Base
@@ -36,7 +36,7 @@ class PromptExecution(Base):
     # User feedback on this execution
     user_satisfaction = Column(Integer, nullable=True)  # 1-5
 
-    created_at = Column(String, nullable=False, default=lambda: datetime.utcnow().isoformat())
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     # Relationships
     prompt = relationship("PromptTemplate", back_populates="executions")

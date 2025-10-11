@@ -1,6 +1,6 @@
 """Prompt feedback model for user feedback."""
 
-from sqlalchemy import Column, String, Text, Boolean, Integer, ForeignKey
+from sqlalchemy import Column, String, Text, Boolean, Integer, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from .base import Base
@@ -20,9 +20,9 @@ class PromptFeedback(Base):
     content = Column(Text, nullable=False)
     is_resolved = Column(Boolean, default=False)
     resolved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    resolved_at = Column(String, nullable=True)
-    created_at = Column(String, nullable=False, default=lambda: datetime.utcnow().isoformat())
-    updated_at = Column(String, nullable=False, default=lambda: datetime.utcnow().isoformat(), onupdate=lambda: datetime.utcnow().isoformat())
+    resolved_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     prompt = relationship("PromptTemplate", back_populates="feedback")

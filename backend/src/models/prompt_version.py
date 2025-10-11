@@ -1,6 +1,6 @@
 """Prompt version model for tracking prompt history."""
 
-from sqlalchemy import Column, Text, Integer, ForeignKey
+from sqlalchemy import Column, Text, Integer, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from .base import Base
@@ -21,7 +21,7 @@ class PromptVersion(Base):
     model_params = Column(JSONB, nullable=True)  # Store all model parameters
     change_summary = Column(Text, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    created_at = Column(String, nullable=False, default=lambda: datetime.utcnow().isoformat())
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     # Relationships
     prompt = relationship("PromptTemplate", back_populates="versions")

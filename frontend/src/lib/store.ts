@@ -319,3 +319,101 @@ export const useNotificationStore = create<NotificationState>((set) => ({
     set((state) => ({ recent: [n, ...state.recent].slice(0, 20), unreadCount: state.unreadCount + 1 })),
   clear: () => set({ recent: [], unreadCount: 0 }),
 }));
+
+// Prompt Registry State
+export interface ModelParameters {
+  temperature?: number;
+  top_p?: number;
+  top_k?: number;
+  max_tokens?: number;
+  frequency_penalty?: number;
+  presence_penalty?: number;
+}
+
+export interface PromptVariable {
+  name: string;
+  type?: string;
+  description?: string;
+  default?: string;
+  required?: boolean;
+  validation?: string;
+}
+
+export interface PromptTemplate {
+  id: string;
+  tenant_id: number;
+  name: string;
+  slug: string;
+  description?: string;
+  content: string;
+  category_id?: string;
+  tags: string[];
+  variables: PromptVariable[];
+  suggested_model?: string;
+  model_parameters: ModelParameters;
+  is_public: boolean;
+  is_command_enabled: boolean;
+  average_rating: number;
+  total_ratings: number;
+  total_executions: number;
+  created_by: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PromptCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  parent_id?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface PromptState {
+  prompts: PromptTemplate[];
+  categories: PromptCategory[];
+  currentPrompt: PromptTemplate | null;
+  filters: {
+    category_id?: string;
+    tags?: string[];
+    search?: string;
+    public_only?: boolean;
+    min_rating?: number;
+    sort_by?: string;
+    sort_order?: 'asc' | 'desc';
+  };
+  setPrompts: (prompts: PromptTemplate[]) => void;
+  setCategories: (categories: PromptCategory[]) => void;
+  setCurrentPrompt: (prompt: PromptTemplate | null) => void;
+  addPrompt: (prompt: PromptTemplate) => void;
+  updatePrompt: (id: string, prompt: Partial<PromptTemplate>) => void;
+  deletePrompt: (id: string) => void;
+  setFilters: (filters: Partial<PromptState['filters']>) => void;
+  clearFilters: () => void;
+}
+
+export const usePromptStore = create<PromptState>((set) => ({
+  prompts: [],
+  categories: [],
+  currentPrompt: null,
+  filters: {},
+  setPrompts: (prompts) => set({ prompts }),
+  setCategories: (categories) => set({ categories }),
+  setCurrentPrompt: (prompt) => set({ currentPrompt: prompt }),
+  addPrompt: (prompt) => set((state) => ({ prompts: [...state.prompts, prompt] })),
+  updatePrompt: (id, updatedPrompt) =>
+    set((state) => ({
+      prompts: state.prompts.map((p) => (p.id === id ? { ...p, ...updatedPrompt } : p)),
+      currentPrompt: state.currentPrompt?.id === id ? { ...state.currentPrompt, ...updatedPrompt } : state.currentPrompt,
+    })),
+  deletePrompt: (id) =>
+    set((state) => ({
+      prompts: state.prompts.filter((p) => p.id !== id),
+      currentPrompt: state.currentPrompt?.id === id ? null : state.currentPrompt,
+    })),
+  setFilters: (filters) => set((state) => ({ filters: { ...state.filters, ...filters } })),
+  clearFilters: () => set({ filters: {} }),
+}));

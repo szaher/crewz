@@ -1,6 +1,6 @@
 """Prompt rating model for user ratings."""
 
-from sqlalchemy import Column, Integer, ForeignKey
+from sqlalchemy import Column, Integer, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from .base import Base
@@ -17,8 +17,8 @@ class PromptRating(Base):
     prompt_id = Column(UUID(as_uuid=True), ForeignKey("prompt_templates.id"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     rating = Column(Integer, nullable=False)  # 1-5 stars
-    created_at = Column(String, nullable=False, default=lambda: datetime.utcnow().isoformat())
-    updated_at = Column(String, nullable=False, default=lambda: datetime.utcnow().isoformat(), onupdate=lambda: datetime.utcnow().isoformat())
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     prompt = relationship("PromptTemplate", back_populates="ratings")

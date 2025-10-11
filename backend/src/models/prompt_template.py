@@ -1,6 +1,6 @@
 """Prompt template model with variables and model recommendations."""
 
-from sqlalchemy import Column, String, Text, Boolean, Integer, ForeignKey, Numeric
+from sqlalchemy import Column, String, Text, Boolean, Integer, ForeignKey, Numeric, DateTime
 from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSONB
 from sqlalchemy.orm import relationship
 from .base import Base
@@ -50,14 +50,14 @@ class PromptTemplate(Base):
 
     # Usage and ranking
     usage_count = Column(Integer, default=0)
-    last_used_at = Column(String, nullable=True)
+    last_used_at = Column(DateTime, nullable=True)
     average_rating = Column(Numeric(3, 2), default=0.0)
     total_ratings = Column(Integer, default=0)
     total_feedback = Column(Integer, default=0)
 
     # Timestamps
-    created_at = Column(String, nullable=False, default=lambda: datetime.utcnow().isoformat())
-    updated_at = Column(String, nullable=False, default=lambda: datetime.utcnow().isoformat(), onupdate=lambda: datetime.utcnow().isoformat())
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     user = relationship("User")
