@@ -28,7 +28,9 @@ export function usePrompts(params?: PromptListParams) {
     try {
       const response = await categoryApi.list();
       if (response.error) throw new Error(response.error);
-      setCategories(response.data || []);
+      // API returns { categories: [], total: number }
+      const data = response.data as any;
+      setCategories(data?.categories || []);
     } catch (err) {
       console.error('Failed to fetch categories:', err);
     }
