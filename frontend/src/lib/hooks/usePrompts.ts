@@ -14,7 +14,9 @@ export function usePrompts(params?: PromptListParams) {
     try {
       const response = await promptApi.list(params);
       if (response.error) throw new Error(response.error);
-      setPrompts(response.data || []);
+      // API returns { prompts: [], total: number, page: number }
+      const data = response.data as any;
+      setPrompts(data?.prompts || []);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch prompts';
       setError(message);
