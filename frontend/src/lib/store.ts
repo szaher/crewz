@@ -350,6 +350,7 @@ export interface PromptTemplate {
   tags: string[];
   variables: PromptVariable[];
   suggested_model?: string;
+  suggested_provider_id?: number;
   model_parameters: ModelParameters;
   is_public: boolean;
   is_command_enabled: boolean;

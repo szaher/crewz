@@ -26,6 +26,7 @@ from ...services.prompt_service import PromptService
 from ...services.chat_command_handler import ChatCommandHandler
 from ...services.prompt_suggestion_service import PromptSuggestionService
 from ...api.middleware.auth import require_auth
+from ...services.prompt_seed import seed_default_prompts
 
 router = APIRouter()
 
@@ -112,6 +113,37 @@ async def create_prompt(
     return PromptTemplateResponse.from_orm(prompt)
 
 
+# Place static routes before dynamic /{prompt_id} to avoid path conflicts
+
+@router.get("/by-slug", response_model=PromptTemplateResponse)
+async def get_prompt_by_slug(
+    slug: str = Query(..., description="Prompt slug to fetch"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """Get a prompt by its slug for the current tenant."""
+    prompt_service = PromptService(db)
+    prompt = await prompt_service.get_prompt_by_slug(
+        slug=slug,
+        tenant_id=current_user["tenant_id"],
+    )
+    return PromptTemplateResponse.from_orm(prompt)
+
+
+@router.api_route("/seed-defaults", methods=["POST", "GET"])
+async def seed_default_prompt_templates(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """Seed rich default prompts for the current tenant (idempotent). Admin only."""
+    if str(current_user.get("role", "")).lower() not in ["admin"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+
+    # Run seeding for this tenant
+    seed_default_prompts(db, tenant_id=current_user["tenant_id"])
+    return {"status": "ok", "message": "Default prompts seeded"}
+
+
 @router.get("/{prompt_id}", response_model=PromptTemplateResponse)
 async def get_prompt(
     prompt_id: UUID,
@@ -125,6 +157,9 @@ async def get_prompt(
         tenant_id=current_user["tenant_id"],
     )
     return PromptTemplateResponse.from_orm(prompt)
+
+
+    
 
 
 @router.put("/{prompt_id}", response_model=PromptTemplateResponse)

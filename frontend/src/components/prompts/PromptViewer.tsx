@@ -36,11 +36,17 @@ export default function PromptViewer({ promptId, onEdit, onDelete }: PromptViewe
       const response = await promptApi.get(promptId);
       if (response.error) throw new Error(response.error);
 
-      setPrompt(response.data!);
+      // Normalize variables to an array in case API returned an object map
+      const raw = response.data as any;
+      const variableList = Array.isArray(raw?.variables)
+        ? raw.variables
+        : Object.entries(raw?.variables || {}).map(([name, meta]: any) => ({ name, ...(meta || {}) }));
+
+      setPrompt({ ...(response.data as any), variables: variableList } as PromptTemplate);
 
       // Initialize variables with defaults
       const defaultVars: Record<string, any> = {};
-      response.data!.variables?.forEach(v => {
+      (variableList || []).forEach((v: any) => {
         if (v.default) {
           defaultVars[v.name] = v.default;
         }

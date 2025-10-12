@@ -94,6 +94,28 @@ class PromptService:
 
         return prompt
 
+    async def get_prompt_by_slug(self, slug: str, tenant_id: int) -> PromptTemplate:
+        """Get a prompt by slug for a tenant."""
+        prompt = (
+            self.db.query(PromptTemplate)
+            .filter(
+                and_(
+                    PromptTemplate.tenant_id == tenant_id,
+                    PromptTemplate.slug == slug,
+                    PromptTemplate.is_active == True,
+                )
+            )
+            .first()
+        )
+
+        if not prompt:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Prompt not found",
+            )
+
+        return prompt
+
     async def list_prompts(
         self,
         tenant_id: int,
@@ -122,14 +144,22 @@ class PromptService:
             query = query.filter(PromptTemplate.tags.contains(tags))
 
         if search:
-            search_pattern = f"%{search}%"
-            query = query.filter(
-                or_(
-                    PromptTemplate.name.ilike(search_pattern),
-                    PromptTemplate.description.ilike(search_pattern),
-                    PromptTemplate.content.ilike(search_pattern),
-                )
-            )
+            # Support searching by slug as well, and handle hyphens/underscores vs spaces
+            search_text = search.strip()
+            patterns = [f"%{search_text}%"]
+            if "-" in search_text or "_" in search_text:
+                normalized = search_text.replace("-", " ").replace("_", " ")
+                patterns.append(f"%{normalized}%")
+
+            clauses = []
+            for p in patterns:
+                clauses.extend([
+                    PromptTemplate.name.ilike(p),
+                    PromptTemplate.slug.ilike(p),
+                    PromptTemplate.description.ilike(p),
+                    PromptTemplate.content.ilike(p),
+                ])
+            query = query.filter(or_(*clauses))
 
         if public_only:
             query = query.filter(PromptTemplate.is_public == True)

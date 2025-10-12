@@ -6,6 +6,22 @@
 import { apiClient } from '../api-client';
 import type { PromptTemplate, PromptCategory, ModelParameters, PromptVariable } from '../store';
 
+// Normalize backend prompt 'variables' from object-map to array of { name, ... }
+function normalizePromptVariables<T extends { variables?: any }>(prompt: T): T {
+  if (prompt && prompt.variables && !Array.isArray(prompt.variables)) {
+    const entries = Object.entries(prompt.variables as Record<string, any>);
+    (prompt as any).variables = entries.map(([name, meta]) => ({ name, ...(meta || {}) }));
+  }
+  return prompt;
+}
+
+function normalizePromptListResponse(data: any): any {
+  if (data && Array.isArray(data.prompts)) {
+    data.prompts = data.prompts.map((p: any) => normalizePromptVariables(p));
+  }
+  return data;
+}
+
 // Request/Response Types
 export interface PromptListParams {
   category_id?: string;
@@ -28,6 +44,7 @@ export interface PromptCreateRequest {
   tags?: string[];
   variables?: PromptVariable[];
   suggested_model?: string;
+  suggested_provider_id?: number;
   model_parameters?: ModelParameters;
   is_public?: boolean;
   is_command_enabled?: boolean;
@@ -111,28 +128,45 @@ export const promptApi = {
     const query = queryParams.toString();
     const endpoint = `/api/v1/prompts${query ? `?${query}` : ''}`;
 
-    return apiClient.get<PromptTemplate[]>(endpoint);
+    const res = await apiClient.get<any>(endpoint);
+    if (res.data) res.data = normalizePromptListResponse(res.data);
+    return res;
   },
 
   /**
    * Get a single prompt by ID
    */
   async get(promptId: string) {
-    return apiClient.get<PromptTemplate>(`/api/v1/prompts/${promptId}`);
+    const res = await apiClient.get<PromptTemplate>(`/api/v1/prompts/${promptId}`);
+    if (res.data) res.data = normalizePromptVariables(res.data as any);
+    return res;
+  },
+
+  /**
+   * Get a prompt by slug
+   */
+  async getBySlug(slug: string) {
+    const res = await apiClient.get<PromptTemplate>(`/api/v1/prompts/by-slug?slug=${encodeURIComponent(slug)}`);
+    if (res.data) res.data = normalizePromptVariables(res.data as any);
+    return res;
   },
 
   /**
    * Create a new prompt
    */
   async create(data: PromptCreateRequest) {
-    return apiClient.post<PromptTemplate>('/api/v1/prompts', data);
+    const res = await apiClient.post<PromptTemplate>('/api/v1/prompts', data);
+    if (res.data) res.data = normalizePromptVariables(res.data as any);
+    return res;
   },
 
   /**
    * Update an existing prompt
    */
   async update(promptId: string, data: PromptUpdateRequest) {
-    return apiClient.put<PromptTemplate>(`/api/v1/prompts/${promptId}`, data);
+    const res = await apiClient.put<PromptTemplate>(`/api/v1/prompts/${promptId}`, data);
+    if (res.data) res.data = normalizePromptVariables(res.data as any);
+    return res;
   },
 
   /**

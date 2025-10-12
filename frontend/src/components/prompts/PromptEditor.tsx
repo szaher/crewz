@@ -1,9 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { promptApi, categoryApi, type PromptCreateRequest, type CategoryListResponse } from '@/lib/api/prompts';
 import type { PromptTemplate, PromptCategory, ModelParameters, PromptVariable } from '@/lib/store';
 import ModelParametersEditor from './ModelParametersEditor';
+import PromptContentEditor from './PromptContentEditor';
+import { useMemo } from 'react';
+import { estimateTokens } from '@/lib/tokenize';
+import { useLLMProviders } from '@/lib/hooks/useLLMProviders';
 
 interface PromptEditorProps {
   promptId?: string;
@@ -15,6 +19,11 @@ export default function PromptEditor({ promptId, onSave, onCancel }: PromptEdito
   const [activeTab, setActiveTab] = useState<'content' | 'variables' | 'parameters' | 'settings'>('content');
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState<PromptCategory[]>([]);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryDescription, setNewCategoryDescription] = useState('');
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
 
   // Form state
   const [name, setName] = useState('');
@@ -26,6 +35,7 @@ export default function PromptEditor({ promptId, onSave, onCancel }: PromptEdito
   const [tagInput, setTagInput] = useState('');
   const [variables, setVariables] = useState<PromptVariable[]>([]);
   const [suggestedModel, setSuggestedModel] = useState('');
+  const [suggestedProviderId, setSuggestedProviderId] = useState<string>('');
   const [modelParameters, setModelParameters] = useState<ModelParameters>({
     temperature: 0.7,
     top_p: 1.0,
@@ -33,6 +43,8 @@ export default function PromptEditor({ promptId, onSave, onCancel }: PromptEdito
   });
   const [isPublic, setIsPublic] = useState(false);
   const [isCommandEnabled, setIsCommandEnabled] = useState(true);
+  const [autoExtractVars, setAutoExtractVars] = useState(true);
+  const extractDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     loadCategories();
@@ -40,6 +52,17 @@ export default function PromptEditor({ promptId, onSave, onCancel }: PromptEdito
       loadPrompt();
     }
   }, [promptId]);
+
+  const tokenCount = useMemo(() => estimateTokens(content), [content]);
+  const { providers } = useLLMProviders();
+
+  const handleProviderChange = (value: string) => {
+    setSuggestedProviderId(value);
+    const provider = providers.find((p) => String(p.id) === value);
+    if (provider && !suggestedModel) {
+      setSuggestedModel(provider.model_name || '');
+    }
+  };
 
   const loadCategories = async () => {
     try {
@@ -51,6 +74,34 @@ export default function PromptEditor({ promptId, onSave, onCancel }: PromptEdito
     }
   };
 
+  const handleCreateCategory = async () => {
+    if (!newCategoryName.trim()) {
+      setCategoryError('Category name is required');
+      return;
+    }
+    setCreatingCategory(true);
+    setCategoryError(null);
+    try {
+      const response = await categoryApi.create({
+        name: newCategoryName.trim(),
+        description: newCategoryDescription.trim() || undefined,
+      });
+      if (response.error) throw new Error(response.error);
+      const created = response.data as PromptCategory | undefined;
+      if (created) {
+        setCategories((prev) => [...prev, created]);
+        setCategoryId(created.id);
+      }
+      setIsCategoryModalOpen(false);
+      setNewCategoryName('');
+      setNewCategoryDescription('');
+    } catch (err) {
+      setCategoryError(err instanceof Error ? err.message : 'Failed to create category');
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
+
   const loadPrompt = async () => {
     if (!promptId) return;
 
@@ -59,7 +110,12 @@ export default function PromptEditor({ promptId, onSave, onCancel }: PromptEdito
       const response = await promptApi.get(promptId);
       if (response.error) throw new Error(response.error);
 
-      const prompt = response.data!;
+      const raw = response.data as any;
+      const variableList = Array.isArray(raw?.variables)
+        ? raw.variables
+        : Object.entries(raw?.variables || {}).map(([name, meta]: any) => ({ name, ...(meta || {}) }));
+
+      const prompt = { ...(response.data as any), variables: variableList } as any;
       setName(prompt.name);
       setSlug(prompt.slug);
       setDescription(prompt.description || '');
@@ -68,6 +124,7 @@ export default function PromptEditor({ promptId, onSave, onCancel }: PromptEdito
       setTags(prompt.tags || []);
       setVariables(prompt.variables || []);
       setSuggestedModel(prompt.suggested_model || '');
+      setSuggestedProviderId((prompt as any).suggested_provider_id ? String((prompt as any).suggested_provider_id) : '');
       setModelParameters(prompt.model_parameters || {
         temperature: 0.7,
         top_p: 1.0,
@@ -96,6 +153,7 @@ export default function PromptEditor({ promptId, onSave, onCancel }: PromptEdito
         tags: tags.length > 0 ? tags : undefined,
         variables: variables.length > 0 ? variables : undefined,
         suggested_model: suggestedModel || undefined,
+        suggested_provider_id: suggestedProviderId ? Number(suggestedProviderId) : undefined,
         model_parameters: modelParameters,
         is_public: isPublic,
         is_command_enabled: isCommandEnabled,
@@ -153,6 +211,36 @@ export default function PromptEditor({ promptId, onSave, onCancel }: PromptEdito
     }
   };
 
+  // Auto-infer variables from content (debounced)
+  useEffect(() => {
+    if (!autoExtractVars) return;
+    if (!content) return;
+    if (extractDebounceRef.current) {
+      clearTimeout(extractDebounceRef.current);
+    }
+    extractDebounceRef.current = setTimeout(() => {
+      const regex = /\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g;
+      const matches = content.matchAll(regex);
+      const foundVars = new Set<string>();
+      for (const match of matches) {
+        if (match[1]) foundVars.add(match[1]);
+      }
+      const existingVarNames = new Set(variables.map(v => v.name));
+      const newVars: PromptVariable[] = Array.from(foundVars)
+        .filter(name => !existingVarNames.has(name))
+        .map(name => ({ name, type: 'string', required: true }));
+      if (newVars.length > 0) {
+        setVariables(prev => [...prev, ...newVars]);
+      }
+    }, 500);
+
+    return () => {
+      if (extractDebounceRef.current) {
+        clearTimeout(extractDebounceRef.current);
+      }
+    };
+  }, [content, autoExtractVars, variables]);
+
   if (loading && promptId) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -196,7 +284,7 @@ export default function PromptEditor({ promptId, onSave, onCancel }: PromptEdito
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="e.g., Code Review Prompt"
               />
             </div>
@@ -209,7 +297,7 @@ export default function PromptEditor({ promptId, onSave, onCancel }: PromptEdito
                 type="text"
                 value={slug}
                 onChange={(e) => setSlug(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Auto-generated from name if empty"
               />
               {isCommandEnabled && slug && (
@@ -227,7 +315,7 @@ export default function PromptEditor({ promptId, onSave, onCancel }: PromptEdito
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Brief description of this prompt's purpose"
               />
             </div>
@@ -237,25 +325,36 @@ export default function PromptEditor({ promptId, onSave, onCancel }: PromptEdito
                 <label className="block text-sm font-medium text-gray-700">
                   Prompt Content *
                 </label>
-                <button
-                  type="button"
-                  onClick={extractVariablesFromContent}
-                  className="text-xs text-blue-600 hover:text-blue-700"
-                >
-                  Extract Variables
-                </button>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 text-xs text-gray-700">
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-300"
+                      checked={autoExtractVars}
+                      onChange={(e) => setAutoExtractVars(e.target.checked)}
+                    />
+                    Auto-extract variables
+                  </label>
+                  <button
+                    type="button"
+                    onClick={extractVariablesFromContent}
+                    className="text-xs text-blue-600 hover:text-blue-700"
+                  >
+                    Extract Now
+                  </button>
+                </div>
               </div>
-              <textarea
+              <PromptContentEditor
                 value={content}
-                onChange={(e) => setContent(e.target.value)}
-                required
+                onChange={setContent}
                 rows={10}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
                 placeholder="Use {variable_name} for dynamic values..."
+                className=""
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Use {'{variable_name}'} syntax for dynamic values
-              </p>
+              <div className="text-xs text-gray-500 mt-1 flex items-center justify-between">
+                <span>Use {'{variable_name}'} syntax for dynamic values</span>
+                <span className="text-gray-400">Tokens: {tokenCount.toLocaleString()}</span>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -266,7 +365,7 @@ export default function PromptEditor({ promptId, onSave, onCancel }: PromptEdito
                 <select
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="">None</option>
                   {categories.map((cat) => (
@@ -275,19 +374,47 @@ export default function PromptEditor({ promptId, onSave, onCancel }: PromptEdito
                     </option>
                   ))}
                 </select>
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsCategoryModalOpen(true)}
+                    className="text-xs text-blue-600 hover:text-blue-700"
+                  >
+                    + Create new category
+                  </button>
+                </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Suggested Model
+                  LLM Provider & Suggested Model
                 </label>
-                <input
-                  type="text"
-                  value={suggestedModel}
-                  onChange={(e) => setSuggestedModel(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., gpt-4, claude-3-opus"
-                />
+                <div className="flex gap-2">
+                  <select
+                    value={suggestedProviderId}
+                    onChange={(e) => handleProviderChange(e.target.value)}
+                    className="w-1/2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">None</option>
+                    {providers.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.provider_type})
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    value={suggestedModel}
+                    onChange={(e) => setSuggestedModel(e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="e.g., gpt-4o-mini, claude-3-opus"
+                  />
+                </div>
+                <div className="mt-1 text-xs text-gray-500">
+                  {suggestedProviderId
+                    ? 'Will suggest this model with the selected provider.'
+                    : 'Optionally select a provider and suggest a model.'}
+                </div>
               </div>
             </div>
 
@@ -306,7 +433,7 @@ export default function PromptEditor({ promptId, onSave, onCancel }: PromptEdito
                       handleAddTag();
                     }
                   }}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Add a tag..."
                 />
                 <button
@@ -373,7 +500,7 @@ export default function PromptEditor({ promptId, onSave, onCancel }: PromptEdito
                             newVars[index].name = e.target.value;
                             setVariables(newVars);
                           }}
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md"
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           placeholder="variable_name"
                         />
                       </div>
@@ -388,7 +515,7 @@ export default function PromptEditor({ promptId, onSave, onCancel }: PromptEdito
                             newVars[index].type = e.target.value;
                             setVariables(newVars);
                           }}
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md"
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         >
                           <option value="string">String</option>
                           <option value="number">Number</option>
@@ -409,7 +536,7 @@ export default function PromptEditor({ promptId, onSave, onCancel }: PromptEdito
                           newVars[index].description = e.target.value;
                           setVariables(newVars);
                         }}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md"
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         placeholder="What this variable represents"
                       />
                     </div>
@@ -427,7 +554,7 @@ export default function PromptEditor({ promptId, onSave, onCancel }: PromptEdito
                             newVars[index].default = e.target.value;
                             setVariables(newVars);
                           }}
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md"
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
                       <div className="flex items-center">
@@ -520,7 +647,7 @@ export default function PromptEditor({ promptId, onSave, onCancel }: PromptEdito
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
           >
             Cancel
           </button>
@@ -528,11 +655,90 @@ export default function PromptEditor({ promptId, onSave, onCancel }: PromptEdito
         <button
           type="submit"
           disabled={loading}
-          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? 'Saving...' : promptId ? 'Update Prompt' : 'Create Prompt'}
         </button>
       </div>
+      {/* Create Category Modal */}
+      {isCategoryModalOpen && (
+      <div className="fixed inset-0 z-50 overflow-y-auto">
+        {/* Backdrop */}
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+          onClick={() => {
+            setIsCategoryModalOpen(false);
+            setCategoryError(null);
+            setNewCategoryName('');
+            setNewCategoryDescription('');
+          }}
+        />
+
+        {/* Modal */}
+        <div className="flex min-h-full items-center justify-center p-4">
+          <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            {/* Header */}
+            <div className="mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Create Category</h2>
+              <p className="mt-1 text-sm text-gray-500">Organize your prompts by category</p>
+            </div>
+
+            {/* Body */}
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                <input
+                  type="text"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="e.g., Code Review"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  value={newCategoryDescription}
+                  onChange={(e) => setNewCategoryDescription(e.target.value)}
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Optional description"
+                />
+              </div>
+              {categoryError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-600">{categoryError}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCategoryModalOpen(false);
+                  setCategoryError(null);
+                  setNewCategoryName('');
+                  setNewCategoryDescription('');
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={creatingCategory}
+                onClick={handleCreateCategory}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                {creatingCategory ? 'Creating...' : 'Create Category'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      )}
     </form>
   );
 }
