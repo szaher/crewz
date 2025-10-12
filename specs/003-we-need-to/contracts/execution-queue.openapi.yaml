@@ -1,0 +1,505 @@
+openapi: 3.0.3
+info:
+  title: Execution Queue API
+  description: |
+    API for async task execution management with Celery + Redis message queue.
+
+    Features:
+    - Submit executions to queue (crews, flows, agents, tasks)
+    - Monitor execution status
+    - Cancel pending/running executions
+    - View and requeue dead letter tasks
+    - Configure rate limits (admin)
+    - Monitor queue metrics
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Development
+
+tags:
+  - name: Executions
+    description: Execution submission and monitoring
+  - name: Queue Metrics
+    description: Queue performance metrics
+  - name: Dead Letter Queue
+    description: Failed task management
+  - name: Settings
+    description: Admin configuration
+
+security:
+  - BearerAuth: []
+
+paths:
+  /executions/submit:
+    post:
+      tags: [Executions]
+      summary: Submit execution to queue
+      description: |
+        Queue execution request for background processing.
+        Returns immediately with execution ID (<200ms target).
+
+        Rate limits:
+        - Per tenant: Default 10 concurrent (configurable)
+        - Per user: Default 5 concurrent (configurable)
+      operationId: submitExecution
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionSubmitRequest'
+      responses:
+        '202':
+          description: Execution queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionSubmitResponse'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Rate limit exceeded"
+                  limit:
+                    type: integer
+                    example: 10
+                  current:
+                    type: integer
+                    example: 10
+                  retry_after:
+                    type: integer
+                    description: "Seconds until next slot available"
+
+  /executions/{execution_id}:
+    get:
+      tags: [Executions]
+      summary: Get execution status
+      operationId: getExecutionStatus
+      parameters:
+        - name: execution_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Execution status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionStatus'
+
+    delete:
+      tags: [Executions]
+      summary: Cancel execution
+      description: Cancel pending or running execution. Cannot cancel completed/failed executions.
+      operationId: cancelExecution
+      parameters:
+        - name: execution_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Execution cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Execution cancelled"
+                  status:
+                    type: string
+                    example: "cancelled"
+        '400':
+          description: Cannot cancel (already completed/failed)
+
+  /executions/queue/metrics:
+    get:
+      tags: [Queue Metrics]
+      summary: Get queue metrics
+      description: Current queue depth, processing rate, failure rate
+      operationId: getQueueMetrics
+      parameters:
+        - name: tenant_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: "Filter by tenant (admin only, defaults to current tenant)"
+        - name: timeframe
+          in: query
+          schema:
+            type: string
+            enum: [1m, 5m, 15m, 1h, 24h]
+            default: 5m
+      responses:
+        '200':
+          description: Queue metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueMetrics'
+
+  /executions/dlq:
+    get:
+      tags: [Dead Letter Queue]
+      summary: List dead letter tasks
+      description: Get failed tasks after retry exhaustion. Admin only.
+      operationId: listDeadLetterTasks
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Dead letter tasks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tasks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DeadLetterTask'
+                  total:
+                    type: integer
+
+  /executions/dlq/{task_id}/requeue:
+    post:
+      tags: [Dead Letter Queue]
+      summary: Requeue failed task
+      description: Move task from DLQ back to execution queue. Admin only.
+      operationId: requeueTask
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Task requeued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  execution_id:
+                    type: string
+                    format: uuid
+
+  /admin/settings/rate-limits:
+    get:
+      tags: [Settings]
+      summary: Get rate limits
+      description: Get current rate limit configuration for tenant
+      operationId: getRateLimits
+      responses:
+        '200':
+          description: Rate limits
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimits'
+
+    put:
+      tags: [Settings]
+      summary: Update rate limits
+      description: Update rate limits for tenant. Tenant admin only.
+      operationId: updateRateLimits
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RateLimitsUpdate'
+      responses:
+        '200':
+          description: Rate limits updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimits'
+
+  /admin/settings/execution-config:
+    get:
+      tags: [Settings]
+      summary: Get execution configuration
+      description: Get timeout, retry, and other execution settings
+      operationId: getExecutionConfig
+      responses:
+        '200':
+          description: Execution configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionConfig'
+
+    put:
+      tags: [Settings]
+      summary: Update execution configuration
+      operationId: updateExecutionConfig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionConfigUpdate'
+      responses:
+        '200':
+          description: Configuration updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionConfig'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ExecutionSubmitRequest:
+      type: object
+      required: [execution_type, entity_id, payload]
+      properties:
+        execution_type:
+          type: string
+          enum: [crew, flow, agent, task, tool]
+        entity_id:
+          type: string
+          format: uuid
+          description: "ID of crew/flow/agent/task/tool to execute"
+        payload:
+          type: object
+          description: "Execution parameters (inputs, config, etc.)"
+        priority:
+          type: string
+          enum: [low, normal, high]
+          default: normal
+        timeout_minutes:
+          type: integer
+          minimum: 1
+          maximum: 120
+          description: "Override default timeout (defaults to tenant setting)"
+
+    ExecutionSubmitResponse:
+      type: object
+      properties:
+        execution_id:
+          type: string
+          format: uuid
+        queue_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          example: "pending"
+        estimated_start_time:
+          type: string
+          format: date-time
+        queue_position:
+          type: integer
+
+    ExecutionStatus:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        execution_type:
+          type: string
+        entity_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, running, completed, failed, timeout, cancelled]
+        priority:
+          type: string
+        retry_count:
+          type: integer
+        max_retries:
+          type: integer
+        scheduled_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        duration_ms:
+          type: integer
+          nullable: true
+        result:
+          type: object
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        celery_task_id:
+          type: string
+          nullable: true
+
+    QueueMetrics:
+      type: object
+      properties:
+        queue_depth:
+          type: integer
+          description: "Total pending + running"
+        pending_count:
+          type: integer
+        running_count:
+          type: integer
+        completed_last_minute:
+          type: integer
+        failed_last_minute:
+          type: integer
+        processing_rate:
+          type: number
+          description: "Tasks per second"
+        avg_duration_ms:
+          type: integer
+        p95_duration_ms:
+          type: integer
+        p99_duration_ms:
+          type: integer
+        failure_rate:
+          type: number
+          description: "Percentage (0.0-1.0)"
+        timestamp:
+          type: string
+          format: date-time
+
+    DeadLetterTask:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        original_queue_id:
+          type: string
+          format: uuid
+        execution_type:
+          type: string
+        payload:
+          type: object
+        failure_reason:
+          type: string
+        retry_history:
+          type: array
+          items:
+            type: object
+            properties:
+              attempt:
+                type: integer
+              timestamp:
+                type: string
+                format: date-time
+              error:
+                type: string
+              duration_ms:
+                type: integer
+        failure_timestamp:
+          type: string
+          format: date-time
+        is_requeued:
+          type: boolean
+
+    RateLimits:
+      type: object
+      properties:
+        tenant_id:
+          type: string
+          format: uuid
+        concurrent_executions_per_tenant:
+          type: integer
+        concurrent_executions_per_user:
+          type: integer
+        max_executions_per_hour:
+          type: integer
+          nullable: true
+        max_executions_per_day:
+          type: integer
+          nullable: true
+
+    RateLimitsUpdate:
+      type: object
+      properties:
+        concurrent_executions_per_tenant:
+          type: integer
+          minimum: 1
+          maximum: 100
+        concurrent_executions_per_user:
+          type: integer
+          minimum: 1
+          maximum: 50
+        max_executions_per_hour:
+          type: integer
+          nullable: true
+        max_executions_per_day:
+          type: integer
+          nullable: true
+
+    ExecutionConfig:
+      type: object
+      properties:
+        default_timeout_minutes:
+          type: integer
+        max_timeout_minutes:
+          type: integer
+        soft_timeout_warning_seconds:
+          type: integer
+          description: "Warning before hard timeout"
+        max_retries:
+          type: integer
+        retry_backoff_base_seconds:
+          type: integer
+        retry_backoff_max_seconds:
+          type: integer
+        enable_jitter:
+          type: boolean
+
+    ExecutionConfigUpdate:
+      type: object
+      properties:
+        default_timeout_minutes:
+          type: integer
+          minimum: 1
+          maximum: 120
+        soft_timeout_warning_seconds:
+          type: integer
+          minimum: 10
+        max_retries:
+          type: integer
+          minimum: 0
+          maximum: 10

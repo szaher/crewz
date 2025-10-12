@@ -1,0 +1,406 @@
+openapi: 3.0.3
+info:
+  title: Tenant Management API
+  description: |
+    API for tenant registration and super admin approval workflow.
+
+    Features:
+    - Public tenant registration
+    - Super admin approval/rejection
+    - Sample data installation
+    - Onboarding wizard support
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8000/api/v1
+
+tags:
+  - name: Registration
+    description: Tenant registration (public)
+  - name: Admin
+    description: Super admin operations
+
+paths:
+  /tenants/register:
+    post:
+      tags: [Registration]
+      summary: Submit tenant registration
+      description: |
+        Public endpoint for new tenant registration.
+        No authentication required.
+        Creates pending registration for super admin approval.
+      operationId: registerTenant
+      security: []  # Public endpoint
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantRegistrationRequest'
+      responses:
+        '201':
+          description: Registration submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantRegistration'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  details:
+                    type: object
+
+  /tenants/register/status:
+    get:
+      tags: [Registration]
+      summary: Check registration status
+      description: Check status by email (public, rate-limited)
+      operationId: checkRegistrationStatus
+      security: []
+      parameters:
+        - name: email
+          in: query
+          required: true
+          schema:
+            type: string
+            format: email
+      responses:
+        '200':
+          description: Registration status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [pending, approved, rejected, not_found]
+                  submitted_at:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  message:
+                    type: string
+                    nullable: true
+        '429':
+          description: Rate limit exceeded
+
+  /admin/tenants/pending:
+    get:
+      tags: [Admin]
+      summary: List pending registrations
+      description: Super admin only. Get all pending tenant registrations.
+      operationId: listPendingRegistrations
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Pending registrations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  registrations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TenantRegistration'
+                  total:
+                    type: integer
+        '403':
+          description: Not super admin
+
+  /admin/tenants/{registration_id}/approve:
+    post:
+      tags: [Admin]
+      summary: Approve tenant registration
+      description: |
+        Super admin only. Approve pending registration.
+        Creates tenant, admin user, and optionally loads sample data.
+      operationId: approveRegistration
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: registration_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes:
+                  type: string
+                  description: "Internal notes for approval"
+      responses:
+        '200':
+          description: Registration approved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  registration:
+                    $ref: '#/components/schemas/TenantRegistration'
+                  tenant:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      name:
+                        type: string
+                      status:
+                        type: string
+                        example: "active"
+                  admin_user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      email:
+                        type: string
+                      temporary_password:
+                        type: string
+                        description: "One-time password (send to admin via email)"
+                  sample_data_loaded:
+                    type: boolean
+
+  /admin/tenants/{registration_id}/reject:
+    post:
+      tags: [Admin]
+      summary: Reject tenant registration
+      description: Super admin only. Reject pending registration with reason.
+      operationId: rejectRegistration
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: registration_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  minLength: 10
+                  description: "Reason for rejection (shown to requester)"
+      responses:
+        '200':
+          description: Registration rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantRegistration'
+
+  /admin/tenants/{tenant_id}/seed-data:
+    post:
+      tags: [Admin]
+      summary: Install sample data
+      description: |
+        Admin only. Load sample data for existing tenant.
+        Useful if tenant initially declined sample data.
+      operationId: seedTenantData
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: tenant_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Sample data installed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  sample_data:
+                    type: object
+                    properties:
+                      crews_created:
+                        type: integer
+                      flows_created:
+                        type: integer
+                      prompts_created:
+                        type: integer
+                      tools_created:
+                        type: integer
+                      executions_created:
+                        type: integer
+        '400':
+          description: Sample data already exists
+
+  /admin/tenants/{tenant_id}/onboarding-status:
+    get:
+      tags: [Admin]
+      summary: Get onboarding status
+      description: Check if tenant has completed onboarding steps
+      operationId: getOnboardingStatus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: tenant_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Onboarding status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  onboarding_completed:
+                    type: boolean
+                  steps_completed:
+                    type: object
+                    properties:
+                      created_first_crew:
+                        type: boolean
+                      created_first_flow:
+                        type: boolean
+                      ran_first_execution:
+                        type: boolean
+                      configured_llm_provider:
+                        type: boolean
+                      invited_team_member:
+                        type: boolean
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    TenantRegistrationRequest:
+      type: object
+      required: [company_name, admin_email, admin_name, reason]
+      properties:
+        company_name:
+          type: string
+          minLength: 2
+          maxLength: 255
+          example: "Acme Corporation"
+        admin_email:
+          type: string
+          format: email
+          example: "admin@acme.com"
+        admin_name:
+          type: string
+          minLength: 2
+          maxLength: 255
+          example: "Jane Doe"
+        reason:
+          type: string
+          minLength: 20
+          maxLength: 1000
+          description: "Why you want to use the platform"
+          example: "We want to automate our marketing workflows with AI agents"
+        sample_data_requested:
+          type: boolean
+          default: false
+          description: "Request sample crews/flows/prompts to explore"
+        company_size:
+          type: string
+          enum: [1-10, 11-50, 51-200, 201-1000, 1000+]
+          nullable: true
+        use_case:
+          type: string
+          nullable: true
+          description: "Primary use case (optional)"
+
+    TenantRegistration:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        company_name:
+          type: string
+        admin_email:
+          type: string
+        admin_name:
+          type: string
+        reason:
+          type: string
+        sample_data_requested:
+          type: boolean
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        rejection_reason:
+          type: string
+          nullable: true
+        approved_by:
+          type: string
+          format: uuid
+          nullable: true
+          description: "Super admin user ID"
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+        tenant_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: "Populated after approval"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+  responses:
+    Forbidden:
+      description: Not authorized (not super admin)
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Super admin access required"

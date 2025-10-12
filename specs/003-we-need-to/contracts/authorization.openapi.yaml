@@ -1,0 +1,849 @@
+openapi: 3.0.3
+info:
+  title: Authorization Service API
+  description: |
+    API for fine-grained authorization management with hybrid RBAC+ABAC model.
+
+    Features:
+    - Permission checks (single and bulk)
+    - Role management (CRUD)
+    - Policy management (tenant and user-level)
+    - Authorization audit logs
+    - Session invalidation
+  version: 1.0.0
+  contact:
+    name: CrewAI Platform Team
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Development server
+  - url: https://api.crewai.platform/api/v1
+    description: Production server
+
+tags:
+  - name: Authorization Checks
+    description: Permission verification endpoints
+  - name: Roles
+    description: Role management (RBAC)
+  - name: Policies
+    description: Policy management (ABAC)
+  - name: Audit
+    description: Authorization audit logs
+
+security:
+  - BearerAuth: []
+
+paths:
+  /authz/check:
+    post:
+      tags: [Authorization Checks]
+      summary: Check single permission
+      description: |
+        Verifies if a user has permission to perform an action on a resource.
+        Returns decision (allow/deny) with reason.
+
+        Performance target: <50ms at p95
+      operationId: checkPermission
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PermissionCheckRequest'
+            examples:
+              crewRead:
+                summary: Check crew read permission
+                value:
+                  resource_type: "crew"
+                  resource_id: "018e1234-5678-7abc-def0-123456789abc"
+                  action: "read"
+              flowExecute:
+                summary: Check flow execute permission
+                value:
+                  resource_type: "flow"
+                  resource_id: "018e2345-6789-7bcd-ef01-23456789abcd"
+                  action: "execute"
+      responses:
+        '200':
+          description: Authorization decision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionCheckResponse'
+              examples:
+                allowed:
+                  summary: Permission granted
+                  value:
+                    decision: "allow"
+                    reason: "role:tenant-admin"
+                    latency_ms: 12
+                denied:
+                  summary: Permission denied
+                  value:
+                    decision: "deny"
+                    reason: "policy:user-explicit-deny"
+                    latency_ms: 8
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /authz/bulk-check:
+    post:
+      tags: [Authorization Checks]
+      summary: Check multiple permissions
+      description: |
+        Batch permission check for multiple resources/actions.
+        Useful for UI rendering (show/hide actions based on permissions).
+      operationId: bulkCheckPermissions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [checks]
+              properties:
+                checks:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/PermissionCheckRequest'
+                  maxItems: 20
+            example:
+              checks:
+                - resource_type: "crew"
+                  resource_id: "018e1111-1111-7111-1111-111111111111"
+                  action: "read"
+                - resource_type: "crew"
+                  resource_id: "018e1111-1111-7111-1111-111111111111"
+                  action: "execute"
+                - resource_type: "crew"
+                  resource_id: "018e1111-1111-7111-1111-111111111111"
+                  action: "delete"
+      responses:
+        '200':
+          description: Bulk authorization decisions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PermissionCheckResponse'
+                  total_latency_ms:
+                    type: integer
+              example:
+                results:
+                  - decision: "allow"
+                    reason: "role:member"
+                    latency_ms: 5
+                  - decision: "allow"
+                    reason: "role:member"
+                    latency_ms: 3
+                  - decision: "deny"
+                    reason: "default:deny"
+                    latency_ms: 2
+                total_latency_ms: 15
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /authz/roles:
+    get:
+      tags: [Roles]
+      summary: List roles
+      description: Get all roles (system + tenant-specific). Tenant admins see only their tenant roles + system roles.
+      operationId: listRoles
+      parameters:
+        - name: include_system
+          in: query
+          schema:
+            type: boolean
+            default: true
+          description: Include system roles
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Roles list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  roles:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Role'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  page_size:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Roles]
+      summary: Create role
+      description: Create custom tenant role. Requires tenant-admin or higher.
+      operationId: createRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleCreate'
+      responses:
+        '201':
+          description: Role created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /authz/roles/{role_id}:
+    get:
+      tags: [Roles]
+      summary: Get role details
+      operationId: getRole
+      parameters:
+        - $ref: '#/components/parameters/RoleId'
+      responses:
+        '200':
+          description: Role details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Roles]
+      summary: Update role
+      description: Update custom role. System roles cannot be modified.
+      operationId: updateRole
+      parameters:
+        - $ref: '#/components/parameters/RoleId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleUpdate'
+      responses:
+        '200':
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          description: Cannot modify system role
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Roles]
+      summary: Delete role
+      description: Delete custom role. System roles cannot be deleted. Users with this role will lose permissions.
+      operationId: deleteRole
+      parameters:
+        - $ref: '#/components/parameters/RoleId'
+      responses:
+        '204':
+          description: Role deleted
+        '403':
+          description: Cannot delete system role
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /authz/roles/{role_id}/permissions:
+    post:
+      tags: [Roles]
+      summary: Add permission to role
+      operationId: addRolePermission
+      parameters:
+        - $ref: '#/components/parameters/RoleId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PermissionCreate'
+      responses:
+        '201':
+          description: Permission added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Permission'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /authz/policies:
+    get:
+      tags: [Policies]
+      summary: List policies
+      description: Get policies (tenant-level and user-level for current user)
+      operationId: listPolicies
+      parameters:
+        - name: scope
+          in: query
+          schema:
+            type: string
+            enum: [tenant, user, all]
+            default: all
+        - name: active_only
+          in: query
+          schema:
+            type: boolean
+            default: true
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Policies list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  policies:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Policy'
+                  total:
+                    type: integer
+
+    post:
+      tags: [Policies]
+      summary: Create policy
+      description: Create tenant or user-level policy. Tenant policies require tenant-admin role.
+      operationId: createPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyCreate'
+      responses:
+        '201':
+          description: Policy created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /authz/policies/{policy_id}:
+    put:
+      tags: [Policies]
+      summary: Update policy
+      operationId: updatePolicy
+      parameters:
+        - $ref: '#/components/parameters/PolicyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyUpdate'
+      responses:
+        '200':
+          description: Policy updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+
+    delete:
+      tags: [Policies]
+      summary: Delete policy
+      operationId: deletePolicy
+      parameters:
+        - $ref: '#/components/parameters/PolicyId'
+      responses:
+        '204':
+          description: Policy deleted
+
+  /authz/audit:
+    get:
+      tags: [Audit]
+      summary: Query authorization audit logs
+      description: Query audit logs with filtering. Tenant admins see their tenant logs. Super admins see all.
+      operationId: queryAuditLogs
+      parameters:
+        - name: user_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: resource_type
+          in: query
+          schema:
+            type: string
+        - name: decision
+          in: query
+          schema:
+            type: string
+            enum: [allow, deny]
+        - name: start_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Audit logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  logs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditLog'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+
+  /authz/sessions/invalidate:
+    post:
+      tags: [Authorization Checks]
+      summary: Invalidate user sessions
+      description: Force logout for user (used when permissions change)
+      operationId: invalidateSessions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id:
+                  type: string
+                  format: uuid
+                reason:
+                  type: string
+                  example: "Permissions changed"
+      responses:
+        '200':
+          description: Sessions invalidated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invalidated_sessions:
+                    type: integer
+                  message:
+                    type: string
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    RoleId:
+      name: role_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PolicyId:
+      name: policy_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    PermissionCheckRequest:
+      type: object
+      required: [resource_type, action]
+      properties:
+        resource_type:
+          type: string
+          example: "crew"
+        resource_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: "Null means any resource of this type"
+        action:
+          type: string
+          enum: [read, write, execute, delete, "*"]
+
+    PermissionCheckResponse:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum: [allow, deny]
+        reason:
+          type: string
+          description: "Human-readable reason (e.g., 'role:admin', 'policy:deny-all')"
+        latency_ms:
+          type: integer
+          description: "Authorization check latency"
+
+    Permission:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        subject_type:
+          type: string
+          enum: [user, role]
+        subject_id:
+          type: string
+          format: uuid
+        resource_type:
+          type: string
+        resource_id:
+          type: string
+          format: uuid
+          nullable: true
+        action:
+          type: string
+          enum: [read, write, execute, delete, "*"]
+        effect:
+          type: string
+          enum: [allow, deny]
+        conditions:
+          type: object
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    PermissionCreate:
+      type: object
+      required: [resource_type, action]
+      properties:
+        resource_type:
+          type: string
+        resource_id:
+          type: string
+          format: uuid
+          nullable: true
+        action:
+          type: string
+          enum: [read, write, execute, delete, "*"]
+        effect:
+          type: string
+          enum: [allow, deny]
+          default: allow
+        conditions:
+          type: object
+          nullable: true
+
+    Role:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+          nullable: true
+        is_system_role:
+          type: boolean
+        is_default:
+          type: boolean
+        priority:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    RoleDetail:
+      allOf:
+        - $ref: '#/components/schemas/Role'
+        - type: object
+          properties:
+            permissions:
+              type: array
+              items:
+                $ref: '#/components/schemas/Permission'
+            user_count:
+              type: integer
+              description: "Number of users with this role"
+
+    RoleCreate:
+      type: object
+      required: [name, slug]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        slug:
+          type: string
+          maxLength: 100
+          pattern: '^[a-z0-9-]+$'
+        description:
+          type: string
+          nullable: true
+        is_default:
+          type: boolean
+          default: false
+        priority:
+          type: integer
+          default: 500
+
+    RoleUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          nullable: true
+        is_default:
+          type: boolean
+        priority:
+          type: integer
+
+    Policy:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        scope:
+          type: string
+          enum: [tenant, user]
+        scope_id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        resource_pattern:
+          type: string
+          example: "crew:*"
+        action_pattern:
+          type: string
+          example: "read"
+        effect:
+          type: string
+          enum: [allow, deny]
+        conditions:
+          type: object
+          nullable: true
+        priority:
+          type: integer
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    PolicyCreate:
+      type: object
+      required: [scope, name, resource_pattern, action_pattern, effect]
+      properties:
+        scope:
+          type: string
+          enum: [tenant, user]
+        scope_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: "Required if scope=user"
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          nullable: true
+        resource_pattern:
+          type: string
+          example: "crew:*"
+        action_pattern:
+          type: string
+          example: "read"
+        effect:
+          type: string
+          enum: [allow, deny]
+        conditions:
+          type: object
+          nullable: true
+        priority:
+          type: integer
+          default: 100
+
+    PolicyUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        resource_pattern:
+          type: string
+        action_pattern:
+          type: string
+        effect:
+          type: string
+          enum: [allow, deny]
+        conditions:
+          type: object
+        priority:
+          type: integer
+        is_active:
+          type: boolean
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        resource_type:
+          type: string
+        resource_id:
+          type: string
+          format: uuid
+          nullable: true
+        action:
+          type: string
+        decision:
+          type: string
+          enum: [allow, deny]
+        reason:
+          type: string
+        latency_ms:
+          type: integer
+        ip_address:
+          type: string
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          nullable: true
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
