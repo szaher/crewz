@@ -22,6 +22,7 @@ export default function Navigation() {
     { name: 'Tasks', path: '/tasks', icon: '✅' },
     { name: 'Providers', path: '/providers', icon: '🔌' },
     { name: 'Tools', path: '/tools', icon: '🔧' },
+    { name: 'Prompts', path: '/prompts', icon: '📝' },
     { name: 'Executions', path: '/executions', icon: '⚙️' },
     { name: 'Observability', path: '/observability', icon: '📈' },
     { name: 'Chat', path: '/chat', icon: '💬' },

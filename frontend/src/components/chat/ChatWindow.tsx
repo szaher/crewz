@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
+import { promptApi } from '@/lib/api/prompts';
 import MessageList from './MessageList';
 import type { ChatMessage } from '@/types/api';
+import type { PromptTemplate, PromptVariable } from '@/lib/store';
 
 interface ChatWindowProps {
   sessionId: number;
@@ -31,6 +33,17 @@ export default function ChatWindow({ sessionId, sessionTitle, crewId, onManageTo
   const abortRef = useRef<AbortController | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editText, setEditText] = useState('');
+  // Slash command support
+  const [commands, setCommands] = useState<Array<{ slug: string; name: string; description?: string; usage?: string }>>([]);
+  const [showCommandList, setShowCommandList] = useState(false);
+  const [commandQuery, setCommandQuery] = useState('');
+  const [cmdIndex, setCmdIndex] = useState(0);
+  // Prompt variable modal state
+  const [showPromptVars, setShowPromptVars] = useState(false);
+  const [promptForCommand, setPromptForCommand] = useState<PromptTemplate | null>(null);
+  const [promptVarValues, setPromptVarValues] = useState<Record<string, any>>({});
+  const [promptVarErrors, setPromptVarErrors] = useState<Record<string, string>>({});
+  const [previewContent, setPreviewContent] = useState<string>('');
   // Web audio (speech-to-text and text-to-speech)
   const [voiceEnabled, setVoiceEnabled] = useState<boolean>(false);
   const [autoSendVoice, setAutoSendVoice] = useState<boolean>(false);
@@ -59,6 +72,21 @@ export default function ChatWindow({ sessionId, sessionTitle, crewId, onManageTo
     };
     void load();
   }, [sessionId]);
+
+  // Load prompt commands for slash suggestions
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await promptApi.listCommands();
+        const data = (res.data as any) || {};
+        const list = Array.isArray(data) ? data : (data.commands || []);
+        setCommands(list);
+      } catch (e) {
+        // ignore
+        setCommands([]);
+      }
+    })();
+  }, []);
 
   // Streaming via HTTP SSE endpoint using fetch with Authorization header
   const startStream = async (userText: string, storeUser: boolean) => {
@@ -337,17 +365,184 @@ export default function ChatWindow({ sessionId, sessionTitle, crewId, onManageTo
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (showCommandList) return; // let onKeyDown handle selection
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       void handleSendStream();
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!showCommandList) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setCmdIndex((i) => Math.min(i + 1, filteredCommands.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setCmdIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const pick = filteredCommands[cmdIndex];
+      if (pick) {
+        const pairs = parseVarPairs(input);
+        applyCommand(pick.slug);
+        void openPromptVariableModal(pick.slug, pairs);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setShowCommandList(false);
+    }
+  };
+
+  // Filter commands by current query
+  const filteredCommands = useMemo(() => {
+    const q = commandQuery.trim().toLowerCase();
+    if (!q) return commands.slice(0, 8);
+    return commands
+      .filter((c: any) => c.slug?.toLowerCase().startsWith(q) || c.name?.toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [commands, commandQuery]);
+
+  const applyCommand = (slug: string) => {
+    const rest = input.replace(/^\S*/, '').trimStart();
+    const prefix = `/${slug}`;
+    const newValue = rest ? `${prefix} ${rest}` : `${prefix} `;
+    setInput(newValue);
+    setShowCommandList(false);
+    setCmdIndex(0);
+  };
+
+  // Utilities for prompts by slug
+  const findPromptBySlug = async (slug: string): Promise<PromptTemplate | null> => {
+    try {
+      const res = await promptApi.getBySlug(slug);
+      return (res.data as any) || null;
+    } catch {
+      return null;
+    }
+  };
+
+  // Parse var=value pairs after slug. Supports quoted values.
+  const parseVarPairs = (text: string): Record<string, string> => {
+    const out: Record<string, string> = {};
+    const first = extractFirstToken(text);
+    const idx = text.indexOf(first);
+    const rest = idx >= 0 ? text.slice(idx + first.length).trim() : '';
+    if (!rest) return out;
+    const re = /(\w+)=(?:"([^"]*)"|'([^']*)'|([^\s]+))/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(rest)) !== null) {
+      const k = m[1];
+      const v = (m[2] ?? m[3] ?? m[4] ?? '').toString();
+      out[k] = v;
+    }
+    return out;
+  };
+
+  const extractFirstToken = (text: string): string => (text.trimStart().split(/\s+/)[0] || '');
+  const isSlashCommand = (text: string): boolean => extractFirstToken(text).startsWith('/');
+  const currentSlug = (): string => extractFirstToken(input).replace(/^\//, '');
+
+  const openPromptVariableModal = async (slug: string, prefill?: Record<string, any>) => {
+    const prompt = await findPromptBySlug(slug);
+    if (!prompt) return;
+    setPromptForCommand(prompt);
+    // Initialize values from defaults
+    const init: Record<string, any> = {};
+    const varsArr: PromptVariable[] = Array.isArray((prompt as any).variables)
+      ? (prompt as any).variables
+      : Object.entries((prompt as any).variables || {}).map(([name, meta]: any) => ({ name, ...(meta || {}) }));
+    varsArr.forEach((v) => {
+      if (v.default != null) init[v.name] = v.default as any;
+    });
+    if (prefill) {
+      for (const [k, v] of Object.entries(prefill)) init[k] = v;
+    }
+    setPromptVarValues(init);
+    setPromptVarErrors({});
+    setShowPromptVars(true);
+  };
+
+  const validatePromptVars = (): boolean => {
+    const errs: Record<string, string> = {};
+    const varsArr: PromptVariable[] = Array.isArray((promptForCommand as any)?.variables)
+      ? ((promptForCommand as any).variables as PromptVariable[])
+      : Object.entries((promptForCommand as any)?.variables || {}).map(([name, meta]: any) => ({ name, ...(meta || {}) }));
+    varsArr.forEach((v) => {
+      const required = v.required ?? true;
+      if (required && (promptVarValues[v.name] == null || String(promptVarValues[v.name]).trim() === '')) {
+        errs[v.name] = 'Required';
+      }
+    });
+    setPromptVarErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handlePromptVarsSubmit = async () => {
+    if (!promptForCommand) return;
+    if (!validatePromptVars()) return;
+    try {
+      // Use locally rendered preview content
+      const content = (previewContent || '').trim();
+      if (!content) return;
+      setShowPromptVars(false);
+      onStreamingStart?.();
+      setSending(true);
+      try {
+        const localUser: ChatMessage = {
+          id: `local-${Date.now()}`,
+          session_id: sessionId,
+          role: 'user',
+          content,
+          created_at: new Date().toISOString(),
+          metadata: { command_slug: (promptForCommand as any).slug },
+        } as any;
+        setMessages((prev) => [...prev, localUser]);
+        void startStream(content, true);
+        setUserCount((c) => c + 1);
+      } finally {
+        setSending(false);
+      }
+    } catch (e) {
+      console.error('Failed to send rendered prompt', e);
+    } finally {
+      setPromptForCommand(null);
+      setPromptVarValues({});
+      setPromptVarErrors({});
+      setPreviewContent('');
+    }
+  };
+
+  // Live local preview of rendered prompt content
+  useEffect(() => {
+    if (!promptForCommand) {
+      setPreviewContent('');
+      return;
+    }
+    const template = ((promptForCommand as any).content || '') as string;
+    const rendered = template.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, (_m, name) => {
+      const v = promptVarValues?.[name];
+      return v != null && String(v).length > 0 ? String(v) : `{${name}}`;
+    });
+    setPreviewContent(rendered);
+  }, [promptForCommand, promptVarValues]);
+
   // Streaming send via HTTP SSE endpoint
   const handleSendStream = async () => {
     if (!input.trim()) return;
 
+    // If message starts with /slug, collect variables and render before sending
+    if (isSlashCommand(input)) {
+      const slug = currentSlug();
+      if (slug) {
+        setShowCommandList(false);
+        await openPromptVariableModal(slug);
+        return;
+      }
+    }
+
     onStreamingStart?.();
+    setShowCommandList(false);
     setSending(true);
     const text = input;
     setInput('');
@@ -511,18 +706,51 @@ export default function ChatWindow({ sessionId, sessionTitle, crewId, onManageTo
       {/* Input */}
       <div className="px-4 py-4">
         <div
-          className={`glow-card flex items-end gap-2 p-3 bg-white/80 dark:bg-[#2a2b32]/70 backdrop-blur-md border border-slate-200/70 dark:border-[#2a2b32]/70 rounded-2xl shadow-xl max-w-3xl mx-auto 
+          className={`relative glow-card flex items-end gap-2 p-3 bg-white/80 dark:bg-[#2a2b32]/70 backdrop-blur-md border border-slate-200/70 dark:border-[#2a2b32]/70 rounded-2xl shadow-xl max-w-3xl mx-auto 
             ${recognizing ? 'ring-2 ring-red-500/40 recording' : 'focus-within:ring-2 focus-within:ring-blue-500/40'}`}
         >
           <textarea
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setInput(val);
+              const first = val.trimStart().split(/\s+/)[0] || '';
+              if (first.startsWith('/')) {
+                setShowCommandList(true);
+                setCommandQuery(first.slice(1));
+                setCmdIndex(0);
+              } else {
+                setShowCommandList(false);
+                setCommandQuery('');
+              }
+            }}
+            onKeyDown={handleKeyDown}
             onKeyPress={handleKeyPress}
             placeholder="Message…"
             rows={1}
             disabled={sending || streaming}
             className="flex-1 bg-transparent text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-300 px-1 py-1 resize-none focus:outline-none max-h-40 min-h-[44px]"
           />
+          {/* Slash command suggestions */}
+          {showCommandList && filteredCommands.length > 0 && (
+            <div className="absolute bottom-16 left-4 right-4 max-w-3xl mx-auto">
+              <div className="bg-white dark:bg-[#2a2b32] border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
+                {filteredCommands.map((c, idx) => (
+                  <button
+                    key={c.slug}
+                    onMouseDown={(e) => { e.preventDefault(); applyCommand(c.slug); }}
+                    className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-gray-50 dark:hover:bg-[#30313a] ${idx === cmdIndex ? 'bg-gray-100 dark:bg-[#30313a]' : ''}`}
+                  >
+                    <div>
+                      <div className="font-medium text-gray-900 dark:text-gray-100">/{c.slug}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{c.name}</div>
+                    </div>
+                    {c.usage && <div className="text-[10px] text-gray-400 ml-3">{c.usage}</div>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -584,6 +812,102 @@ export default function ChatWindow({ sessionId, sessionTitle, crewId, onManageTo
           </div>
         )}
       </div>
+
+      {/* Prompt Variables Modal */}
+      {showPromptVars && promptForCommand && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" onClick={() => { setShowPromptVars(false); setPromptForCommand(null); setPromptVarErrors({}); }} />
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div className="relative bg-white dark:bg-[#2a2b32] rounded-lg shadow-xl max-w-md w-full p-6">
+              <div className="mb-4">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">/{(promptForCommand as any).slug}</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-300">{(promptForCommand as any).name}</p>
+              </div>
+              <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                {/* Command hints */}
+                {(() => {
+                  const info = commands.find((c: any) => c.slug === (promptForCommand as any).slug) as any;
+                  if (!info) return null;
+                  const required = info.required_variables || [];
+                  const optional = info.optional_variables || [];
+                  const example = info.example || info.usage;
+                  return (
+                    <div className="p-2 border border-gray-200 dark:border-gray-700 rounded-md text-xs text-gray-600 dark:text-gray-300">
+                      {example && (
+                        <div className="mb-1"><span className="font-semibold">Example:</span> <code>/{example.replace(/^\//,'')}</code></div>
+                      )}
+                      {(required.length > 0 || optional.length > 0) && (
+                        <div className="flex flex-wrap gap-3">
+                          {required.length > 0 && (
+                            <div><span className="font-semibold">Required:</span> {required.join(', ')}</div>
+                          )}
+                          {optional.length > 0 && (
+                            <div><span className="font-semibold">Optional:</span> {optional.join(', ')}</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+                {/* Render preview */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Preview</label>
+                  <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md p-3 max-h-60 overflow-auto">
+                    <pre className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-100">{previewContent}</pre>
+                  </div>
+                </div>
+                {(Array.isArray((promptForCommand as any).variables)
+                  ? (promptForCommand as any).variables
+                  : Object.entries((promptForCommand as any).variables || {}).map(([name, meta]: any) => ({ name, ...(meta || {}) }))
+                ).map((v: any) => (
+                  <div key={v.name}>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                      {v.name} {v.required ?? true ? <span className="text-red-500">*</span> : null}
+                    </label>
+                    {v.description && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{v.description}</p>
+                    )}
+                    <input
+                      type="text"
+                      value={promptVarValues[v.name] ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setPromptVarValues((prev) => ({ ...prev, [v.name]: val }));
+                        if (promptVarErrors[v.name]) {
+                          const n = { ...promptVarErrors } as any;
+                          delete n[v.name];
+                          setPromptVarErrors(n);
+                        }
+                      }}
+                      placeholder={v.default ?? ''}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${promptVarErrors[v.name] ? 'border-red-300 bg-red-50' : 'border-gray-300'}`}
+                    />
+                    {promptVarErrors[v.name] && (
+                      <p className="mt-1 text-xs text-red-600">{promptVarErrors[v.name]}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="mt-6 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowPromptVars(false); setPromptForCommand(null); setPromptVarErrors({}); }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePromptVarsSubmit}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                >
+                  Run
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

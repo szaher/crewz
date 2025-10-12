@@ -148,6 +148,21 @@ async def startup_event():
     except Exception as e:
         logger.error("redis_init_failed", error=str(e))
 
+    # Seed default prompts (idempotent) unless disabled
+    try:
+        seed_enabled = os.getenv("SEED_DEFAULT_PROMPTS", "true").lower() != "false"
+        if seed_enabled:
+            from .db import SessionLocal
+            from .services.prompt_seed import seed_default_prompts
+            db = SessionLocal()
+            try:
+                seed_default_prompts(db, tenant_id=int(os.getenv("DEFAULT_TENANT_ID", "1")))
+                logger.info("default_prompts_seeded")
+            finally:
+                db.close()
+    except Exception as e:
+        logger.error("default_prompts_seed_failed", error=str(e))
+
 
 # Shutdown event
 @app.on_event("shutdown")

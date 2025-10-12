@@ -2,10 +2,10 @@
 
 import json
 import asyncio
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-import redis
+import redis.asyncio as aioredis
 
 from ...db.postgres import get_db
 from ...schemas.executions import ExecutionResponse
@@ -115,6 +115,7 @@ async def get_execution(
 @router.get("/{execution_id}/stream")
 async def stream_execution(
     execution_id: int,
+    request: Request,
     token: str | None = Query(None),
     current_user: dict | None = Depends(get_optional_user),
 ):
@@ -133,7 +134,12 @@ async def stream_execution(
     """
     import os
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-    redis_client = redis.from_url(redis_url, decode_responses=True)
+    redis_client = aioredis.from_url(
+        redis_url,
+        decode_responses=True,
+        socket_connect_timeout=float(os.getenv("REDIS_CONNECT_TIMEOUT", 0.5)),
+        socket_timeout=float(os.getenv("REDIS_SOCKET_TIMEOUT", 0.5)),
+    )
 
     # Authenticate: allow Authorization header or token query param
     user = current_user
@@ -153,31 +159,84 @@ async def stream_execution(
         raise HTTPException(status_code=403, detail="Forbidden")
 
     async def event_generator():
-        """Generate SSE events from Redis Pub/Sub."""
+        """Generate SSE events from Redis Pub/Sub without blocking the event loop."""
         pubsub = redis_client.pubsub()
         channel = f"executions:{execution_id}"
-        pubsub.subscribe(channel)
+        await pubsub.subscribe(channel)
+
+        keepalive_interval = 15.0  # seconds
+        last_keepalive = 0.0
+        # Optional idle/absolute timeouts
+        import time, os as _os
+        idle_timeout = float(_os.getenv("SSE_IDLE_TIMEOUT", 300))  # 5 min default
+        max_stream = float(_os.getenv("SSE_MAX_STREAM_SECONDS", 3600))  # 1 hour default
+        start_ts = time.monotonic()
+        last_activity = start_ts
 
         try:
-            # Send initial connection event
+            # Initial event
             yield f"data: {json.dumps({'type': 'connected', 'execution_id': execution_id})}\n\n"
 
-            # Listen for events
-            for message in pubsub.listen():
-                if message['type'] == 'message':
-                    # Forward event to client
-                    yield f"data: {message['data']}\n\n"
+            while True:
+                # Non-blocking get with timeout; ignore subscribe confirmations
+                msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+                if msg and msg.get('type') == 'message':
+                    data = msg.get('data')
+                    if data is None:
+                        await asyncio.sleep(0.05)
+                        continue
+                    # Forward event
+                    yield f"data: {data}\n\n"
+                    # Track activity
+                    last_activity = time.monotonic()
 
-                    # Check if execution is complete
-                    event = json.loads(message['data'])
-                    if event['type'] in ['execution_completed', 'execution_failed', 'execution_cancelled']:
-                        break
+                    # Check termination events
+                    try:
+                        event = json.loads(data)
+                        if event.get('type') in {'execution_completed', 'execution_failed', 'execution_cancelled'}:
+                            break
+                    except Exception:
+                        # If payload isn't JSON, just continue
+                        pass
+
+                # Periodic keepalive to prevent proxies from closing idle connections
+                last_keepalive += 1.0
+                if last_keepalive >= keepalive_interval:
+                    last_keepalive = 0.0
+                    # Comment line is valid SSE and ignored by clients
+                    yield ": keepalive\n\n"
+
+                # Yield control to the event loop
+                await asyncio.sleep(0.3)
+
+                # Client disconnect detection
+                if request is not None:
+                    try:
+                        if await request.is_disconnected():
+                            break
+                    except Exception:
+                        pass
+                # Idle timeout (no real events)
+                now = time.monotonic()
+                if idle_timeout > 0 and (now - last_activity) >= idle_timeout:
+                    yield f"data: {json.dumps({'type': 'timeout', 'reason': 'idle'})}\n\n"
+                    break
+                # Absolute stream cap
+                if max_stream > 0 and (now - start_ts) >= max_stream:
+                    yield f"data: {json.dumps({'type': 'timeout', 'reason': 'max_duration'})}\n\n"
+                    break
 
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
         finally:
-            pubsub.unsubscribe(channel)
-            pubsub.close()
+            try:
+                await pubsub.unsubscribe(channel)
+            except Exception:
+                pass
+            try:
+                await pubsub.close()
+            except Exception:
+                pass
 
     return StreamingResponse(
         event_generator(),
@@ -185,6 +244,8 @@ async def stream_execution(
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
+            # Helpful for some reverse proxies (nginx) to not buffer SSE
+            "X-Accel-Buffering": "no",
         },
     )
 

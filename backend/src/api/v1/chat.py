@@ -391,8 +391,13 @@ async def generate_response(
         )
     )
 
-    # Generate AI response
-    ai_response = await chat_service.generate_response(session_id, user_message)
+    # Generate AI response (supports prompt commands like /slug var=value)
+    ai_response = await chat_service.generate_response(
+        session_id,
+        user_message,
+        user_id=current_user["id"],
+        tenant_id=current_user["tenant_id"]
+    )
 
     # Store AI message
     ai_msg = await chat_service.send_message(

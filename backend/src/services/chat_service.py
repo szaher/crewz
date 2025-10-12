@@ -1,11 +1,12 @@
 """Chat service for conversational AI interactions."""
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from datetime import datetime
+from uuid import UUID
 
-from ..models import ChatSession
+from ..models import ChatSession, User
 from ..schemas.chat import (
     ChatSessionCreate,
     ChatSessionResponse,
@@ -17,6 +18,9 @@ from ..services.llm_service import LLMService
 from ..models import Tool
 from .docker_service import DockerService
 from .custom_tool_runner import CustomToolRunner
+from .chat_command_handler import ChatCommandHandler
+from .prompt_service import PromptService
+from ..schemas.prompt import PromptExecutionRequest
 import json
 import re
 
@@ -27,6 +31,71 @@ class ChatService:
     def __init__(self, db: Session, llm_service: LLMService):
         self.db = db
         self.llm_service = llm_service
+
+    async def _handle_prompt_command(
+        self, user_message: str, session_id: int, user_id: int, tenant_id: int
+    ) -> Optional[str]:
+        """
+        Handle prompt commands (e.g., /slug var=value).
+
+        Args:
+            user_message: The user's message
+            session_id: Chat session ID
+            user_id: User ID
+            tenant_id: Tenant ID
+
+        Returns:
+            Rendered prompt content if command found and executed, None otherwise
+        """
+        # Check if message starts with /
+        if not user_message.strip().startswith('/'):
+            return None
+
+        # Parse command
+        command_handler = ChatCommandHandler(self.db)
+        command_data = await command_handler.parse_command(user_message)
+
+        if not command_data:
+            # Not a valid command format
+            return None
+
+        slug = command_data["slug"]
+        variables = command_data["variables"]
+
+        # Get prompt by slug
+        prompt = await command_handler.get_prompt_by_slug(slug, tenant_id)
+
+        if not prompt:
+            # Command not found - return helpful error
+            return f"❌ Command '/{slug}' not found. Use /help to see available commands."
+
+        # Validate variables
+        is_valid, error_msg = await command_handler.validate_variables(prompt, variables)
+        if not is_valid:
+            # Show help for this command
+            help_text = command_handler.format_command_help(prompt)
+            return f"❌ {error_msg}\n\n{help_text}"
+
+        # Execute prompt
+        prompt_service = PromptService(self.db)
+        try:
+            execution_request = PromptExecutionRequest(
+                variables=variables,
+                context_type="command",
+                context_id=UUID(int=session_id) if session_id else None,
+            )
+
+            result = await prompt_service.execute_prompt(
+                prompt_id=prompt.id,
+                request=execution_request,
+                user_id=user_id,
+                tenant_id=tenant_id,
+            )
+
+            return result["rendered_content"]
+
+        except Exception as e:
+            return f"❌ Failed to execute command '/{slug}': {str(e)}"
 
     async def create_session(
         self, data: ChatSessionCreate, user_id: int
@@ -200,19 +269,32 @@ class ChatService:
         return messages
 
     async def generate_response(
-        self, session_id: int, user_message: str
+        self, session_id: int, user_message: str, user_id: Optional[int] = None, tenant_id: Optional[int] = None
     ) -> str:
         """
         Generate AI response for a user message.
 
+        Supports prompt commands (e.g., /slug var=value) which are executed immediately.
+
         Args:
             session_id: Session ID
             user_message: User's message
+            user_id: Optional user ID for command execution
+            tenant_id: Optional tenant ID for command execution
 
         Returns:
-            AI response text
+            AI response text or command result
         """
         session = await self.get_session(session_id)
+
+        # Handle prompt commands (e.g., /slug var=value)
+        if user_id and tenant_id:
+            command_result = await self._handle_prompt_command(
+                user_message, session_id, user_id, tenant_id
+            )
+            if command_result is not None:
+                # Command was executed, return its result
+                return command_result
 
         # Get conversation history
         messages = await self.get_messages(session_id)
