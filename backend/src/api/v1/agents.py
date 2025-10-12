@@ -65,38 +65,41 @@ async def create_agent(
 
 @router.get("/{agent_id}", response_model=AgentResponse)
 async def get_agent(
-    agent_id: int,
+    agent_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
     """Get agent details by ID."""
+    from uuid import UUID
     agent_service = AgentService(db)
-    agent = await agent_service.get_agent(agent_id)
+    agent = await agent_service.get_agent(UUID(agent_id))
     return AgentResponse.from_orm(agent)
 
 
 @router.put("/{agent_id}", response_model=AgentResponse)
 async def update_agent(
-    agent_id: int,
+    agent_id: str,
     request: AgentUpdate,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
     """Update an existing agent."""
+    from uuid import UUID
     agent_service = AgentService(db)
-    agent = await agent_service.update_agent(agent_id, request)
+    agent = await agent_service.update_agent(UUID(agent_id), request)
     return AgentResponse.from_orm(agent)
 
 
 @router.delete("/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_agent(
-    agent_id: int,
+    agent_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
     """Delete an agent."""
+    from uuid import UUID
     agent_service = AgentService(db)
-    await agent_service.delete_agent(agent_id)
+    await agent_service.delete_agent(UUID(agent_id))
 
 
 @router.get("/{agent_id}/versions", response_model=dict)

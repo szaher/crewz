@@ -77,7 +77,7 @@ async def create_task(
 
 @router.get("/{task_id}", response_model=TaskResponse)
 async def get_task(
-    task_id: int,
+    task_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -89,7 +89,7 @@ async def get_task(
 
 @router.put("/{task_id}", response_model=TaskResponse)
 async def update_task(
-    task_id: int,
+    task_id: str,
     request: TaskUpdate,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
@@ -102,7 +102,7 @@ async def update_task(
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_task(
-    task_id: int,
+    task_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -113,7 +113,7 @@ async def delete_task(
 
 @router.put("/{task_id}/unassign", response_model=TaskResponse)
 async def unassign_task_from_crew(
-    task_id: int,
+    task_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):

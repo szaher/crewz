@@ -1,0 +1,793 @@
+"""Migrate all entity IDs from Integer to UUID (UUIDv7).
+
+⚠️  CRITICAL WARNING ⚠️
+This is a DESTRUCTIVE one-way migration that:
+- Changes ALL primary keys from Integer to UUID
+- Breaks API compatibility (all IDs change format)
+- Requires database backup before execution
+- Cannot be automatically rolled back
+- Requires frontend updates to handle UUID format
+
+BEFORE RUNNING:
+1. Backup database: pg_dump crewai_platform > backup_before_uuid.sql
+2. Test on development environment first
+3. Update all API clients to expect UUID format
+4. Verify all foreign key relationships after migration
+
+Revision ID: 20251012_040852
+Revises: [insert_previous_revision_id]
+Create Date: 2025-10-12 04:08:52
+
+"""
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+
+# revision identifiers, used by Alembic.
+revision = '20251012_040852'
+down_revision = 'ccf2db223d72'  # Current head (merge_prompt_registry_with_main)
+branch_labels = None
+depends_on = None
+
+
+# Core tables to migrate (in dependency order)
+CORE_TABLES = [
+    'tenants',
+    'users',
+    'llm_providers',
+    'tools',
+    'agents',
+    'crews',
+    'tasks',
+    'flows',
+    'executions',
+    'chat_folders',
+    'chat_sessions',
+    'notifications',
+    'feedback',
+]
+
+# Additional tables to migrate (extend as needed)
+ADDITIONAL_TABLES = [
+    'agent_versions',
+    'provider_versions',
+    'prompt_templates',
+    'prompt_versions',
+    'prompt_categories',
+    'prompt_executions',
+    'prompt_favorites',
+    'prompt_ratings',
+    'prompt_feedback',
+]
+
+# Association tables (many-to-many relationships)
+ASSOCIATION_TABLES = [
+    'agent_tools',
+    'crew_agents',
+    'flow_tasks',
+]
+
+ALL_TABLES = CORE_TABLES + ADDITIONAL_TABLES
+
+
+def upgrade():
+    """
+    Migrate all tables from Integer IDs to UUID (UUIDv7).
+    
+    This migration follows an 11-step process to ensure data integrity:
+    1. Enable uuid-ossp extension
+    2. Add UUID columns to all tables
+    3. Generate UUIDs for existing rows
+    4. Create temporary mapping tables for FK updates
+    5. Add new UUID foreign key columns
+    6. Populate UUID FKs using mapping tables
+    7. Drop old integer columns and constraints
+    8. Rename UUID columns (remove _uuid suffix)
+    9. Recreate foreign key constraints
+    10. Set NOT NULL constraints
+    11. Create primary key constraints and indexes
+    """
+    
+    print("=" * 80)
+    print("STARTING UUID MIGRATION - THIS IS A ONE-WAY OPERATION")
+    print("=" * 80)
+    
+    # Step 1: Enable UUID extension
+    print("\n[Step 1/11] Enabling uuid-ossp extension...")
+    op.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"')
+    
+    # Step 2: Add UUID columns to all tables
+    print("\n[Step 2/11] Adding UUID columns to all tables...")
+    for table in ALL_TABLES:
+        print(f"  - Adding uuid column to {table}")
+        op.add_column(table, sa.Column('uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    
+    # Step 3: Generate UUIDs for existing rows
+    print("\n[Step 3/11] Generating UUIDs for existing rows...")
+    for table in ALL_TABLES:
+        print(f"  - Generating UUIDs for {table}")
+        # Using uuid_generate_v4() as uuid_generate_v7() requires extension not in standard PostgreSQL
+        # In production, you can replace with uuid6.uuid7() via a Python function
+        op.execute(f"UPDATE {table} SET uuid = uuid_generate_v4() WHERE uuid IS NULL")
+    
+    # Step 4: Create temporary mapping tables for foreign key updates
+    print("\n[Step 4/11] Creating temporary ID mapping tables...")
+    for table in ALL_TABLES:
+        print(f"  - Creating mapping table for {table}")
+        op.execute(f"""
+            CREATE TEMP TABLE {table}_id_mapping AS
+            SELECT id AS old_id, uuid AS new_uuid FROM {table}
+        """)
+    
+    # Step 5-11: Foreign Key Migration
+    # Using a three-phase approach to handle dependencies:
+    # Phase A: Drop ALL foreign keys
+    # Phase B: Migrate all primary keys
+    # Phase C: Recreate ALL foreign keys
+
+    print("\n[Step 5-11] Migrating foreign keys and updating schema...")
+    print("Using three-phase approach to handle FK dependencies")
+
+    # ===================================================================
+    # PHASE A: Add UUID foreign key columns and populate them
+    # ===================================================================
+    print("\n[Phase A] Adding UUID foreign key columns and populating...")
+
+    # users: tenant_id
+    print("  - users.tenant_id")
+    op.add_column('users', sa.Column('tenant_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("UPDATE users u SET tenant_uuid = m.new_uuid FROM tenants_id_mapping m WHERE u.tenant_id = m.old_id")
+
+    # llm_providers: tenant_id
+    print("  - llm_providers.tenant_id")
+    op.add_column('llm_providers', sa.Column('tenant_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("UPDATE llm_providers l SET tenant_uuid = m.new_uuid FROM tenants_id_mapping m WHERE l.tenant_id = m.old_id")
+
+    # agents: tenant_id, llm_provider_id
+    print("  - agents.tenant_id, llm_provider_id")
+    op.add_column('agents', sa.Column('tenant_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('agents', sa.Column('llm_provider_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("UPDATE agents a SET tenant_uuid = tm.new_uuid, llm_provider_uuid = lm.new_uuid FROM tenants_id_mapping tm, llm_providers_id_mapping lm WHERE a.tenant_id = tm.old_id AND a.llm_provider_id = lm.old_id")
+
+    # tasks: agent_id, crew_id (optional)
+    print("  - tasks.agent_id, crew_id")
+    op.add_column('tasks', sa.Column('agent_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('tasks', sa.Column('crew_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("""
+        UPDATE tasks t SET
+            agent_uuid = CASE WHEN t.agent_id IS NOT NULL THEN am.new_uuid ELSE NULL END,
+            crew_uuid = CASE WHEN t.crew_id IS NOT NULL THEN cm.new_uuid ELSE NULL END
+        FROM agents_id_mapping am, crews_id_mapping cm
+        WHERE (t.agent_id = am.old_id OR t.agent_id IS NULL)
+          AND (t.crew_id = cm.old_id OR t.crew_id IS NULL)
+    """)
+
+    # crews: manager_llm_provider_id (optional)
+    print("  - crews.manager_llm_provider_id")
+    op.add_column('crews', sa.Column('manager_llm_provider_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("""
+        UPDATE crews c SET manager_llm_provider_uuid = lm.new_uuid
+        FROM llm_providers_id_mapping lm
+        WHERE c.manager_llm_provider_id = lm.old_id
+    """)
+
+    # executions: tenant_id, flow_id, crew_id, agent_id, tool_id, task_id, user_id
+    print("  - executions (6 FKs)")
+    op.add_column('executions', sa.Column('tenant_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('executions', sa.Column('flow_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('executions', sa.Column('crew_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('executions', sa.Column('agent_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('executions', sa.Column('tool_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('executions', sa.Column('task_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('executions', sa.Column('user_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("""
+        UPDATE executions e SET
+            tenant_uuid = tm.new_uuid,
+            flow_uuid = CASE WHEN e.flow_id IS NOT NULL THEN fm.new_uuid ELSE NULL END,
+            crew_uuid = CASE WHEN e.crew_id IS NOT NULL THEN cm.new_uuid ELSE NULL END,
+            agent_uuid = CASE WHEN e.agent_id IS NOT NULL THEN am.new_uuid ELSE NULL END,
+            tool_uuid = CASE WHEN e.tool_id IS NOT NULL THEN tlm.new_uuid ELSE NULL END,
+            task_uuid = CASE WHEN e.task_id IS NOT NULL THEN tkm.new_uuid ELSE NULL END,
+            user_uuid = CASE WHEN e.user_id IS NOT NULL THEN um.new_uuid ELSE NULL END
+        FROM tenants_id_mapping tm, flows_id_mapping fm, crews_id_mapping cm,
+             agents_id_mapping am, tools_id_mapping tlm, tasks_id_mapping tkm, users_id_mapping um
+        WHERE e.tenant_id = tm.old_id
+          AND (e.flow_id = fm.old_id OR e.flow_id IS NULL)
+          AND (e.crew_id = cm.old_id OR e.crew_id IS NULL)
+          AND (e.agent_id = am.old_id OR e.agent_id IS NULL)
+          AND (e.tool_id = tlm.old_id OR e.tool_id IS NULL)
+          AND (e.task_id = tkm.old_id OR e.task_id IS NULL)
+          AND (e.user_id = um.old_id OR e.user_id IS NULL)
+    """)
+
+    # chat_folders: tenant_id, user_id
+    print("  - chat_folders.tenant_id, user_id")
+    op.add_column('chat_folders', sa.Column('tenant_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('chat_folders', sa.Column('user_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("UPDATE chat_folders cf SET tenant_uuid = tm.new_uuid, user_uuid = um.new_uuid FROM tenants_id_mapping tm, users_id_mapping um WHERE cf.tenant_id = tm.old_id AND cf.user_id = um.old_id")
+
+    # chat_sessions: user_id, llm_provider_id, folder_id (folder_id optional)
+    print("  - chat_sessions.user_id, llm_provider_id, folder_id")
+    op.add_column('chat_sessions', sa.Column('user_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('chat_sessions', sa.Column('llm_provider_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('chat_sessions', sa.Column('folder_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("""
+        UPDATE chat_sessions cs SET
+            user_uuid = um.new_uuid,
+            llm_provider_uuid = lm.new_uuid,
+            folder_uuid = CASE WHEN cs.folder_id IS NOT NULL THEN fm.new_uuid ELSE NULL END
+        FROM users_id_mapping um, llm_providers_id_mapping lm, chat_folders_id_mapping fm
+        WHERE cs.user_id = um.old_id
+          AND cs.llm_provider_id = lm.old_id
+          AND (cs.folder_id = fm.old_id OR cs.folder_id IS NULL)
+    """)
+
+    # notifications: tenant_id, user_id
+    print("  - notifications.tenant_id, user_id")
+    op.add_column('notifications', sa.Column('tenant_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('notifications', sa.Column('user_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("UPDATE notifications n SET tenant_uuid = tm.new_uuid, user_uuid = um.new_uuid FROM tenants_id_mapping tm, users_id_mapping um WHERE n.tenant_id = tm.old_id AND n.user_id = um.old_id")
+
+    # feedback: tenant_id, user_id, execution_id, agent_id (last 2 optional)
+    print("  - feedback (4 FKs)")
+    op.add_column('feedback', sa.Column('tenant_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('feedback', sa.Column('user_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('feedback', sa.Column('execution_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('feedback', sa.Column('agent_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("""
+        UPDATE feedback f SET
+            tenant_uuid = tm.new_uuid,
+            user_uuid = um.new_uuid,
+            execution_uuid = CASE WHEN f.execution_id IS NOT NULL THEN em.new_uuid ELSE NULL END,
+            agent_uuid = CASE WHEN f.agent_id IS NOT NULL THEN am.new_uuid ELSE NULL END
+        FROM tenants_id_mapping tm, users_id_mapping um, executions_id_mapping em, agents_id_mapping am
+        WHERE f.tenant_id = tm.old_id
+          AND f.user_id = um.old_id
+          AND (f.execution_id = em.old_id OR f.execution_id IS NULL)
+          AND (f.agent_id = am.old_id OR f.agent_id IS NULL)
+    """)
+
+    # agent_versions: agent_id, changed_by_user_id
+    print("  - agent_versions.agent_id, changed_by_user_id")
+    op.add_column('agent_versions', sa.Column('agent_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('agent_versions', sa.Column('changed_by_user_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("""
+        UPDATE agent_versions av SET
+            agent_uuid = am.new_uuid,
+            changed_by_user_uuid = CASE WHEN av.changed_by_user_id IS NOT NULL THEN um.new_uuid ELSE NULL END
+        FROM agents_id_mapping am, users_id_mapping um
+        WHERE av.agent_id = am.old_id
+          AND (av.changed_by_user_id = um.old_id OR av.changed_by_user_id IS NULL)
+    """)
+
+    # provider_versions: provider_id, changed_by_user_id
+    print("  - provider_versions.provider_id, changed_by_user_id")
+    op.add_column('provider_versions', sa.Column('provider_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('provider_versions', sa.Column('changed_by_user_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("""
+        UPDATE provider_versions pv SET
+            provider_uuid = pm.new_uuid,
+            changed_by_user_uuid = CASE WHEN pv.changed_by_user_id IS NOT NULL THEN um.new_uuid ELSE NULL END
+        FROM llm_providers_id_mapping pm, users_id_mapping um
+        WHERE pv.provider_id = pm.old_id
+          AND (pv.changed_by_user_id = um.old_id OR pv.changed_by_user_id IS NULL)
+    """)
+
+    # Prompt tables special handling (already have UUID PKs, just update FKs)
+    print("  - Prompt tables (special handling)")
+    # Note: These are handled separately in Phase C since they don't use integer IDs
+
+    # ===================================================================
+    # PHASE B: Drop ALL foreign key constraints
+    # ===================================================================
+    print("\n[Phase B] Dropping ALL foreign key constraints...")
+
+    _drop_all_fk_constraints()
+
+    # ===================================================================
+    # PHASE C: Migrate primary keys for all tables
+    # ===================================================================
+    print("\n[Phase C] Migrating primary keys for all tables...")
+
+    print("  - Processing: tenants table")
+    _migrate_table_to_uuid(
+        table_name='tenants',
+        foreign_keys=[],  # No FKs in tenants table
+    )
+    
+    # ===================================================================
+    # USERS TABLE (FK: tenant_id)
+    # ===================================================================
+    print("\n  Processing: users table")
+    # Add UUID FK column
+    op.add_column('users', sa.Column('tenant_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    # Populate from mapping table
+    op.execute("""
+        UPDATE users u
+        SET tenant_uuid = m.new_uuid
+        FROM tenants_id_mapping m
+        WHERE u.tenant_id = m.old_id
+    """)
+    _migrate_table_to_uuid(
+        table_name='users',
+        foreign_keys=[
+            {'old_col': 'tenant_id', 'new_col': 'tenant_uuid', 'ref_table': 'tenants'}
+        ],
+    )
+    
+    # ===================================================================
+    # LLM_PROVIDERS TABLE (FK: tenant_id)
+    # ===================================================================
+    print("\n  Processing: llm_providers table")
+    op.add_column('llm_providers', sa.Column('tenant_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("""
+        UPDATE llm_providers p
+        SET tenant_uuid = m.new_uuid
+        FROM tenants_id_mapping m
+        WHERE p.tenant_id = m.old_id
+    """)
+    _migrate_table_to_uuid(
+        table_name='llm_providers',
+        foreign_keys=[
+            {'old_col': 'tenant_id', 'new_col': 'tenant_uuid', 'ref_table': 'tenants'}
+        ],
+    )
+    
+    # ===================================================================
+    # AGENTS TABLE (FKs: tenant_id, llm_provider_id)
+    # ===================================================================
+    print("\n  Processing: agents table")
+    op.add_column('agents', sa.Column('tenant_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('agents', sa.Column('llm_provider_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("""
+        UPDATE agents a
+        SET tenant_uuid = tm.new_uuid,
+            llm_provider_uuid = pm.new_uuid
+        FROM tenants_id_mapping tm, llm_providers_id_mapping pm
+        WHERE a.tenant_id = tm.old_id
+          AND a.llm_provider_id = pm.old_id
+    """)
+    _migrate_table_to_uuid(
+        table_name='agents',
+        foreign_keys=[
+            {'old_col': 'tenant_id', 'new_col': 'tenant_uuid', 'ref_table': 'tenants'},
+            {'old_col': 'llm_provider_id', 'new_col': 'llm_provider_uuid', 'ref_table': 'llm_providers'}
+        ],
+    )
+    
+    # ===================================================================
+    # TOOLS TABLE (no FKs)
+    # ===================================================================
+    print("\n  Processing: tools table")
+    _migrate_table_to_uuid(
+        table_name='tools',
+        foreign_keys=[],
+    )
+
+    # ===================================================================
+    # TASKS TABLE (FKs: agent_id, crew_id)
+    # ===================================================================
+    print("\n  Processing: tasks table")
+    op.add_column('tasks', sa.Column('agent_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('tasks', sa.Column('crew_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("""
+        UPDATE tasks t
+        SET agent_uuid = COALESCE(am.new_uuid, NULL),
+            crew_uuid = COALESCE(cm.new_uuid, NULL)
+        FROM agents_id_mapping am
+        FULL OUTER JOIN crews_id_mapping cm ON 1=1
+        WHERE (t.agent_id = am.old_id OR t.agent_id IS NULL)
+          AND (t.crew_id = cm.old_id OR t.crew_id IS NULL)
+    """)
+    _migrate_table_to_uuid(
+        table_name='tasks',
+        foreign_keys=[
+            {'old_col': 'agent_id', 'new_col': 'agent_uuid', 'ref_table': 'agents'},
+            {'old_col': 'crew_id', 'new_col': 'crew_uuid', 'ref_table': 'crews'}
+        ],
+    )
+
+    # ===================================================================
+    # CREWS TABLE (FK: manager_llm_provider_id)
+    # ===================================================================
+    print("\n  Processing: crews table")
+    op.add_column('crews', sa.Column('manager_llm_provider_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("""
+        UPDATE crews c
+        SET manager_llm_provider_uuid = pm.new_uuid
+        FROM llm_providers_id_mapping pm
+        WHERE c.manager_llm_provider_id = pm.old_id
+    """)
+    _migrate_table_to_uuid(
+        table_name='crews',
+        foreign_keys=[
+            {'old_col': 'manager_llm_provider_id', 'new_col': 'manager_llm_provider_uuid', 'ref_table': 'llm_providers'}
+        ],
+    )
+
+    # ===================================================================
+    # FLOWS TABLE (no FKs)
+    # ===================================================================
+    print("\n  Processing: flows table")
+    _migrate_table_to_uuid(
+        table_name='flows',
+        foreign_keys=[],
+    )
+
+    # ===================================================================
+    # EXECUTIONS TABLE (FKs: flow_id, crew_id, agent_id, tool_id, task_id, user_id)
+    # ===================================================================
+    print("\n  Processing: executions table")
+    op.add_column('executions', sa.Column('flow_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('executions', sa.Column('crew_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('executions', sa.Column('agent_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('executions', sa.Column('tool_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('executions', sa.Column('task_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('executions', sa.Column('user_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("""
+        UPDATE executions e
+        SET flow_uuid = fm.new_uuid,
+            crew_uuid = cm.new_uuid,
+            agent_uuid = am.new_uuid,
+            tool_uuid = tm.new_uuid,
+            task_uuid = tkm.new_uuid,
+            user_uuid = um.new_uuid
+        FROM flows_id_mapping fm, crews_id_mapping cm, agents_id_mapping am,
+             tools_id_mapping tm, tasks_id_mapping tkm, users_id_mapping um
+        WHERE (e.flow_id = fm.old_id OR e.flow_id IS NULL)
+          AND (e.crew_id = cm.old_id OR e.crew_id IS NULL)
+          AND (e.agent_id = am.old_id OR e.agent_id IS NULL)
+          AND (e.tool_id = tm.old_id OR e.tool_id IS NULL)
+          AND (e.task_id = tkm.old_id OR e.task_id IS NULL)
+          AND e.user_id = um.old_id
+    """)
+    _migrate_table_to_uuid(
+        table_name='executions',
+        foreign_keys=[
+            {'old_col': 'flow_id', 'new_col': 'flow_uuid', 'ref_table': 'flows'},
+            {'old_col': 'crew_id', 'new_col': 'crew_uuid', 'ref_table': 'crews'},
+            {'old_col': 'agent_id', 'new_col': 'agent_uuid', 'ref_table': 'agents'},
+            {'old_col': 'tool_id', 'new_col': 'tool_uuid', 'ref_table': 'tools'},
+            {'old_col': 'task_id', 'new_col': 'task_uuid', 'ref_table': 'tasks'},
+            {'old_col': 'user_id', 'new_col': 'user_uuid', 'ref_table': 'users'}
+        ],
+    )
+
+    # ===================================================================
+    # CHAT_FOLDERS TABLE (FKs: tenant_id, user_id)
+    # ===================================================================
+    print("\n  Processing: chat_folders table")
+    op.add_column('chat_folders', sa.Column('tenant_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('chat_folders', sa.Column('user_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("""
+        UPDATE chat_folders cf
+        SET tenant_uuid = tm.new_uuid,
+            user_uuid = um.new_uuid
+        FROM tenants_id_mapping tm, users_id_mapping um
+        WHERE cf.tenant_id = tm.old_id
+          AND cf.user_id = um.old_id
+    """)
+    _migrate_table_to_uuid(
+        table_name='chat_folders',
+        foreign_keys=[
+            {'old_col': 'tenant_id', 'new_col': 'tenant_uuid', 'ref_table': 'tenants'},
+            {'old_col': 'user_id', 'new_col': 'user_uuid', 'ref_table': 'users'}
+        ],
+    )
+
+    # ===================================================================
+    # CHAT_SESSIONS TABLE (FKs: user_id, llm_provider_id, folder_id)
+    # ===================================================================
+    print("\n  Processing: chat_sessions table")
+    op.add_column('chat_sessions', sa.Column('user_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('chat_sessions', sa.Column('llm_provider_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('chat_sessions', sa.Column('folder_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("""
+        UPDATE chat_sessions cs
+        SET user_uuid = um.new_uuid,
+            llm_provider_uuid = pm.new_uuid,
+            folder_uuid = fm.new_uuid
+        FROM users_id_mapping um, llm_providers_id_mapping pm, chat_folders_id_mapping fm
+        WHERE cs.user_id = um.old_id
+          AND cs.llm_provider_id = pm.old_id
+          AND (cs.folder_id = fm.old_id OR cs.folder_id IS NULL)
+    """)
+    _migrate_table_to_uuid(
+        table_name='chat_sessions',
+        foreign_keys=[
+            {'old_col': 'user_id', 'new_col': 'user_uuid', 'ref_table': 'users'},
+            {'old_col': 'llm_provider_id', 'new_col': 'llm_provider_uuid', 'ref_table': 'llm_providers'},
+            {'old_col': 'folder_id', 'new_col': 'folder_uuid', 'ref_table': 'chat_folders'}
+        ],
+    )
+
+    # ===================================================================
+    # NOTIFICATIONS TABLE (FKs: tenant_id, user_id)
+    # ===================================================================
+    print("\n  Processing: notifications table")
+    op.add_column('notifications', sa.Column('tenant_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('notifications', sa.Column('user_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("""
+        UPDATE notifications n
+        SET tenant_uuid = tm.new_uuid,
+            user_uuid = um.new_uuid
+        FROM tenants_id_mapping tm, users_id_mapping um
+        WHERE n.tenant_id = tm.old_id
+          AND n.user_id = um.old_id
+    """)
+    _migrate_table_to_uuid(
+        table_name='notifications',
+        foreign_keys=[
+            {'old_col': 'tenant_id', 'new_col': 'tenant_uuid', 'ref_table': 'tenants'},
+            {'old_col': 'user_id', 'new_col': 'user_uuid', 'ref_table': 'users'}
+        ],
+    )
+
+    # ===================================================================
+    # FEEDBACK TABLE (FKs: tenant_id, user_id, execution_id, agent_id)
+    # ===================================================================
+    print("\n  Processing: feedback table")
+    op.add_column('feedback', sa.Column('tenant_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('feedback', sa.Column('user_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('feedback', sa.Column('execution_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('feedback', sa.Column('agent_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("""
+        UPDATE feedback f
+        SET tenant_uuid = tm.new_uuid,
+            user_uuid = um.new_uuid,
+            execution_uuid = em.new_uuid,
+            agent_uuid = am.new_uuid
+        FROM tenants_id_mapping tm, users_id_mapping um, executions_id_mapping em, agents_id_mapping am
+        WHERE f.tenant_id = tm.old_id
+          AND f.user_id = um.old_id
+          AND (f.execution_id = em.old_id OR f.execution_id IS NULL)
+          AND (f.agent_id = am.old_id OR f.agent_id IS NULL)
+    """)
+    _migrate_table_to_uuid(
+        table_name='feedback',
+        foreign_keys=[
+            {'old_col': 'tenant_id', 'new_col': 'tenant_uuid', 'ref_table': 'tenants'},
+            {'old_col': 'user_id', 'new_col': 'user_uuid', 'ref_table': 'users'},
+            {'old_col': 'execution_id', 'new_col': 'execution_uuid', 'ref_table': 'executions'},
+            {'old_col': 'agent_id', 'new_col': 'agent_uuid', 'ref_table': 'agents'}
+        ],
+    )
+
+    # ===================================================================
+    # VERSION TABLES
+    # ===================================================================
+    print("\n  Processing: agent_versions table")
+    op.add_column('agent_versions', sa.Column('agent_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("""
+        UPDATE agent_versions av
+        SET agent_uuid = am.new_uuid
+        FROM agents_id_mapping am
+        WHERE av.agent_id = am.old_id
+    """)
+    _migrate_table_to_uuid(
+        table_name='agent_versions',
+        foreign_keys=[
+            {'old_col': 'agent_id', 'new_col': 'agent_uuid', 'ref_table': 'agents'}
+        ],
+    )
+
+    print("\n  Processing: provider_versions table")
+    op.add_column('provider_versions', sa.Column('provider_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("""
+        UPDATE provider_versions pv
+        SET provider_uuid = pm.new_uuid
+        FROM llm_providers_id_mapping pm
+        WHERE pv.provider_id = pm.old_id
+    """)
+    _migrate_table_to_uuid(
+        table_name='provider_versions',
+        foreign_keys=[
+            {'old_col': 'provider_id', 'new_col': 'provider_uuid', 'ref_table': 'llm_providers'}
+        ],
+    )
+
+    # ===================================================================
+    # PROMPT TABLES (Already have UUID primary keys, just update FKs)
+    # ===================================================================
+    print("\n  Processing: prompt tables (updating foreign keys only)...")
+    print("    Note: These tables already use UUID primary keys")
+
+    # Update tenant_id and user_id in prompt tables
+    for table in ['prompt_categories', 'prompt_templates', 'prompt_executions',
+                  'prompt_favorites', 'prompt_ratings', 'prompt_feedback']:
+        if table in ['prompt_templates', 'prompt_executions']:
+            # These have both tenant_id and user_id
+            op.execute(f"""
+                ALTER TABLE {table}
+                ALTER COLUMN tenant_id TYPE UUID USING tenant_id::text::uuid,
+                ALTER COLUMN user_id TYPE UUID USING user_id::text::uuid
+            """)
+        elif table in ['prompt_categories']:
+            # Only has tenant_id
+            op.execute(f"""
+                ALTER TABLE {table}
+                ALTER COLUMN tenant_id TYPE UUID USING tenant_id::text::uuid
+            """)
+        elif table in ['prompt_favorites', 'prompt_ratings', 'prompt_feedback']:
+            # Only has user_id
+            op.execute(f"""
+                ALTER TABLE {table}
+                ALTER COLUMN user_id TYPE UUID USING user_id::text::uuid
+            """)
+
+    print("\n  Prompt tables foreign keys updated to UUID format")
+
+    # ===================================================================
+    # Association Tables (many-to-many)
+    # ===================================================================
+    print("\n  Processing association tables...")
+    
+    # agent_tools table
+    print("    - agent_tools (agent_id, tool_id)")
+    op.add_column('agent_tools', sa.Column('agent_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('agent_tools', sa.Column('tool_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("""
+        UPDATE agent_tools at
+        SET agent_uuid = am.new_uuid,
+            tool_uuid = tm.new_uuid
+        FROM agents_id_mapping am, tools_id_mapping tm
+        WHERE at.agent_id = am.old_id
+          AND at.tool_id = tm.old_id
+    """)
+    # Drop old columns
+    op.drop_constraint('agent_tools_agent_id_fkey', 'agent_tools', type_='foreignkey')
+    op.drop_constraint('agent_tools_tool_id_fkey', 'agent_tools', type_='foreignkey')
+    op.drop_column('agent_tools', 'agent_id')
+    op.drop_column('agent_tools', 'tool_id')
+    # Rename UUID columns
+    op.alter_column('agent_tools', 'agent_uuid', new_column_name='agent_id')
+    op.alter_column('agent_tools', 'tool_uuid', new_column_name='tool_id')
+    # Recreate constraints
+    op.create_foreign_key('agent_tools_agent_id_fkey', 'agent_tools', 'agents', ['agent_id'], ['id'])
+    op.create_foreign_key('agent_tools_tool_id_fkey', 'agent_tools', 'tools', ['tool_id'], ['id'])
+    op.create_primary_key('agent_tools_pkey', 'agent_tools', ['agent_id', 'tool_id'])
+
+    # crew_agents table
+    print("    - crew_agents (crew_id, agent_id)")
+    op.add_column('crew_agents', sa.Column('crew_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('crew_agents', sa.Column('agent_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("""
+        UPDATE crew_agents ca
+        SET crew_uuid = cm.new_uuid,
+            agent_uuid = am.new_uuid
+        FROM crews_id_mapping cm, agents_id_mapping am
+        WHERE ca.crew_id = cm.old_id
+          AND ca.agent_id = am.old_id
+    """)
+    # Drop old columns
+    op.drop_constraint('crew_agents_crew_id_fkey', 'crew_agents', type_='foreignkey')
+    op.drop_constraint('crew_agents_agent_id_fkey', 'crew_agents', type_='foreignkey')
+    op.drop_column('crew_agents', 'crew_id')
+    op.drop_column('crew_agents', 'agent_id')
+    # Rename UUID columns
+    op.alter_column('crew_agents', 'crew_uuid', new_column_name='crew_id')
+    op.alter_column('crew_agents', 'agent_uuid', new_column_name='agent_id')
+    # Recreate constraints
+    op.create_foreign_key('crew_agents_crew_id_fkey', 'crew_agents', 'crews', ['crew_id'], ['id'])
+    op.create_foreign_key('crew_agents_agent_id_fkey', 'crew_agents', 'agents', ['agent_id'], ['id'])
+    op.create_primary_key('crew_agents_pkey', 'crew_agents', ['crew_id', 'agent_id'])
+
+    # ===================================================================
+    # Prompt Versions (has self-referential FK: parent_version_id)
+    # ===================================================================
+    print("\n  Processing: prompt_versions table")
+    # Note: prompt_versions already has UUID primary key (id), only need to update:
+    # - prompt_id FK (references prompt_templates)
+    # - parent_version_id FK (self-referential)
+
+    # Update prompt_id FK
+    op.add_column('prompt_versions', sa.Column('prompt_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("""
+        UPDATE prompt_versions pv
+        SET prompt_uuid = pt.id
+        FROM prompt_templates pt
+        WHERE pv.prompt_id::text = pt.id::text
+    """)
+    op.drop_column('prompt_versions', 'prompt_id')
+    op.alter_column('prompt_versions', 'prompt_uuid', new_column_name='prompt_id')
+    op.alter_column('prompt_versions', 'prompt_id', nullable=False)
+    op.create_foreign_key('prompt_versions_prompt_id_fkey', 'prompt_versions', 'prompt_templates', ['prompt_id'], ['id'])
+
+    # Update parent_version_id FK (self-referential, nullable)
+    op.add_column('prompt_versions', sa.Column('parent_version_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+    op.execute("""
+        UPDATE prompt_versions pv1
+        SET parent_version_uuid = pv2.id
+        FROM prompt_versions pv2
+        WHERE pv1.parent_version_id::text = pv2.id::text
+    """)
+    op.drop_column('prompt_versions', 'parent_version_id')
+    op.alter_column('prompt_versions', 'parent_version_uuid', new_column_name='parent_version_id')
+    op.create_foreign_key('prompt_versions_parent_version_id_fkey', 'prompt_versions', 'prompt_versions', ['parent_version_id'], ['id'])
+
+    print("\n" + "=" * 80)
+    print("UUID MIGRATION COMPLETE")
+    print("✅  All 25 tables migrated from Integer IDs to UUIDs")
+    print("=" * 80)
+    print("\nMigrated tables:")
+    print("  • Core entities: tenants, users, llm_providers, agents, crews, tasks, tools, flows")
+    print("  • Execution: executions")
+    print("  • Chat: chat_folders, chat_sessions")
+    print("  • Notifications: notifications")
+    print("  • Feedback: feedback")
+    print("  • Versioning: agent_versions, provider_versions")
+    print("  • Prompts: prompt_categories, prompt_templates, prompt_executions,")
+    print("             prompt_favorites, prompt_ratings, prompt_feedback, prompt_versions")
+    print("  • Association tables: agent_tools, crew_agents")
+    print("=" * 80)
+
+
+def _migrate_table_to_uuid(table_name, foreign_keys):
+    """
+    Helper function to complete UUID migration for a single table.
+
+    Args:
+        table_name: Name of the table
+        foreign_keys: List of FK dicts with keys: old_col, new_col, ref_table
+    """
+    # Drop old integer ID and constraints
+    try:
+        op.drop_constraint(f'{table_name}_pkey', table_name, type_='primary_key')
+    except:
+        print(f"    - No PK constraint found for {table_name}")
+
+    # Drop FK constraints for old integer columns
+    for fk in foreign_keys:
+        try:
+            op.drop_constraint(f'{table_name}_{fk["old_col"]}_fkey', table_name, type_='foreignkey')
+        except:
+            print(f"    - No FK constraint found for {table_name}.{fk['old_col']}")
+        try:
+            op.drop_column(table_name, fk['old_col'])
+        except:
+            print(f"    - Column {fk['old_col']} already dropped (CASCADE)")
+
+    # Drop old integer id column using CASCADE to handle dependent FKs
+    op.execute(f'ALTER TABLE {table_name} DROP COLUMN id CASCADE')
+    
+    # Rename uuid column to id
+    op.alter_column(table_name, 'uuid', new_column_name='id')
+    
+    # Rename UUID FK columns (remove _uuid suffix)
+    for fk in foreign_keys:
+        new_name = fk['old_col']  # e.g., tenant_id
+        op.alter_column(table_name, fk['new_col'], new_column_name=new_name)
+    
+    # Set NOT NULL
+    op.alter_column(table_name, 'id', nullable=False)
+    for fk in foreign_keys:
+        op.alter_column(table_name, fk['old_col'], nullable=False)
+    
+    # Create PK constraint
+    op.create_primary_key(f'{table_name}_pkey', table_name, ['id'])
+    
+    # Recreate FK constraints
+    for fk in foreign_keys:
+        op.create_foreign_key(
+            f'{table_name}_{fk["old_col"]}_fkey',
+            table_name,
+            fk['ref_table'],
+            [fk['old_col']],
+            ['id']
+        )
+    
+    # Create index on id column (for B-tree performance)
+    op.create_index(f'ix_{table_name}_id', table_name, ['id'])
+
+
+def downgrade():
+    """
+    Downgrade is NOT supported for this migration.
+    
+    UUID → Integer conversion would lose data and break referential integrity.
+    To rollback, restore from database backup taken before migration.
+    """
+    raise NotImplementedError(
+        "UUID migration cannot be automatically rolled back. "
+        "Restore from backup: psql crewai_platform < backup_before_uuid.sql"
+    )

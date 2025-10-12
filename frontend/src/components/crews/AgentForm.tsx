@@ -7,8 +7,8 @@ import { useLLMProviders } from '@/lib/hooks/useLLMProviders';
 import type { AgentCreate, AgentUpdate } from '@/types/api';
 
 interface AgentFormProps {
-  agentId?: number;
-  onSave?: (agentId: number) => void;
+  agentId?: string;
+  onSave?: (agentId: string) => void;
   onCancel?: () => void;
 }
 
@@ -60,7 +60,7 @@ export default function AgentForm({ agentId, onSave, onCancel }: AgentFormProps)
     setFormData({ ...formData, [key]: value } as AgentCreate);
   };
 
-  const handleToolToggle = (toolId: number) => {
+  const handleToolToggle = (toolId: string) => {
     const newTools = formData.tool_ids?.includes(toolId)
       ? formData.tool_ids.filter((id) => id !== toolId)
       : [...(formData.tool_ids || []), toolId];

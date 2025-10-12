@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
 from enum import Enum
+from uuid import UUID
 
 
 class FeedbackType(str, Enum):
@@ -25,8 +26,8 @@ class FeedbackCreate(BaseModel):
     """Create feedback request schema."""
 
     feedback_type: FeedbackType = Field(..., description="Type of feedback")
-    execution_id: Optional[int] = Field(None, description="Execution ID (if feedback on execution)")
-    agent_id: Optional[int] = Field(None, description="Agent ID (if feedback on agent)")
+    execution_id: Optional[UUID] = Field(None, description="Execution ID (if feedback on execution)")
+    agent_id: Optional[UUID] = Field(None, description="Agent ID (if feedback on agent)")
     chat_session_id: Optional[str] = Field(None, description="Chat session ID (if feedback on chat)")
 
     rating: int = Field(..., ge=1, le=5, description="Rating (1-5 stars)")
@@ -59,12 +60,12 @@ class FeedbackUpdate(BaseModel):
 class FeedbackResponse(BaseModel):
     """Feedback response schema."""
 
-    id: int
-    tenant_id: int
-    user_id: int
+    id: UUID
+    tenant_id: UUID
+    user_id: UUID
     feedback_type: str
-    execution_id: Optional[int]
-    agent_id: Optional[int]
+    execution_id: Optional[UUID]
+    agent_id: Optional[UUID]
     chat_session_id: Optional[str]
     rating: int
     comment: Optional[str]

@@ -19,9 +19,8 @@ export default function TasksPage() {
   const { crews, refetch: refetchCrews } = useCrews();
 
   const [showTaskForm, setShowTaskForm] = useState(false);
-  const [editingTask, setEditingTask] = useState<Task | undefined>(undefined);
-  const [filterCrew, setFilterCrew] = useState<number | 'all'>('all');
-  const [filterAgent, setFilterAgent] = useState<number | 'all'>('all');
+  const [filterCrew, setFilterCrew] = useState<string | 'all'>('all');
+  const [filterAgent, setFilterAgent] = useState<string | 'all'>('all');
 
   useEffect(() => {
     fetchTasks();
@@ -30,31 +29,24 @@ export default function TasksPage() {
   }, [fetchTasks, refetchAgents, refetchCrews]);
 
   const handleCreateTask = () => {
-    setEditingTask(undefined);
     setShowTaskForm(true);
   };
 
   const handleEditTask = (task: Task) => {
-    setEditingTask(task);
-    setShowTaskForm(true);
+    router.push(`/tasks/${task.id}`);
   };
 
   const handleSaveTask = async (taskData: TaskCreate | TaskUpdate) => {
     try {
-      if (editingTask) {
-        await updateTask(editingTask.id, taskData as TaskUpdate);
-      } else {
-        await createTask(taskData as TaskCreate);
-      }
+      await createTask(taskData as TaskCreate);
       setShowTaskForm(false);
-      setEditingTask(undefined);
       fetchTasks();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to save task');
     }
   };
 
-  const handleDeleteTask = async (taskId: number) => {
+  const handleDeleteTask = async (taskId: string) => {
     try {
       await deleteTask(taskId);
       fetchTasks();
@@ -63,7 +55,7 @@ export default function TasksPage() {
     }
   };
 
-  const handleUnassignTask = async (taskId: number) => {
+  const handleUnassignTask = async (taskId: string) => {
     try {
       await unassignFromCrew(taskId);
       fetchTasks();
@@ -76,7 +68,7 @@ export default function TasksPage() {
   const agentNames = agents.reduce((acc, agent) => {
     acc[agent.id] = agent.name;
     return acc;
-  }, {} as Record<number, string>);
+  }, {} as Record<string, string>);
 
   // Filter tasks
   const filteredTasks = tasks.filter(task => {
@@ -116,7 +108,7 @@ export default function TasksPage() {
                   <label className="text-sm font-medium text-gray-700">Filter by Crew:</label>
                   <select
                     value={filterCrew}
-                    onChange={(e) => setFilterCrew(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+                    onChange={(e) => setFilterCrew(e.target.value === 'all' ? 'all' : e.target.value)}
                     className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:border-blue-500 focus:ring-blue-500"
                   >
                     <option value="all">All Crews</option>
@@ -130,7 +122,7 @@ export default function TasksPage() {
                   <label className="text-sm font-medium text-gray-700">Filter by Agent:</label>
                   <select
                     value={filterAgent}
-                    onChange={(e) => setFilterAgent(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+                    onChange={(e) => setFilterAgent(e.target.value === 'all' ? 'all' : e.target.value)}
                     className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:border-blue-500 focus:ring-blue-500"
                   >
                     <option value="all">All Agents</option>
@@ -158,14 +150,12 @@ export default function TasksPage() {
             {showTaskForm && (
               <div className="bg-white p-6 rounded-lg border border-gray-200 mb-6">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                  {editingTask ? 'Edit Task' : 'Create New Task'}
+                  Create New Task
                 </h2>
                 <TaskForm
-                  task={editingTask}
                   onSave={handleSaveTask}
                   onCancel={() => {
                     setShowTaskForm(false);
-                    setEditingTask(undefined);
                   }}
                 />
               </div>

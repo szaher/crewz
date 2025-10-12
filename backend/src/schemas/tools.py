@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 from enum import Enum
+from uuid import UUID
 
 
 class ToolType(str, Enum):
@@ -41,7 +42,7 @@ class ToolUpdate(BaseModel):
 class ToolResponse(BaseModel):
     """Tool response schema."""
 
-    id: int
+    id: UUID
     name: str
     description: str
     tool_type: ToolType

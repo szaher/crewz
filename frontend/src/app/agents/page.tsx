@@ -15,7 +15,7 @@ export default function AgentsPage() {
   const { agents, loading, error, refetch } = useAgents();
 
   const [showAgentForm, setShowAgentForm] = useState(false);
-  const [editingAgentId, setEditingAgentId] = useState<number | undefined>();
+  const [editingAgentId, setEditingAgentId] = useState<string | undefined>();
   const [executingAgent, setExecutingAgent] = useState<any | null>(null);
 
   const providerFilter = searchParams?.get('llm_provider_id');
@@ -37,9 +37,8 @@ export default function AgentsPage() {
     setShowAgentForm(true);
   };
 
-  const handleEditAgent = (agentId: number) => {
-    setEditingAgentId(agentId);
-    setShowAgentForm(true);
+  const handleEditAgent = (agentId: string) => {
+    router.push(`/agents/${agentId}`);
   };
 
   const handleSaveAgent = () => {

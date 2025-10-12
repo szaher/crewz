@@ -85,7 +85,7 @@ async def create_crew(
 
 @router.get("/{crew_id}", response_model=CrewOut)
 async def get_crew(
-    crew_id: int,
+    crew_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth)
 ):
@@ -111,7 +111,7 @@ async def get_crew(
 
 @router.put("/{crew_id}", response_model=CrewOut)
 async def update_crew(
-    crew_id: int,
+    crew_id: str,
     crew_data: CrewUpdate,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth)
@@ -150,7 +150,7 @@ async def update_crew(
 
 @router.delete("/{crew_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_crew(
-    crew_id: int,
+    crew_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth)
 ):
@@ -162,7 +162,7 @@ async def delete_crew(
 
 @router.get("/{crew_id}/variables")
 async def get_crew_variables(
-    crew_id: int,
+    crew_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -192,7 +192,7 @@ async def get_crew_variables(
 
 @router.post("/{crew_id}/execute", response_model=ExecutionResponse, status_code=status.HTTP_201_CREATED)
 async def execute_crew(
-    crew_id: int,
+    crew_id: str,
     input_data: dict,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),

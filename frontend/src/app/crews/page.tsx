@@ -17,7 +17,6 @@ export default function CrewsPage() {
   const error = crewsError;
 
   const [showCrewBuilder, setShowCrewBuilder] = useState(false);
-  const [editingCrewId, setEditingCrewId] = useState<number | undefined>();
   const [executingCrew, setExecutingCrew] = useState<any | null>(null);
 
   const loadData = () => {
@@ -38,16 +37,14 @@ export default function CrewsPage() {
   };
 
   const handleCreateCrew = () => {
-    setEditingCrewId(undefined);
     setShowCrewBuilder(true);
   };
 
-  const handleEditCrew = (crewId: number) => {
-    setEditingCrewId(crewId);
-    setShowCrewBuilder(true);
+  const handleEditCrew = (crewId: string) => {
+    router.push(`/crews/${crewId}`);
   };
 
-  const handleSaveCrew = (crewId: number) => {
+  const handleSaveCrew = () => {
     setShowCrewBuilder(false);
     void loadData();
   };
@@ -62,7 +59,6 @@ export default function CrewsPage() {
               <Breadcrumbs />
             </div>
             <CrewBuilder
-              crewId={editingCrewId}
               onSave={handleSaveCrew}
             />
           </div>

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useFlows } from '@/lib/hooks/useFlows';
 
 interface FlowPropertiesPanelProps {
-  flowId: number;
+  flowId: string;
   initialData: {
     name: string;
     description?: string;

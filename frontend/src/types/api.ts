@@ -47,10 +47,10 @@ export interface RefreshResponse {
 // ============================================================================
 
 export interface User {
-  id: number;
+  id: string; // UUID
   email: string;
   full_name: string;
-  tenant_id: number;
+  tenant_id: string; // UUID
   role: 'admin' | 'member' | 'viewer';
   is_active: boolean;
   created_at: string;
@@ -58,7 +58,7 @@ export interface User {
 }
 
 export interface Tenant {
-  id: number;
+  id: string; // UUID
   name: string;
   schema_name: string;
   is_active: boolean;
@@ -77,9 +77,9 @@ export interface FlowNode {
   position: { x: number; y: number };
   data: {
     label: string;
-    agent_id?: number;
-    crew_id?: number;
-    tool_id?: number;
+    agent_id?: string; // UUID
+    crew_id?: string; // UUID
+    tool_id?: string; // UUID
     config?: Record<string, any>;
   };
 }
@@ -96,8 +96,8 @@ export interface FlowEdge {
 }
 
 export interface Flow {
-  id: number;
-  tenant_id: number;
+  id: string; // UUID
+  tenant_id: string; // UUID
   name: string;
   description: string;
   version: string;
@@ -160,14 +160,14 @@ export interface LLMConfig {
 }
 
 export interface Agent {
-  id: number;
+  id: string; // UUID
   name: string;
   role: string;
   goal: string;
   backstory: string;
 
   // LLM configuration
-  llm_provider_id: number;
+  llm_provider_id: string; // UUID
   temperature: number;
   max_tokens?: number;
 
@@ -195,7 +195,7 @@ export interface AgentCreate {
   backstory: string;
 
   // LLM configuration
-  llm_provider_id: number;
+  llm_provider_id: string; // UUID
   temperature?: number;
   max_tokens?: number;
 
@@ -260,12 +260,12 @@ export interface AgentResponse {
 // ============================================================================
 
 export interface Crew {
-  id: number;
-  tenant_id: number;
+  id: string; // UUID
+  tenant_id: string; // UUID
   name: string;
   description: string;
   process_type: 'sequential' | 'hierarchical' | 'consensus';
-  agent_ids: number[];
+  agent_ids: string[]; // UUIDs
   task_delegation_enabled: boolean;
   verbose: boolean;
   config: Record<string, any>;
@@ -278,8 +278,8 @@ export interface CrewCreate {
   name: string;
   description: string;
   process_type: 'sequential' | 'hierarchical' | 'consensus';
-  agent_ids: number[];
-  task_ids?: number[];
+  agent_ids: string[]; // UUIDs
+  task_ids?: string[]; // UUIDs
   task_delegation_enabled?: boolean;
   verbose?: boolean;
   config?: Record<string, any>;
@@ -289,8 +289,8 @@ export interface CrewUpdate {
   name?: string;
   description?: string;
   process_type?: 'sequential' | 'hierarchical' | 'consensus';
-  agent_ids?: number[];
-  task_ids?: number[];
+  agent_ids?: string[]; // UUIDs
+  task_ids?: string[]; // UUIDs
   task_delegation_enabled?: boolean;
   verbose?: boolean;
   config?: Record<string, any>;
@@ -313,7 +313,7 @@ export interface CrewResponse {
 // ============================================================================
 
 export interface Tool {
-  id: number;
+  id: string; // UUID
   name: string;
   description: string;
   tool_type: 'builtin' | 'custom' | 'docker';
@@ -374,14 +374,14 @@ export interface ToolExecuteResponse {
 // ============================================================================
 
 export interface Execution {
-  id: number;
-  tenant_id: number;
+  id: string; // UUID
+  tenant_id: string; // UUID
   execution_type: 'flow' | 'crew' | 'agent' | 'tool' | 'task';
-  flow_id?: number;
-  crew_id?: number;
-  agent_id?: number;
-  tool_id?: number;
-  task_id?: number;
+  flow_id?: string; // UUID
+  crew_id?: string; // UUID
+  agent_id?: string; // UUID
+  tool_id?: string; // UUID
+  task_id?: string; // UUID
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
   input_data: Record<string, any>;
   output_data?: Record<string, any>;
@@ -395,11 +395,11 @@ export interface Execution {
 
 export interface ExecutionCreate {
   execution_type: 'flow' | 'crew' | 'agent' | 'tool' | 'task';
-  flow_id?: number;
-  crew_id?: number;
-  agent_id?: number;
-  tool_id?: number;
-  task_id?: number;
+  flow_id?: string; // UUID
+  crew_id?: string; // UUID
+  agent_id?: string; // UUID
+  tool_id?: string; // UUID
+  task_id?: string; // UUID
   input_data: Record<string, any>;
 }
 
@@ -416,7 +416,7 @@ export interface ExecutionResponse {
 
 export interface ExecutionEvent {
   type: 'connected' | 'execution_started' | 'node_started' | 'node_completed' | 'node_failed' | 'execution_completed' | 'execution_failed' | 'execution_cancelled' | 'error';
-  execution_id?: number;
+  execution_id?: string; // UUID
   node_id?: string;
   node_type?: string;
   output?: any;
@@ -430,10 +430,10 @@ export interface ExecutionEvent {
 // ============================================================================
 
 export interface ChatSession {
-  id: number;
-  tenant_id: number;
-  agent_id?: number;
-  crew_id?: number;
+  id: string; // UUID
+  tenant_id: string; // UUID
+  agent_id?: string; // UUID
+  crew_id?: string; // UUID
   name: string;
   metadata: Record<string, any>;
   created_at: string;
@@ -442,7 +442,7 @@ export interface ChatSession {
 
 export interface ChatMessage {
   id: string;
-  session_id: number;
+  session_id: string; // UUID
   role: 'user' | 'assistant' | 'system';
   content: string;
   created_at: string;
@@ -450,8 +450,8 @@ export interface ChatMessage {
 }
 
 export interface ChatSessionCreate {
-  agent_id?: number;
-  crew_id?: number;
+  agent_id?: string; // UUID
+  crew_id?: string; // UUID
   name: string;
   metadata?: Record<string, any>;
 }
@@ -492,7 +492,7 @@ export interface ChatEvent {
 }
 
 export interface TypingEvent {
-  session_id: number;
+  session_id: string; // UUID
   typing: boolean;
 }
 

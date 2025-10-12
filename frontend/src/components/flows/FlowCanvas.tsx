@@ -107,7 +107,7 @@ const edgeTypes: EdgeTypes = {
 };
 
 interface FlowCanvasProps {
-  flowId?: number;
+  flowId?: string;
   readOnly?: boolean;
   onNodeSelect?: (node: Node | null) => void;
 }

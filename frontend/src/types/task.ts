@@ -2,12 +2,12 @@
 export type TaskOutputFormat = 'text' | 'json' | 'pydantic';
 
 export interface Task {
-  id: number;
+  id: string; // UUID
   name: string;
   description: string;
   expected_output: string;
-  agent_id?: number;
-  crew_id?: number;
+  agent_id?: string; // UUID
+  crew_id?: string; // UUID
   order: number;
   async_execution: boolean;
   output_format: TaskOutputFormat;
@@ -22,8 +22,8 @@ export interface TaskCreate {
   name: string;
   description: string;
   expected_output: string;
-  agent_id?: number;
-  crew_id?: number;
+  agent_id?: string; // UUID
+  crew_id?: string; // UUID
   order?: number;
   async_execution?: boolean;
   output_format?: TaskOutputFormat;
@@ -36,8 +36,8 @@ export interface TaskUpdate {
   name?: string;
   description?: string;
   expected_output?: string;
-  agent_id?: number;
-  crew_id?: number;
+  agent_id?: string; // UUID
+  crew_id?: string; // UUID
   order?: number;
   async_execution?: boolean;
   output_format?: TaskOutputFormat;

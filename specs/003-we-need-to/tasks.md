@@ -62,13 +62,13 @@
 
 **Goal**: Convert all 20+ entity IDs from integers to UUIDs using UUIDv7 in single atomic transaction
 
-- [ ] **T001** Add uuid6 library to backend/requirements.txt
+- [x] **T001** Add uuid6 library to backend/requirements.txt
   - Add `uuid6==2024.1.12` dependency
   - Install dependencies: `pip install -r backend/requirements.txt`
   - **Files**: `backend/requirements.txt`
   - **Acceptance**: uuid6 library available for import
 
-- [ ] **T002** Create UUID utility module in backend/src/utils/uuid.py
+- [x] **T002** Create UUID utility module in backend/src/utils/uuid.py
   - Implement `generate_uuid_v7()` function
   - Implement `uuid_to_string()` and `string_to_uuid()` helpers
   - Add docstrings and type hints

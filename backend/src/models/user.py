@@ -1,6 +1,7 @@
 """User model for authentication and authorization."""
 
-from sqlalchemy import Column, String, Boolean, Integer, ForeignKey, Enum, DateTime
+from sqlalchemy import Column, String, Boolean, ForeignKey, Enum, DateTime
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import relationship, deferred
 from .base import BaseModel
 import enum
@@ -24,7 +25,7 @@ class User(BaseModel):
 
     __tablename__ = "users"
 
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    tenant_id = Column(postgresql.UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
     email = Column(String(255), nullable=False, unique=True, index=True)
     password_hash = Column(String(255), nullable=False)
     full_name = Column(String(255), nullable=False)

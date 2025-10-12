@@ -1,6 +1,7 @@
 """Task model for CrewAI tasks."""
 
 from sqlalchemy import Column, String, Text, Boolean, Integer, ForeignKey, Enum, JSON
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 import enum
@@ -31,12 +32,12 @@ class Task(BaseModel):
 
     # Agent assignment
     agent_id = Column(
-        Integer, ForeignKey("agents.id"), nullable=True, index=True
+        postgresql.UUID(as_uuid=True), ForeignKey("agents.id"), nullable=True, index=True
     )
 
     # Crew association
     crew_id = Column(
-        Integer, ForeignKey("crews.id"), nullable=True, index=True
+        postgresql.UUID(as_uuid=True), ForeignKey("crews.id"), nullable=True, index=True
     )
 
     # Task ordering within crew

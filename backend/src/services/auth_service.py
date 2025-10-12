@@ -2,11 +2,13 @@
 
 import secrets
 from typing import Optional
+from uuid import UUID
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from passlib.context import CryptContext
 
 from ..models import User, Tenant
+from ..models.tenant import TenantStatus
 from ..schemas.auth import (
     RegisterRequest,
     RegisterResponse,
@@ -144,7 +146,7 @@ class AuthService:
             )
 
         # Check tenant status
-        if tenant.status != "active":
+        if tenant.status != TenantStatus.ACTIVE:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Tenant is {tenant.status}",
@@ -167,13 +169,13 @@ class AuthService:
         )
 
     @staticmethod
-    async def get_current_user(db: Session, user_id: int) -> Optional[User]:
+    async def get_current_user(db: Session, user_id: UUID) -> Optional[User]:
         """
         Get current user by ID.
 
         Args:
             db: Database session
-            user_id: User ID from token
+            user_id: User ID (UUID) from token
 
         Returns:
             User object or None

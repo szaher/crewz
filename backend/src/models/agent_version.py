@@ -1,6 +1,7 @@
 """Agent version model for tracking agent configuration changes."""
 
 from sqlalchemy import Column, String, Text, Integer, ForeignKey, JSON, Enum
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 import enum
@@ -23,7 +24,7 @@ class AgentVersion(BaseModel):
     __tablename__ = "agent_versions"
 
     # Reference to the agent
-    agent_id = Column(Integer, ForeignKey("agents.id", ondelete="CASCADE"), nullable=False, index=True)
+    agent_id = Column(postgresql.UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Version metadata
     version_number = Column(Integer, nullable=False)

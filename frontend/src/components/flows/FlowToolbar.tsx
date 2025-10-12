@@ -10,7 +10,7 @@ import Breadcrumbs from '../navigation/Breadcrumbs';
 import ExecuteFlowModal from './ExecuteFlowModal';
 
 interface FlowToolbarProps {
-  flowId?: number;
+  flowId?: string;
   onSave?: () => void;
   onExecute?: () => void;
   onDiscard?: () => void;
