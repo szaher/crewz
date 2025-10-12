@@ -22,6 +22,11 @@ from .prompt_favorite import PromptFavorite
 from .prompt_rating import PromptRating
 from .prompt_feedback import PromptFeedback
 from .prompt_execution import PromptExecution
+from .permission import Permission
+from .role import Role
+from .user_role import user_roles
+from .policy import Policy
+from .authorization_audit_log import AuthorizationAuditLog
 
 __all__ = [
     "Tenant",
@@ -45,4 +50,9 @@ __all__ = [
     "PromptRating",
     "PromptFeedback",
     "PromptExecution",
+    "Permission",
+    "Role",
+    "user_roles",
+    "Policy",
+    "AuthorizationAuditLog",
 ]

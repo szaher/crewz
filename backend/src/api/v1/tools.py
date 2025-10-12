@@ -67,7 +67,7 @@ async def create_tool(
 
 @router.get("/{tool_id}", response_model=ToolResponse)
 async def get_tool(
-    tool_id: int,
+    tool_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -79,7 +79,7 @@ async def get_tool(
 
 @router.put("/{tool_id}", response_model=ToolResponse)
 async def update_tool(
-    tool_id: int,
+    tool_id: str,
     request: ToolUpdate,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
@@ -92,7 +92,7 @@ async def update_tool(
 
 @router.delete("/{tool_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_tool(
-    tool_id: int,
+    tool_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -103,7 +103,7 @@ async def delete_tool(
 
 @router.post("/{tool_id}/execute")
 async def execute_tool(
-    tool_id: int,
+    tool_id: str,
     input_data: dict,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),

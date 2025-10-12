@@ -104,7 +104,7 @@ async def delete_agent(
 
 @router.get("/{agent_id}/versions", response_model=dict)
 async def get_agent_versions(
-    agent_id: int,
+    agent_id: str,
     page: int = 1,
     page_size: int = 10,
     db: Session = Depends(get_db),
@@ -153,7 +153,7 @@ async def get_agent_versions(
 
 @router.post("/{agent_id}/rollback/{version_number}", response_model=AgentResponse)
 async def rollback_agent(
-    agent_id: int,
+    agent_id: str,
     version_number: int,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
@@ -181,7 +181,7 @@ async def rollback_agent(
 
 @router.get("/{agent_id}/tasks")
 async def get_agent_tasks(
-    agent_id: int,
+    agent_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -203,7 +203,7 @@ async def get_agent_tasks(
 
 @router.post("/{agent_id}/execute")
 async def execute_agent(
-    agent_id: int,
+    agent_id: str,
     input_data: dict,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),

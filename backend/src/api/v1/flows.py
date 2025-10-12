@@ -70,7 +70,7 @@ async def create_flow(
 
 @router.get("/{flow_id}", response_model=FlowResponse)
 async def get_flow(
-    flow_id: int,
+    flow_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -82,7 +82,7 @@ async def get_flow(
 
 @router.put("/{flow_id}", response_model=FlowResponse)
 async def update_flow(
-    flow_id: int,
+    flow_id: str,
     request: FlowUpdate,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
@@ -99,7 +99,7 @@ async def update_flow(
 
 @router.delete("/{flow_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_flow(
-    flow_id: int,
+    flow_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -114,7 +114,7 @@ async def delete_flow(
 
 @router.post("/{flow_id}/execute", response_model=ExecutionResponse, status_code=status.HTTP_201_CREATED)
 async def execute_flow(
-    flow_id: int,
+    flow_id: str,
     input_data: dict,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),

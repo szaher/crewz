@@ -108,7 +108,7 @@ async def create_session(
 
 @router.put("/sessions/{session_id}", response_model=ChatSessionResponse)
 async def update_session(
-    session_id: int,
+    session_id: str,
     payload: dict,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
@@ -150,7 +150,7 @@ async def update_session(
 
 @router.put("/sessions/{session_id}/tools", response_model=dict)
 async def update_session_tools(
-    session_id: int,
+    session_id: str,
     body: dict,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
@@ -183,7 +183,7 @@ async def update_session_tools(
 
 @router.get("/sessions/{session_id}/tools", response_model=dict)
 async def get_session_tools(
-    session_id: int,
+    session_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -238,7 +238,7 @@ async def create_folder(
 
 @router.put("/folders/{folder_id}", response_model=dict)
 async def rename_folder(
-    folder_id: int,
+    folder_id: str,
     body: dict,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
@@ -258,7 +258,7 @@ async def rename_folder(
 
 @router.delete("/folders/{folder_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_folder(
-    folder_id: int,
+    folder_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -286,6 +286,26 @@ async def direct_chat(
     - If `provider_id` is omitted, uses the tenant's default active provider.
     - Does not persist messages.
     """
+    # Validate messages
+    if not payload.messages or len(payload.messages) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Messages list cannot be empty"
+        )
+
+    # Validate message format
+    for i, msg in enumerate(payload.messages):
+        if "role" not in msg or "content" not in msg:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Message at index {i} must have 'role' and 'content' fields"
+            )
+        if msg["role"] not in ["system", "user", "assistant"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Message at index {i} has invalid role: {msg['role']}"
+            )
+
     # Resolve provider
     provider_id = payload.provider_id
     if provider_id is None:
@@ -327,7 +347,7 @@ async def direct_chat(
 
 @router.get("/sessions/{session_id}/messages", response_model=List[ChatMessageResponse])
 async def get_messages(
-    session_id: int,
+    session_id: str,
     limit: int = 100,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
@@ -365,7 +385,7 @@ async def send_message(
 
 @router.post("/sessions/{session_id}/generate")
 async def generate_response(
-    session_id: int,
+    session_id: str,
     user_message: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
@@ -416,7 +436,7 @@ async def generate_response(
 
 @router.get("/sessions/{session_id}/generate/stream")
 async def generate_response_stream(
-    session_id: int,
+    session_id: str,
     user_message: str,
     store_user: bool = True,
     db: Session = Depends(get_db),
@@ -513,7 +533,7 @@ async def generate_response_stream(
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_session(
-    session_id: int,
+    session_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -530,7 +550,7 @@ async def delete_session(
 @router.websocket("/sessions/{session_id}/ws")
 async def websocket_chat(
     websocket: WebSocket,
-    session_id: int,
+    session_id: str,
     token: Optional[str] = Query(None),
 ):
     """

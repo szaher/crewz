@@ -77,7 +77,7 @@ async def list_executions(
 
 @router.get("/{execution_id}", response_model=ExecutionResponse)
 async def get_execution(
-    execution_id: int,
+    execution_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -114,7 +114,7 @@ async def get_execution(
 
 @router.get("/{execution_id}/stream")
 async def stream_execution(
-    execution_id: int,
+    execution_id: str,
     request: Request,
     token: str | None = Query(None),
     current_user: dict | None = Depends(get_optional_user),
@@ -148,7 +148,7 @@ async def stream_execution(
             payload = verify_token(token)
             # Minimal user context for downstream checks if needed
             user = {
-                "id": int(payload.get("sub")) if payload.get("sub") else None,
+                "id": payload.get("sub"),
                 "tenant_id": payload.get("tenant_id"),
                 "tenant_schema": payload.get("tenant_schema"),
                 "role": payload.get("role"),
@@ -252,7 +252,7 @@ async def stream_execution(
 
 @router.post("/{execution_id}/cancel", response_model=ExecutionResponse)
 async def cancel_execution(
-    execution_id: int,
+    execution_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):

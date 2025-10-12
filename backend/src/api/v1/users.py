@@ -181,7 +181,7 @@ async def create_user(
 
 @router.put("/{user_id}", response_model=UserAdminResponse)
 async def update_user(
-    user_id: int,
+    user_id: str,
     body: UserUpdateRequest,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
@@ -222,7 +222,7 @@ async def update_user(
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
-    user_id: int,
+    user_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):

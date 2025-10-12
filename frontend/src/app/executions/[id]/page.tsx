@@ -14,9 +14,9 @@ export default function ExecutionPage() {
   const params = useParams();
   const router = useRouter();
 
-  // Safely parse execution ID
+  // Safely parse execution ID (UUID string)
   const rawId = params.id;
-  const executionId = rawId && rawId !== 'undefined' ? Number(rawId) : NaN;
+  const executionId = rawId && rawId !== 'undefined' ? String(rawId) : null;
 
   const { getExecution, cancelExecution } = useExecutions();
   const [execution, setExecution] = useState<Execution | null>(null);
@@ -26,7 +26,7 @@ export default function ExecutionPage() {
 
   const loadExecution = useCallback(async () => {
     // Validate executionId before making API call
-    if (!executionId || isNaN(executionId)) {
+    if (!executionId) {
       setError('Invalid execution ID');
       setLoading(false);
       return;

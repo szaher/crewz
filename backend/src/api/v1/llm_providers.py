@@ -74,7 +74,7 @@ async def create_llm_provider(
 
 @router.get("/{provider_id}", response_model=LLMProviderResponse)
 async def get_llm_provider(
-    provider_id: int,
+    provider_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth)
 ):
@@ -96,7 +96,7 @@ async def get_llm_provider(
 
 @router.put("/{provider_id}", response_model=LLMProviderResponse)
 async def update_llm_provider(
-    provider_id: int,
+    provider_id: str,
     provider_data: LLMProviderUpdate,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth)
@@ -127,7 +127,7 @@ async def update_llm_provider(
 
 @router.delete("/{provider_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_llm_provider(
-    provider_id: int,
+    provider_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth)
 ):
@@ -194,7 +194,7 @@ async def get_default_provider(
 
 @router.post("/{provider_id}/set-default", response_model=LLMProviderResponse)
 async def set_default_provider(
-    provider_id: int,
+    provider_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth)
 ):
@@ -217,7 +217,7 @@ async def set_default_provider(
 
 @router.post("/{provider_id}/test", response_model=dict)
 async def test_llm_provider(
-    provider_id: int,
+    provider_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth)
 ):
@@ -253,7 +253,7 @@ async def test_llm_provider(
 
 @router.get("/{provider_id}/usage", response_model=dict)
 async def get_provider_usage(
-    provider_id: int,
+    provider_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -279,7 +279,7 @@ async def get_provider_usage(
 
 @router.post("/{provider_id}/reassign", response_model=dict)
 async def reassign_dependents(
-    provider_id: int,
+    provider_id: str,
     payload: dict,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
@@ -288,7 +288,7 @@ async def reassign_dependents(
     Bulk reassign dependents (agents, crews) from one provider to another.
 
     Body:
-      - target_provider_id: int (required)
+      - target_provider_id: str (required)
       - scope: 'agents' | 'crews' | 'all' (default: 'all')
 
     Returns counts updated.
@@ -357,7 +357,7 @@ async def reassign_dependents(
 
 @router.get("/{provider_id}/versions", response_model=dict)
 async def get_provider_versions(
-    provider_id: int,
+    provider_id: str,
     page: int = 1,
     page_size: int = 10,
     db: Session = Depends(get_db),
@@ -406,7 +406,7 @@ async def get_provider_versions(
 
 @router.post("/{provider_id}/rollback/{version_number}", response_model=LLMProviderResponse)
 async def rollback_provider(
-    provider_id: int,
+    provider_id: str,
     version_number: int,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth)

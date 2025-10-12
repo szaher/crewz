@@ -2,14 +2,15 @@
 
 from pydantic import BaseModel, Field, EmailStr
 from typing import Optional, List
+from uuid import UUID
 
 
 class UserProfileResponse(BaseModel):
-    id: int
+    id: UUID
     email: str
     full_name: str
     role: str
-    tenant_id: int
+    tenant_id: UUID
     is_active: bool
 
 
@@ -18,7 +19,7 @@ class UserProfileUpdate(BaseModel):
 
 
 class UserAdminResponse(BaseModel):
-    id: int
+    id: UUID
     email: EmailStr
     full_name: str
     role: str

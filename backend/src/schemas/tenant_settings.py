@@ -1,10 +1,11 @@
 """Schemas for tenant settings endpoints."""
 
 from pydantic import BaseModel, Field, conint
+from uuid import UUID
 
 
 class TenantSettingsResponse(BaseModel):
-    id: int
+    id: UUID
     name: str
     schema_name: str
     status: str

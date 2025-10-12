@@ -41,6 +41,11 @@ class User(BaseModel):
     chat_sessions = relationship(
         "ChatSession", back_populates="user", cascade="all, delete-orphan"
     )
+    roles = relationship(
+        "Role",
+        secondary="user_roles",
+        back_populates="users",
+    )
 
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email}, role={self.role})>"

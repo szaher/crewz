@@ -36,7 +36,7 @@ async def list_notifications(
 
 @router.post("/{notification_id}/read", response_model=NotificationOut)
 async def mark_read(
-    notification_id: int,
+    notification_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -83,7 +83,7 @@ async def stream_notifications(
     if user is None and token:
         try:
             payload = verify_token(token)
-            user = {"id": int(payload.get("sub")) if payload.get("sub") else None}
+            user = {"id": payload.get("sub")}
         except HTTPException:
             user = None
     if user is None or not user.get("id"):
