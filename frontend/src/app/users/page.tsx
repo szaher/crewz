@@ -4,12 +4,21 @@ import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Navigation from '@/components/shared/Navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
+import { useRoles } from '@/lib/hooks/useAuthorization';
+
+type RoleInfo = {
+  id: string;
+  slug: string;
+  name: string;
+  is_system_role: boolean;
+};
 
 type UserRow = {
   id: number;
   email: string;
   full_name: string;
-  role: 'admin' | 'member' | 'viewer';
+  role: string;  // Primary role slug
+  roles: RoleInfo[];  // All assigned roles
   is_active: boolean;
   created_at: string;
 };
@@ -23,15 +32,22 @@ export default function UsersPage() {
   const [pageSize, setPageSize] = useState(20);
   const [total, setTotal] = useState(0);
 
+  // Load available roles from authz service
+  const { roles: availableRoles, loading: rolesLoading } = useRoles({ include_system: true });
+
   // Create modal state
   const [showCreate, setShowCreate] = useState(false);
   const [newUser, setNewUser] = useState({
     email: '',
     full_name: '',
-    role: 'member' as 'admin' | 'member' | 'viewer',
+    role_slugs: ['member'] as string[],
     password: '',
   });
   const [creating, setCreating] = useState(false);
+
+  // Role management modal
+  const [editingUserRoles, setEditingUserRoles] = useState<UserRow | null>(null);
+  const [selectedRoleSlugs, setSelectedRoleSlugs] = useState<string[]>([]);
 
   useEffect(() => {
     void loadUsers();
@@ -57,17 +73,27 @@ export default function UsersPage() {
     setCreating(false);
     if (res.data) {
       setShowCreate(false);
-      setNewUser({ email: '', full_name: '', role: 'member', password: '' });
+      setNewUser({ email: '', full_name: '', role_slugs: ['member'], password: '' });
       await loadUsers();
     } else if (res.error) {
       alert(res.error);
     }
   };
 
+  const updateUserRoles = async (userId: number, role_slugs: string[]) => {
+    const res = await apiClient.put(`/api/v1/users/${userId}`, { role_slugs });
+    if (res.error) {
+      alert(res.error);
+    } else {
+      await loadUsers();
+      setEditingUserRoles(null);
+    }
+  };
+
   // Invite flow
   const [showInvite, setShowInvite] = useState(false);
   const [inviting, setInviting] = useState(false);
-  const [inviteUser, setInviteUser] = useState({ email: '', full_name: '', role: 'member' as 'admin'|'member'|'viewer' });
+  const [inviteUser, setInviteUser] = useState({ email: '', full_name: '', role_slugs: ['member'] as string[] });
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const sendInvite = async () => {
     setInviting(true);
@@ -171,15 +197,29 @@ export default function UsersPage() {
                         <td className="px-4 py-3 text-sm text-gray-900">{u.full_name}</td>
                         <td className="px-4 py-3 text-sm text-gray-600">{u.email}</td>
                         <td className="px-4 py-3">
-                          <select
-                            value={u.role}
-                            onChange={(e) => updateUser(u.id, { role: e.target.value as any })}
-                            className="text-sm border-gray-300 rounded-md"
-                          >
-                            <option value="admin">admin</option>
-                            <option value="member">member</option>
-                            <option value="viewer">viewer</option>
-                          </select>
+                          <div className="flex flex-wrap gap-1">
+                            {u.roles && u.roles.length > 0 ? (
+                              u.roles.map((role) => (
+                                <span
+                                  key={role.id}
+                                  className="inline-flex items-center px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded"
+                                >
+                                  {role.name}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs text-gray-400">{u.role || 'No role'}</span>
+                            )}
+                            <button
+                              onClick={() => {
+                                setEditingUserRoles(u);
+                                setSelectedRoleSlugs(u.roles?.map(r => r.slug) || [u.role]);
+                              }}
+                              className="ml-1 text-xs text-blue-600 hover:text-blue-800"
+                            >
+                              Edit
+                            </button>
+                          </div>
                         </td>
                         <td className="px-4 py-3">
                           <input
@@ -236,16 +276,29 @@ export default function UsersPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm text-gray-700">Role</label>
-                      <select
-                        value={newUser.role}
-                        onChange={(e) => setNewUser({ ...newUser, role: e.target.value as any })}
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
-                      >
-                        <option value="admin">admin</option>
-                        <option value="member">member</option>
-                        <option value="viewer">viewer</option>
-                      </select>
+                      <label className="block text-sm text-gray-700 mb-2">Roles</label>
+                      <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-300 rounded-md p-2">
+                        {availableRoles.map((role) => (
+                          <label key={role.id} className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={newUser.role_slugs.includes(role.slug)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setNewUser({ ...newUser, role_slugs: [...newUser.role_slugs, role.slug] });
+                                } else {
+                                  setNewUser({ ...newUser, role_slugs: newUser.role_slugs.filter(s => s !== role.slug) });
+                                }
+                              }}
+                              className="rounded"
+                            />
+                            <span className="text-sm">{role.name}</span>
+                            {role.is_system_role && (
+                              <span className="text-xs text-gray-500">(system)</span>
+                            )}
+                          </label>
+                        ))}
+                      </div>
                     </div>
                     <div>
                       <label className="block text-sm text-gray-700">Temporary Password</label>
@@ -299,16 +352,29 @@ export default function UsersPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm text-gray-700">Role</label>
-                      <select
-                        value={inviteUser.role}
-                        onChange={(e) => setInviteUser({ ...inviteUser, role: e.target.value as any })}
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
-                      >
-                        <option value="admin">admin</option>
-                        <option value="member">member</option>
-                        <option value="viewer">viewer</option>
-                      </select>
+                      <label className="block text-sm text-gray-700 mb-2">Roles</label>
+                      <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-300 rounded-md p-2">
+                        {availableRoles.map((role) => (
+                          <label key={role.id} className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={inviteUser.role_slugs.includes(role.slug)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setInviteUser({ ...inviteUser, role_slugs: [...inviteUser.role_slugs, role.slug] });
+                                } else {
+                                  setInviteUser({ ...inviteUser, role_slugs: inviteUser.role_slugs.filter(s => s !== role.slug) });
+                                }
+                              }}
+                              className="rounded"
+                            />
+                            <span className="text-sm">{role.name}</span>
+                            {role.is_system_role && (
+                              <span className="text-xs text-gray-500">(system)</span>
+                            )}
+                          </label>
+                        ))}
+                      </div>
                     </div>
                     {inviteLink ? (
                       <div>
@@ -323,7 +389,7 @@ export default function UsersPage() {
                   </div>
                   <div className="p-4 border-t border-gray-200 flex justify-end gap-2">
                     <button
-                      onClick={() => { setShowInvite(false); setInviteLink(null); setInviteUser({ email:'', full_name:'', role:'member' }); }}
+                      onClick={() => { setShowInvite(false); setInviteLink(null); setInviteUser({ email:'', full_name:'', role_slugs:['member'] }); }}
                       className="px-4 py-2 rounded-md border border-gray-300"
                     >
                       Close
@@ -337,6 +403,64 @@ export default function UsersPage() {
                         {inviting ? 'Sending...' : 'Send Invite'}
                       </button>
                     )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {editingUserRoles && (
+              <div className="fixed inset-0 bg-black/30 flex items-center justify-center">
+                <div className="bg-white rounded-lg shadow-lg border border-gray-200 w-full max-w-md">
+                  <div className="p-4 border-b border-gray-200 font-medium">
+                    Manage Roles for {editingUserRoles.full_name}
+                  </div>
+                  <div className="p-4">
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {availableRoles.map((role) => (
+                        <label key={role.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded">
+                          <input
+                            type="checkbox"
+                            checked={selectedRoleSlugs.includes(role.slug)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedRoleSlugs([...selectedRoleSlugs, role.slug]);
+                              } else {
+                                setSelectedRoleSlugs(selectedRoleSlugs.filter(s => s !== role.slug));
+                              }
+                            }}
+                            className="rounded"
+                          />
+                          <div className="flex-1">
+                            <div className="text-sm font-medium">{role.name}</div>
+                            <div className="text-xs text-gray-500">
+                              {role.slug} {role.is_system_role && '(system)'}
+                            </div>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="p-4 border-t border-gray-200 flex justify-end gap-2">
+                    <button
+                      onClick={() => {
+                        setEditingUserRoles(null);
+                        setSelectedRoleSlugs([]);
+                      }}
+                      className="px-4 py-2 rounded-md border border-gray-300"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => updateUserRoles(editingUserRoles.id, selectedRoleSlugs)}
+                      disabled={selectedRoleSlugs.length === 0}
+                      className={`px-4 py-2 rounded-md text-white ${
+                        selectedRoleSlugs.length === 0
+                          ? 'bg-blue-300 cursor-not-allowed'
+                          : 'bg-blue-600 hover:bg-blue-700'
+                      }`}
+                    >
+                      Save Roles
+                    </button>
                   </div>
                 </div>
               </div>

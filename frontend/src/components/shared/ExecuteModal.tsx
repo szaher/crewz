@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 
 interface ExecutionInput {
@@ -39,6 +40,7 @@ export default function ExecuteModal({
   isOpen,
   onClose
 }: ExecuteModalProps) {
+  const router = useRouter();
   const [inputData, setInputData] = useState<Record<string, string | string[]>>({});
   const [executing, setExecuting] = useState(false);
   const [result, setResult] = useState<ExecutionResult | null>(null);
@@ -133,11 +135,22 @@ export default function ExecuteModal({
 
       if (response.data) {
         const data: any = response.data;
-        // If backend returns an execution record (async pattern), show queued message
-        if (data && typeof data === 'object' && 'id' in data && 'status' in data && !('output' in data)) {
+        // If backend returns an execution record (async pattern), redirect to execution page
+        if (data && typeof data === 'object' && ('execution_id' in data || 'id' in data) && 'status' in data) {
+          const executionId = data.execution_id || data.id;
+          const status = String(data.status);
+
+          // If execution started successfully, redirect to execution detail page
+          if (status === 'pending' || status === 'running') {
+            handleClose();
+            router.push(`/executions/${executionId}`);
+            return;
+          }
+
+          // For other statuses, show the result
           setResult({
             status: 'success',
-            output: `Queued execution #${data.id} (status: ${String(data.status)}). Track progress in Executions.`,
+            output: `Execution #${executionId} (status: ${status}). Track progress in Executions.`,
             execution_time_ms: 0,
           });
         } else {

@@ -209,7 +209,10 @@ async def execute_agent(
     current_user: dict = Depends(require_auth),
 ):
     """
-    Execute an agent with a task.
+    Execute an agent with a task asynchronously.
+
+    Returns immediately with execution ID and status "pending".
+    The execution happens in the background.
 
     Input can contain:
     - task_id: ID of existing task to execute (will use task description and substitute variables)
@@ -219,195 +222,29 @@ async def execute_agent(
     - expected_output: Expected output description (optional)
     - provider_id: Optional LLM provider ID to use instead of agent's default provider
     """
-    import time
-    from ...services.llm_service import LLMService
-    from ...services.docker_service import DockerService
+    from uuid import UUID
     from ...services.execution_service import ExecutionService
-    from ...crewai.tool_adapter import ToolAdapter
-    from ...crewai.agent_factory import AgentFactory
-    from ...models.execution import ExecutionStatus
 
-    agent_service = AgentService(db)
-    agent = await agent_service.get_agent(agent_id)
-
-    # Create execution record
+    # Create execution and start it asynchronously
     execution_service = ExecutionService(db, None, None)
-    execution = execution_service.create_agent_execution(
-        agent_id=agent_id,
-        user_id=current_user.get("user_id", 1),
+    execution = await execution_service.execute_agent_async(
+        agent_id=UUID(agent_id),
+        user_id=current_user.get("id"),
         input_data=input_data,
     )
 
-    start_time = time.time()
+    # Get agent name for response
+    agent_service = AgentService(db)
+    agent = await agent_service.get_agent(UUID(agent_id))
 
-    try:
-        # Initialize dependencies
-        llm_service = LLMService(db)
-        docker_service = DockerService()
-        tool_adapter = ToolAdapter(docker_service)
-        agent_factory = AgentFactory(llm_service, tool_adapter)
-
-        # Get provider override if specified
-        provider_id_override = input_data.get('provider_id')
-
-        # Create CrewAI agent (with provider override if specified)
-        crewai_agent = await agent_factory.from_db_model(agent, provider_id_override)
-
-        # Helper function to substitute variables in text
-        def substitute_variables(text: str, vars: dict) -> str:
-            """Substitute {variable_name} patterns with values from vars dict."""
-            if not text or not vars:
-                return text
-            result = text
-            for key, value in vars.items():
-                result = result.replace(f'{{{key}}}', str(value))
-            return result
-
-        # Get variable substitutions from input
-        variables = input_data.get('variables', {})
-
-        # Check if using existing task or direct task description
-        task_description = None
-        expected_output = None
-
-        if 'task_id' in input_data:
-            # Load task from database
-            from ...services.task_service import TaskService
-            task_service = TaskService(db)
-            db_task = await task_service.get_task(input_data['task_id'])
-
-            # Substitute variables in task description and expected output
-            task_description = substitute_variables(db_task.description, variables)
-            expected_output = substitute_variables(db_task.expected_output, variables)
-        else:
-            # Use direct task description from input
-            task_description = substitute_variables(
-                input_data.get('task', 'Perform your assigned task'),
-                variables
-            )
-            expected_output = substitute_variables(
-                input_data.get('expected_output', 'A detailed response to the task'),
-                variables
-            )
-
-        context = input_data.get('context', '')
-
-        # For single agent execution, we need to create a simple crew
-        from crewai import Crew, Task
-
-        # Create a task for the agent
-        task = Task(
-            description=task_description,
-            agent=crewai_agent,
-            expected_output=expected_output
-        )
-
-        # Create a crew with just this agent
-        crew = Crew(
-            agents=[crewai_agent],
-            tasks=[task],
-            verbose=True
-        )
-
-        # Update execution to running
-        execution_service.update_execution_status(execution.id, ExecutionStatus.RUNNING.value)
-
-        # Execute the crew (which runs the single agent)
-        result = crew.kickoff()
-
-        execution_time_ms = int((time.time() - start_time) * 1000)
-
-        # Update execution to completed
-        execution_service.update_execution_status(
-            execution.id,
-            ExecutionStatus.COMPLETED.value,
-            output_data={"output": str(result)},
-            execution_time_ms=execution_time_ms
-        )
-
-        # Update execution to completed and notify
-        execution_service.update_execution_status(
-            execution.id,
-            ExecutionStatus.COMPLETED.value,
-            output_data={"output": str(result)},
-            execution_time_ms=execution_time_ms,
-        )
-
-        try:
-            ns = NotificationService(db)
-            title = f"Agent #{agent_id} completed"
-            await ns.create_notification(
-                user_id=current_user.get("user_id", 1),
-                tenant_id=getattr(agent, 'tenant_id', 1),
-                data=NotificationCreate(
-                    type="success",
-                    title=title,
-                    message="Agent run finished successfully.",
-                    data={"execution_id": execution.id, "type": "agent"},
-                ),
-            )
-            NotificationPublisher().publish(current_user.get("user_id", 1), {
-                "type": "success",
-                "title": title,
-                "message": "Agent run finished successfully.",
-                "data": {"execution_id": execution.id, "type": "agent"},
-            })
-        except Exception:
-            pass
-
-        return {
-            "execution_id": execution.id,
-            "agent_id": agent_id,
-            "agent_name": agent.name,
-            "input_data": input_data,
-            "status": "success",
-            "output": str(result),
-            "execution_time_ms": execution_time_ms
-        }
-
-    except Exception as e:
-        execution_time_ms = int((time.time() - start_time) * 1000)
-
-        # Update execution to failed
-        execution_service.update_execution_status(
-            execution.id,
-            ExecutionStatus.FAILED.value,
-            error=str(e),
-            execution_time_ms=execution_time_ms
-        )
-
-        # Notify failure
-        try:
-            ns = NotificationService(db)
-            title = f"Agent #{agent_id} failed"
-            await ns.create_notification(
-                user_id=current_user.get("user_id", 1),
-                tenant_id=getattr(agent, 'tenant_id', 1),
-                data=NotificationCreate(
-                    type="error",
-                    title=title,
-                    message=str(e),
-                    data={"execution_id": execution.id, "type": "agent"},
-                ),
-            )
-            NotificationPublisher().publish(current_user.get("user_id", 1), {
-                "type": "error",
-                "title": title,
-                "message": str(e),
-                "data": {"execution_id": execution.id, "type": "agent"},
-            })
-        except Exception:
-            pass
-
-        return {
-            "execution_id": execution.id,
-            "agent_id": agent_id,
-            "agent_name": agent.name,
-            "input_data": input_data,
-            "status": "failed",
-            "error": str(e),
-            "execution_time_ms": execution_time_ms
-        }
+    return {
+        "execution_id": str(execution.id),
+        "agent_id": agent_id,
+        "agent_name": agent.name,
+        "input_data": input_data,
+        "status": execution.status,
+        "message": "Execution started in background. Check execution status for results."
+    }
 
 
 # Note: Crew endpoints live in backend/src/api/v1/crews.py

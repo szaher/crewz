@@ -72,3 +72,28 @@ class NotificationService:
         self.db.commit()
         return updated
 
+    async def cleanup_old_notifications(self, retention_days: int = 90) -> int:
+        """
+        Delete notifications older than retention_days.
+
+        This method should be scheduled to run daily via cron or Celery beat.
+
+        Args:
+            retention_days: Number of days to retain notifications (default: 90)
+
+        Returns:
+            Number of notifications deleted
+        """
+        from datetime import timedelta
+
+        cutoff_date = datetime.utcnow() - timedelta(days=retention_days)
+
+        deleted_count = (
+            self.db.query(Notification)
+            .filter(Notification.created_at < cutoff_date)
+            .delete(synchronize_session=False)
+        )
+
+        self.db.commit()
+        return deleted_count
+

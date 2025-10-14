@@ -213,14 +213,14 @@ class ExecutionService:
                             type="success",
                             title=title,
                             message="The flow execution finished successfully.",
-                            data={"execution_id": execution.id, "type": "flow"},
+                            data={"execution_id": str(execution.id), "type": "flow"},
                         ),
                     )
                     NotificationPublisher().publish(execution.user_id, {
                         "type": "success",
                         "title": title,
                         "message": "The flow execution finished successfully.",
-                        "data": {"execution_id": execution.id, "type": "flow"},
+                        "data": {"execution_id": str(execution.id), "type": "flow"},
                     })
                 except Exception:
                     pass
@@ -351,8 +351,8 @@ class ExecutionService:
 
                 crewai_crew.tasks = tasks
 
-                # Execute crew (synchronously)
-                result = crewai_crew.kickoff()
+                # Execute crew in a separate thread to avoid blocking
+                result = await asyncio.to_thread(crewai_crew.kickoff)
 
                 # Update execution
                 execution.output_data = {"output": str(result), "task_count": len(tasks)}
@@ -375,14 +375,14 @@ class ExecutionService:
                             type="success",
                             title=title,
                             message="The crew execution finished successfully.",
-                            data={"execution_id": execution.id, "type": "crew"},
+                            data={"execution_id": str(execution.id), "type": "crew"},
                         ),
                     )
                     NotificationPublisher().publish(execution.user_id, {
                         "type": "success",
                         "title": title,
                         "message": "The crew execution finished successfully.",
-                        "data": {"execution_id": execution.id, "type": "crew"},
+                        "data": {"execution_id": str(execution.id), "type": "crew"},
                     })
                 except Exception:
                     pass
@@ -417,14 +417,14 @@ class ExecutionService:
                         type="error",
                         title=title,
                         message=execution.error,
-                        data={"execution_id": execution.id, "type": execution.execution_type},
+                        data={"execution_id": str(execution.id), "type": execution.execution_type},
                     ),
                 )
                 NotificationPublisher().publish(execution.user_id, {
                     "type": "error",
                     "title": title,
                     "message": execution.error,
-                    "data": {"execution_id": execution.id, "type": execution.execution_type},
+                    "data": {"execution_id": str(execution.id), "type": execution.execution_type},
                 })
             except Exception:
                 pass
@@ -438,8 +438,8 @@ class ExecutionService:
 
     def create_agent_execution(
         self,
-        agent_id: int,
-        user_id: int,
+        agent_id,  # UUID
+        user_id,  # UUID
         input_data: Dict[str, Any],
     ) -> Execution:
         """Create execution record for agent execution."""
@@ -455,10 +455,183 @@ class ExecutionService:
         self.db.refresh(execution)
         return execution
 
+    async def execute_agent_async(
+        self,
+        agent_id,  # UUID
+        user_id,  # UUID
+        input_data: Dict[str, Any],
+    ) -> Execution:
+        """Create and execute agent asynchronously."""
+        # Create execution record
+        execution = self.create_agent_execution(agent_id, user_id, input_data)
+
+        # Start execution in background
+        asyncio.create_task(self._execute_agent_async(execution.id, agent_id, input_data))
+
+        return execution
+
+    async def _execute_agent_async(self, execution_id: int, agent_id, input_data: Dict[str, Any]) -> None:
+        """Execute agent in background."""
+        import time
+        from ..services.llm_service import LLMService
+        from ..services.docker_service import DockerService
+        from ..services.agent_service import AgentService
+        from ..crewai.tool_adapter import ToolAdapter
+        from ..crewai.agent_factory import AgentFactory
+        from crewai import Crew, Task
+        from ..db.postgres import SessionLocal
+
+        # Create a new database session for this background task
+        db = SessionLocal()
+
+        try:
+            execution = db.query(Execution).filter(Execution.id == execution_id).first()
+            if not execution:
+                return
+
+            start_time = time.time()
+
+            # Update to running
+            execution.status = ExecutionStatus.RUNNING.value
+            db.commit()
+
+            # Get agent
+            agent_service = AgentService(db)
+            agent = await agent_service.get_agent(agent_id)
+
+            # Initialize dependencies
+            llm_service = LLMService(db)
+            docker_service = DockerService()
+            tool_adapter = ToolAdapter(docker_service)
+            agent_factory = AgentFactory(llm_service, tool_adapter)
+
+            # Get provider override if specified
+            provider_id_override = input_data.get('provider_id')
+
+            # Create CrewAI agent
+            crewai_agent = await agent_factory.from_db_model(agent, provider_id_override)
+
+            # Helper function to substitute variables
+            def substitute_variables(text: str, vars: dict) -> str:
+                if not text or not vars:
+                    return text
+                result = text
+                for key, value in vars.items():
+                    result = result.replace(f'{{{key}}}', str(value))
+                return result
+
+            # Get variables
+            variables = input_data.get('variables', {})
+
+            # Get task description
+            task_description = None
+            expected_output = None
+
+            if 'task_id' in input_data:
+                from ..services.task_service import TaskService
+                task_service = TaskService(db)
+                db_task = await task_service.get_task(input_data['task_id'])
+                task_description = substitute_variables(db_task.description, variables)
+                expected_output = substitute_variables(db_task.expected_output, variables)
+            else:
+                task_description = substitute_variables(
+                    input_data.get('task', 'Perform your assigned task'),
+                    variables
+                )
+                expected_output = substitute_variables(
+                    input_data.get('expected_output', 'A detailed response to the task'),
+                    variables
+                )
+
+            # Create task and crew
+            task = Task(
+                description=task_description,
+                agent=crewai_agent,
+                expected_output=expected_output
+            )
+
+            crew = Crew(
+                agents=[crewai_agent],
+                tasks=[task],
+                verbose=True
+            )
+
+            # Execute in a separate thread to avoid blocking the event loop
+            result = await asyncio.to_thread(crew.kickoff)
+            execution_time_ms = int((time.time() - start_time) * 1000)
+
+            # Update to completed
+            execution.status = ExecutionStatus.COMPLETED.value
+            execution.output_data = {"output": str(result)}
+            execution.execution_time_ms = execution_time_ms
+            db.commit()
+
+            # Send success notification
+            try:
+                from .notification_service import NotificationService
+                from .notification_events import NotificationPublisher
+                from ..schemas.notifications import NotificationCreate
+                ns = NotificationService(db)
+                title = f"Agent #{agent_id} completed"
+                await ns.create_notification(
+                    user_id=execution.user_id,
+                    tenant_id=getattr(agent, 'tenant_id', 1),
+                    data=NotificationCreate(
+                        type="success",
+                        title=title,
+                        message="Agent run finished successfully.",
+                        data={"execution_id": str(execution.id), "type": "agent"},
+                    ),
+                )
+                NotificationPublisher().publish(execution.user_id, {
+                    "type": "success",
+                    "title": title,
+                    "message": "Agent run finished successfully.",
+                    "data": {"execution_id": str(execution.id), "type": "agent"},
+                })
+            except Exception:
+                pass
+
+        except Exception as e:
+            execution_time_ms = int((time.time() - start_time) * 1000)
+            execution.status = ExecutionStatus.FAILED.value
+            execution.error = str(e)
+            execution.execution_time_ms = execution_time_ms
+            db.commit()
+
+            # Send failure notification
+            try:
+                from .notification_service import NotificationService
+                from .notification_events import NotificationPublisher
+                from ..schemas.notifications import NotificationCreate
+                ns = NotificationService(db)
+                title = f"Agent #{agent_id} failed"
+                await ns.create_notification(
+                    user_id=execution.user_id,
+                    tenant_id=1,
+                    data=NotificationCreate(
+                        type="error",
+                        title=title,
+                        message=str(e),
+                        data={"execution_id": str(execution.id), "type": "agent"},
+                    ),
+                )
+                NotificationPublisher().publish(execution.user_id, {
+                    "type": "error",
+                    "title": title,
+                    "message": str(e),
+                    "data": {"execution_id": str(execution.id), "type": "agent"},
+                })
+            except Exception:
+                pass
+        finally:
+            # Close the database session
+            db.close()
+
     def create_tool_execution(
         self,
-        tool_id: int,
-        user_id: int,
+        tool_id,
+        user_id,
         input_data: Dict[str, Any],
     ) -> Execution:
         """Create execution record for tool execution."""
@@ -474,10 +647,122 @@ class ExecutionService:
         self.db.refresh(execution)
         return execution
 
+    async def execute_tool_async(
+        self,
+        tool_id,
+        user_id,
+        input_data: Dict[str, Any],
+    ) -> Execution:
+        """Create and execute tool asynchronously."""
+        # Create execution record
+        execution = self.create_tool_execution(tool_id, user_id, input_data)
+
+        # Start execution in background
+        asyncio.create_task(self._execute_tool_async(execution.id, tool_id, input_data))
+
+        return execution
+
+    async def _execute_tool_async(self, execution_id: int, tool_id, input_data: Dict[str, Any]) -> None:
+        """Execute tool in background."""
+        import time
+        from ..services.tool_service import ToolService
+        from ..db.postgres import SessionLocal
+
+        # Create a new database session for this background task
+        db = SessionLocal()
+
+        try:
+            execution = db.query(Execution).filter(Execution.id == execution_id).first()
+            if not execution:
+                return
+
+            start_time = time.time()
+
+            try:
+                # Update to running
+                execution.status = ExecutionStatus.RUNNING.value
+                db.commit()
+
+                # Get tool
+                tool_service = ToolService(db)
+                tool = await tool_service.get_tool(tool_id)
+
+                result = None
+
+                if tool.tool_type == "custom":
+                    # Execute custom Python tool
+                    import sys
+                    import site
+                    user_site = site.getusersitepackages()
+                    if user_site not in sys.path:
+                        sys.path.insert(0, user_site)
+
+                    namespace = {
+                        '__builtins__': __builtins__,
+                        '__name__': '__main__',
+                        '__file__': '<tool>',
+                    }
+
+                    exec(tool.code, namespace)
+
+                    # Find the function
+                    func_name = None
+                    for name, obj in namespace.items():
+                        if callable(obj) and not name.startswith('_'):
+                            func_name = name
+                            break
+
+                    if not func_name:
+                        raise ValueError("No callable function found in tool code")
+
+                    func = namespace[func_name]
+
+                    # Execute with input_data in a separate thread to avoid blocking
+                    if isinstance(input_data, dict):
+                        result = await asyncio.to_thread(func, **input_data)
+                    else:
+                        result = await asyncio.to_thread(func, input_data)
+
+                elif tool.tool_type == "docker":
+                    # Execute Docker tool
+                    from ..services.docker_service import DockerService
+                    docker_service = DockerService()
+
+                    import json
+                    input_str = json.dumps(input_data) if isinstance(input_data, dict) else str(input_data)
+
+                    result = await docker_service.execute_tool(
+                        tool_id=str(tool_id),
+                        input_data=input_str,
+                        docker_image=tool.docker_image,
+                        docker_command=tool.docker_command,
+                        timeout=30
+                    )
+                else:
+                    raise ValueError(f"Unsupported tool type: {tool.tool_type}")
+
+                execution_time_ms = int((time.time() - start_time) * 1000)
+
+                # Update to completed
+                execution.status = ExecutionStatus.COMPLETED.value
+                execution.output_data = {"output": str(result)}
+                execution.execution_time_ms = execution_time_ms
+                db.commit()
+
+            except Exception as e:
+                execution_time_ms = int((time.time() - start_time) * 1000)
+                execution.status = ExecutionStatus.FAILED.value
+                execution.error = str(e)
+                execution.execution_time_ms = execution_time_ms
+                db.commit()
+        finally:
+            # Close the database session
+            db.close()
+
     def create_task_execution(
         self,
-        task_id: int,
-        user_id: int,
+        task_id,
+        user_id,
         input_data: Dict[str, Any],
     ) -> Execution:
         """Create execution record for task execution."""

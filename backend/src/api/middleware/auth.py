@@ -59,6 +59,9 @@ async def get_current_user(
             detail="User account is inactive",
         )
 
+    # Check if user has super-admin role
+    is_super_admin = user.is_super_admin if hasattr(user, 'is_super_admin') else False
+
     return {
         "id": user.id,
         "email": user.email,
@@ -66,6 +69,7 @@ async def get_current_user(
         "role": role,
         "tenant_id": tenant_id,
         "tenant_schema": tenant_schema,
+        "is_super_admin": is_super_admin,
     }
 
 

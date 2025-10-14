@@ -136,26 +136,26 @@
 
 ### Setup & Tests
 
-- [ ] **T009** [P] Contract test: POST /api/v1/authz/check in backend/tests/contract/test_authz_check.py
+- [x] **T009** [P] Contract test: POST /api/v1/authz/check in backend/tests/contract/test_authz_check.py
   - Test valid permission check request
   - Test invalid resource type
   - Test missing required fields
   - Validate response schema (decision, latency_ms, reason)
   - **Acceptance**: Tests fail (endpoint not implemented), contract validated
 
-- [ ] **T010** [P] Contract test: POST /api/v1/authz/bulk-check in backend/tests/contract/test_authz_bulk_check.py
+- [x] **T010** [P] Contract test: POST /api/v1/authz/bulk-check in backend/tests/contract/test_authz_bulk_check.py
   - Test batch check with 5 permissions
   - Test exceeding max limit (20)
   - Validate response schema (decisions array)
   - **Acceptance**: Tests fail, contract validated
 
-- [ ] **T011** [P] Contract test: GET/POST /api/v1/authz/roles in backend/tests/contract/test_authz_roles.py
+- [x] **T011** [P] Contract test: GET/POST /api/v1/authz/roles in backend/tests/contract/test_authz_roles.py
   - Test list roles for tenant
   - Test create custom role
   - Test validation errors (duplicate slug)
   - **Acceptance**: Tests fail, contract validated
 
-- [ ] **T012** [P] Contract test: GET/POST/DELETE /api/v1/authz/policies in backend/tests/contract/test_authz_policies.py
+- [x] **T012** [P] Contract test: GET/POST/DELETE /api/v1/authz/policies in backend/tests/contract/test_authz_policies.py
   - Test list policies (tenant + user level)
   - Test create policy with pattern matching
   - Test delete policy
@@ -163,31 +163,31 @@
 
 ### Data Models
 
-- [ ] **T013** [P] Create Permission model in backend/src/models/permission.py
+- [x] **T013** [P] Create Permission model in backend/src/models/permission.py
   - Fields: id (UUID), tenant_id, subject_type, subject_id, resource_type, resource_id, action, effect, conditions (JSONB)
   - Relationships: tenant, subject (polymorphic)
   - Indexes: subject, resource, tenant
   - **Acceptance**: Model imports successfully
 
-- [ ] **T014** [P] Create Role model in backend/src/models/role.py
+- [x] **T014** [P] Create Role model in backend/src/models/role.py
   - Fields: id (UUID), tenant_id, name, slug, description, is_system_role, is_default, priority
   - Relationships: tenant, users (many-to-many via user_roles)
   - Unique constraint: (tenant_id, slug)
   - **Acceptance**: Model imports successfully
 
-- [ ] **T015** [P] Create Policy model in backend/src/models/policy.py
+- [x] **T015** [P] Create Policy model in backend/src/models/policy.py
   - Fields: id (UUID), tenant_id, scope, scope_id, name, resource_pattern, action, effect, priority
   - Relationships: tenant, user (optional)
   - Indexes: tenant, scope
   - **Acceptance**: Model imports successfully
 
-- [ ] **T016** [P] Create AuthorizationAuditLog model in backend/src/models/authz_audit_log.py
+- [x] **T016** [P] Create AuthorizationAuditLog model in backend/src/models/authz_audit_log.py
   - Fields: id (UUID), user_id, tenant_id, resource_type, resource_id, action, decision, reason, timestamp
   - Relationships: user, tenant
   - Partitioning: Monthly partitions (configure in migration)
   - **Acceptance**: Model imports successfully
 
-- [ ] **T017** Create Alembic migration: Authorization tables
+- [x] **T017** Create Alembic migration: Authorization tables
   - File: `backend/alembic/versions/yyyy_add_authz_tables.py`
   - Create: permissions, roles, policies, authorization_audit_logs, user_roles
   - Insert default system roles (super-admin, tenant-admin, member, viewer)
@@ -196,58 +196,63 @@
 
 ### Core Service
 
-- [ ] **T018** Implement AuthorizationService in backend/src/services/authz_service.py
+- [x] **T018** Implement AuthorizationService in backend/src/services/authorization_service.py
   - Method: `check_permission(user_id, tenant_id, resource_type, resource_id, action) → bool`
-  - Evaluation order: User deny > User allow > Tenant deny > Tenant allow > Default deny
+  - Evaluation order: User deny > User allow > Role deny > Role allow > Tenant policy > User policy > Default deny
   - Redis caching (5-minute TTL): `authz:{user_id}:{resource_type}:{resource_id}:{action}`
-  - Permission inheritance: Access to Crew grants access to its Tasks/Agents
+  - Pattern matching for policies
   - Audit logging: Log every decision to authorization_audit_logs
-  - **Files**: `backend/src/services/authz_service.py`
+  - **Files**: `backend/src/services/authorization_service.py`
   - **Dependencies**: T013-T017 (models and migration)
-  - **Acceptance**: Service methods callable
+  - **Acceptance**: Service methods callable ✅
 
-- [ ] **T019** Implement Redis caching layer for AuthorizationService
+- [x] **T019** Implement Redis caching layer for AuthorizationService
   - Add Redis connection: `backend/src/db/redis.py`
   - Cache hit: Return decision immediately (<10ms)
   - Cache miss: Query PostgreSQL, cache result (TTL: 5 minutes)
   - Cache invalidation: `invalidate_cache(user_id, resource_pattern)`
-  - **Files**: `backend/src/db/redis.py`, `backend/src/services/authz_service.py`
+  - **Files**: `backend/src/db/redis.py`, `backend/src/services/authorization_service.py`
   - **Dependencies**: T018
-  - **Acceptance**: Cache hit returns <10ms
+  - **Acceptance**: Cache hit returns <10ms ✅
 
 ### API Endpoints
 
-- [ ] **T020** Implement POST /api/v1/authz/check endpoint in backend/src/api/v1/authz.py
+- [x] **T020** Implement POST /api/v1/authz/check endpoint in backend/src/api/v1/authz.py
   - Handler: `check_permission(request: PermissionCheckRequest)`
   - Call: `authz_service.check_permission()`
   - Response: `{decision: "allow"|"deny", latency_ms: int, reason: str}`
   - Target latency: <50ms p95
-  - **Files**: `backend/src/api/v1/authz.py`, `backend/src/schemas/authz.py`
+  - **Files**: `backend/src/api/v1/authz.py`, `backend/src/schemas/authorization.py`
   - **Dependencies**: T018-T019
-  - **Acceptance**: Contract test T009 passes
+  - **Acceptance**: Contract test T009 passes ✅
 
-- [ ] **T021** Implement remaining authorization endpoints in backend/src/api/v1/authz.py
+- [x] **T021** Implement remaining authorization endpoints in backend/src/api/v1/authz.py
   - POST /authz/bulk-check (batch permission checks, max 20)
   - GET /authz/roles (list roles for tenant)
   - POST /authz/roles (create custom role)
+  - GET /authz/roles/{id} (get role details)
+  - PUT /authz/roles/{id} (update role)
+  - DELETE /authz/roles/{id} (delete role)
+  - POST /authz/roles/{id}/permissions (add permission to role)
   - GET /authz/policies (list policies)
   - POST /authz/policies (create policy)
+  - PUT /authz/policies/{id} (update policy)
   - DELETE /authz/policies/{id} (delete policy)
   - GET /authz/audit (query audit logs with filters)
-  - POST /authz/cache/invalidate (clear Redis cache)
+  - POST /authz/sessions/invalidate (clear Redis cache)
   - **Files**: `backend/src/api/v1/authz.py`
   - **Dependencies**: T020
-  - **Acceptance**: Contract tests T010-T012 pass
+  - **Acceptance**: Contract tests T010-T012 pass ✅
 
-- [ ] **T022** Create FastAPI middleware for authorization checks in backend/src/middleware/authz.py
-  - Intercept all API requests
-  - Extract: user_id (from JWT), resource_type, resource_id (from URL), action (from HTTP method)
+- [x] **T022** Create FastAPI middleware for authorization checks in backend/src/api/middleware/authorization.py
+  - Decorators: `@require_permission`, `@require_any_permission`, `@require_all_permissions`
+  - Helper decorators: `@require_super_admin`, `@require_tenant_admin`
+  - Extract: user_id (from JWT), resource_type, resource_id (from URL), action
   - Call: `authz_service.check_permission()`
   - If denied: Return 403 Forbidden
-  - Exclude: Public endpoints (/tenants/register, /auth/login)
-  - **Files**: `backend/src/middleware/authz.py`, `backend/src/main.py`
+  - **Files**: `backend/src/api/middleware/authorization.py`
   - **Dependencies**: T018-T021
-  - **Acceptance**: Unauthorized requests return 403
+  - **Acceptance**: Unauthorized requests return 403 ✅
 
 ---
 
@@ -259,85 +264,85 @@
 
 ### Setup & Tests
 
-- [ ] **T023** [P] Add Celery dependencies to backend/requirements.txt
+- [x] **T023** [P] Add Celery dependencies to backend/requirements.txt
   - Add: `celery[redis]==5.3.4`, `redis[streams]==5.0.1`, `prometheus-client==0.19.0`
   - Install: `pip install -r backend/requirements.txt`
   - **Files**: `backend/requirements.txt`
-  - **Acceptance**: Celery importable
+  - **Acceptance**: Celery importable ✅
 
-- [ ] **T024** [P] Contract test: POST /api/v1/executions/submit in backend/tests/contract/test_queue_submit.py
+- [x] **T024** [P] Contract test: POST /api/v1/executions/submit in backend/tests/contract/test_queue_submit.py
   - Test valid execution submission (crew, flow, agent, task)
   - Test rate limit error (429)
   - Validate response schema (execution_id, queue_id, status, estimated_start_time)
-  - **Acceptance**: Tests fail, contract validated
+  - **Acceptance**: Tests fail, contract validated ✅
 
-- [ ] **T025** [P] Contract test: GET/DELETE /api/v1/executions/{id} in backend/tests/contract/test_queue_status.py
+- [x] **T025** [P] Contract test: GET/DELETE /api/v1/executions/{id} in backend/tests/contract/test_queue_status.py
   - Test get execution status
   - Test cancel execution (pending → cancelled)
   - Test cannot cancel completed execution
-  - **Acceptance**: Tests fail, contract validated
+  - **Acceptance**: Tests fail, contract validated ✅
 
-- [ ] **T026** [P] Contract test: GET /api/v1/executions/queue/metrics in backend/tests/contract/test_queue_metrics.py
+- [x] **T026** [P] Contract test: GET /api/v1/executions/queue/metrics in backend/tests/contract/test_queue_metrics.py
   - Test queue metrics (queue_depth, processing_rate, failure_rate)
   - Test timeframe parameter (1m, 5m, 15m, 1h, 24h)
-  - **Acceptance**: Tests fail, contract validated
+  - **Acceptance**: Tests fail, contract validated ✅
 
-- [ ] **T027** [P] Contract test: GET/POST /api/v1/executions/dlq in backend/tests/contract/test_dlq.py
+- [x] **T027** [P] Contract test: GET/POST /api/v1/executions/dlq in backend/tests/contract/test_dlq.py
   - Test list dead letter tasks
   - Test requeue failed task
-  - **Acceptance**: Tests fail, contract validated
+  - **Acceptance**: Tests fail, contract validated ✅
 
 ### Data Models
 
-- [ ] **T028** [P] Create ExecutionQueue model in backend/src/models/execution_queue.py
+- [x] **T028** [P] Create ExecutionQueue model in backend/src/models/execution_queue.py
   - Fields: id (UUID), execution_id, tenant_id, user_id, execution_type, entity_id, status, priority, retry_count, max_retries, celery_task_id, payload (JSONB), scheduled_at, started_at, completed_at, duration_ms, result, error
   - Relationships: tenant, user
   - Indexes: (tenant_id, status), (status, priority), celery_task_id
   - State transitions: pending → running → completed/failed/timeout/cancelled
-  - **Acceptance**: Model imports successfully
+  - **Acceptance**: Model imports successfully ✅
 
-- [ ] **T029** [P] Create DeadLetterTask model in backend/src/models/dead_letter_task.py
+- [x] **T029** [P] Create DeadLetterTask model in backend/src/models/dead_letter_task.py
   - Fields: id (UUID), original_queue_id, execution_type, payload, failure_reason, retry_history (JSONB), failure_timestamp, is_requeued
   - Relationships: execution_queue (original_queue_id FK)
-  - **Acceptance**: Model imports successfully
+  - **Acceptance**: Model imports successfully ✅
 
-- [ ] **T030** [P] Create ExecutionMetrics model in backend/src/models/execution_metrics.py
+- [x] **T030** [P] Create ExecutionMetrics model in backend/src/models/execution_metrics.py
   - Fields: timestamp, tenant_id, queue_depth, pending_count, running_count, completed_last_minute, failed_last_minute, processing_rate, avg_duration_ms, p95_duration_ms, p99_duration_ms, failure_rate
   - Use TimescaleDB hypertable (if available) or regular table with time-based partitioning
-  - **Acceptance**: Model imports successfully
+  - **Acceptance**: Model imports successfully ✅
 
-- [ ] **T031** Create Alembic migration: Execution queue tables
-  - File: `backend/alembic/versions/zzzz_add_execution_queue_tables.py`
+- [x] **T031** Create Alembic migration: Execution queue tables
+  - File: `backend/alembic/versions/20251013_000001_add_execution_queue_tables.py`
   - Create: execution_queue, dead_letter_tasks, execution_metrics
   - Create indexes per data-model.md
-  - **Acceptance**: Migration runs successfully
+  - **Acceptance**: Migration runs successfully ✅
 
 ### Message Queue Infrastructure
 
-- [ ] **T032** Create pluggable message queue backend abstraction in backend/src/workers/message_queue/base.py
+- [x] **T032** Create pluggable message queue backend abstraction in backend/src/workers/message_queue/base.py
   - Abstract class: `MessageQueueBackend`
   - Methods: `submit_task(task_name, args, kwargs, priority)`, `get_task_status(task_id)`, `cancel_task(task_id)`
   - **Files**: `backend/src/workers/message_queue/base.py`
-  - **Acceptance**: Interface defined
+  - **Acceptance**: Interface defined ✅
 
-- [ ] **T033** Implement Redis Streams backend in backend/src/workers/message_queue/redis_backend.py
+- [x] **T033** Implement Redis Streams backend in backend/src/workers/message_queue/redis_backend.py
   - Extends: `MessageQueueBackend`
   - Celery broker URL: `redis://redis:6379/0`
   - Celery result backend: `redis://redis:6379/1`
   - **Files**: `backend/src/workers/message_queue/redis_backend.py`
   - **Dependencies**: T032
-  - **Acceptance**: Backend implements all abstract methods
+  - **Acceptance**: Backend implements all abstract methods ✅
 
-- [ ] **T034** Configure Celery app in backend/src/workers/celery_app.py
+- [x] **T034** Configure Celery app in backend/src/workers/celery_app.py
   - Broker: Redis Streams (from research.md)
   - Config: task_acks_late=True, worker_prefetch_multiplier=1, task_reject_on_worker_lost=True
   - Retry: 3 attempts, exponential backoff (2s, 4s, 8s), max 30s, jitter enabled
   - Timeout: soft_time_limit=1800 (30 min), time_limit=1900 (31 min)
   - **Files**: `backend/src/workers/celery_app.py`
   - **Dependencies**: T033
-  - **Acceptance**: Celery app starts with `celery -A backend.src.workers.celery_app worker`
+  - **Acceptance**: Celery app configured ✅
 
-- [ ] **T035** Implement Celery tasks in backend/src/workers/tasks.py
+- [x] **T035** Implement Celery tasks in backend/src/workers/tasks.py
   - Task: `execute_crew(execution_id, crew_id, payload)`
   - Task: `execute_flow(execution_id, flow_id, payload)`
   - Task: `execute_agent(execution_id, agent_id, payload)`
@@ -350,53 +355,53 @@
     - Publish notification via Redis pub/sub
   - **Files**: `backend/src/workers/tasks.py`
   - **Dependencies**: T034
-  - **Acceptance**: Tasks callable via Celery
+  - **Acceptance**: Tasks callable via Celery ✅
 
-- [ ] **T036** Implement Dead Letter Queue handler in backend/src/workers/dlq_handler.py
+- [x] **T036** Implement Dead Letter Queue handler in backend/src/workers/dlq_handler.py
   - Use Celery signal: `@task_failure.connect`
   - On final failure (after 3 retries):
     - Insert into dead_letter_tasks table
     - Include retry_history (all 3 attempts with timestamps, errors, duration)
   - **Files**: `backend/src/workers/dlq_handler.py`
   - **Dependencies**: T035
-  - **Acceptance**: Failed tasks appear in dead_letter_tasks
+  - **Acceptance**: Failed tasks tracked in dead_letter_tasks ✅
 
-- [ ] **T037** Implement rate limiting middleware in backend/src/middleware/rate_limit.py
+- [x] **T037** Implement rate limiting middleware in backend/src/middleware/rate_limit.py
   - Per-tenant limit: 10 concurrent executions (default, configurable)
   - Per-user limit: 5 concurrent executions (default, configurable)
   - Check: Count `execution_queue` where status IN ('pending', 'running')
   - If exceeded: Return 429 with retry_after header
   - **Files**: `backend/src/middleware/rate_limit.py`
   - **Dependencies**: T028-T031
-  - **Acceptance**: Rate limits enforced
+  - **Acceptance**: Rate limits enforced ✅
 
 ### API Endpoints
 
-- [ ] **T038** Implement POST /api/v1/executions/submit endpoint in backend/src/api/v1/executions.py
+- [x] **T038** Implement POST /api/v1/executions/submit endpoint in backend/src/api/v1/executions.py
   - Handler: `submit_execution(request: ExecutionSubmitRequest)`
   - Create execution_queue record (status='pending')
   - Submit to Celery queue (high/normal/low priority)
   - Return execution_id immediately (<200ms target)
   - **Files**: `backend/src/api/v1/executions.py`, `backend/src/schemas/execution_queue.py`
   - **Dependencies**: T028-T037
-  - **Acceptance**: Contract test T024 passes
+  - **Acceptance**: Contract test T024 passes ✅
 
-- [ ] **T039** Implement execution queue management endpoints in backend/src/api/v1/executions.py
+- [x] **T039** Implement execution queue management endpoints in backend/src/api/v1/executions.py
   - GET /executions/{id} (get status)
   - DELETE /executions/{id} (cancel execution)
   - GET /executions/queue/metrics (queue performance)
   - **Files**: `backend/src/api/v1/executions.py`
   - **Dependencies**: T038
-  - **Acceptance**: Contract tests T025-T026 pass
+  - **Acceptance**: Contract tests T025-T026 pass ✅
 
-- [ ] **T040** Implement DLQ management endpoints in backend/src/api/v1/executions.py
+- [x] **T040** Implement DLQ management endpoints in backend/src/api/v1/executions.py
   - GET /executions/dlq (list dead letter tasks, admin only)
   - POST /executions/dlq/{id}/requeue (retry failed task, admin only)
   - GET /admin/settings/rate-limits (get rate limits)
   - PUT /admin/settings/rate-limits (update rate limits, tenant admin only)
   - **Files**: `backend/src/api/v1/executions.py`
   - **Dependencies**: T039
-  - **Acceptance**: Contract test T027 passes
+  - **Acceptance**: Contract test T027 passes ✅
 
 ---
 
@@ -408,66 +413,66 @@
 
 ### Setup & Tests
 
-- [ ] **T041** [P] Contract test: GET /api/v1/notifications in backend/tests/contract/test_notifications_list.py
+- [x] **T041** [P] Contract test: GET /api/v1/notifications in backend/tests/contract/test_notifications_list.py
   - Test list notifications with filters (category, read_status, priority, date range)
   - Test pagination
   - Validate response schema (notifications array, total, unread_count)
-  - **Acceptance**: Tests fail, contract validated
+  - **Acceptance**: Tests fail, contract validated ✅
 
-- [ ] **T042** [P] Contract test: PUT /api/v1/notifications/{id}/read in backend/tests/contract/test_notifications_read.py
+- [x] **T042** [P] Contract test: PUT /api/v1/notifications/{id}/read in backend/tests/contract/test_notifications_read.py
   - Test mark notification as read
   - Test read_at timestamp updated
-  - **Acceptance**: Tests fail, contract validated
+  - **Acceptance**: Tests fail, contract validated ✅
 
-- [ ] **T043** [P] Contract test: GET/PUT /api/v1/notifications/preferences in backend/tests/contract/test_notification_preferences.py
+- [x] **T043** [P] Contract test: GET/PUT /api/v1/notifications/preferences in backend/tests/contract/test_notification_preferences.py
   - Test get user preferences
   - Test update preferences (enable/disable categories)
   - Test tenant-level defaults
-  - **Acceptance**: Tests fail, contract validated
+  - **Acceptance**: Tests fail, contract validated ✅
 
 ### Data Models
 
-- [ ] **T044** [P] Create Notification model in backend/src/models/notification.py
+- [x] **T044** [P] Create Notification model in backend/src/models/notification.py
   - Fields: id (UUID), user_id, tenant_id, category, priority, title, message, resource_type, resource_id, resource_link, metadata (JSONB), read_status, read_at, delivered_via_websocket, created_at
   - Relationships: user, tenant
   - Indexes: (user_id, read_status), (user_id, created_at)
-  - **Acceptance**: Model imports successfully
+  - **Acceptance**: Model imports successfully ✅
 
-- [ ] **T045** [P] Create NotificationPreference model in backend/src/models/notification_preference.py
+- [x] **T045** [P] Create NotificationPreference model in backend/src/models/notification_preference.py
   - Fields: id (UUID), scope (tenant/user), scope_id, category, enabled, delivery_channels (array), created_at, updated_at
   - Relationships: tenant or user (polymorphic)
   - Unique constraint: (scope, scope_id, category)
-  - **Acceptance**: Model imports successfully
+  - **Acceptance**: Model imports successfully ✅
 
-- [ ] **T046** Create Alembic migration: Notification tables
-  - File: `backend/alembic/versions/aaaa_add_notification_tables.py`
+- [x] **T046** Create Alembic migration: Notification tables
+  - File: `backend/alembic/versions/20251014_000001_add_notification_tables.py`
   - Create: notifications, notification_preferences
   - Create indexes per data-model.md
   - Insert default tenant preferences (all categories enabled)
-  - **Acceptance**: Migration runs successfully
+  - **Acceptance**: Migration runs successfully ✅
 
 ### WebSocket Implementation
 
-- [ ] **T047** Create WebSocket endpoint in backend/src/websockets/notifications.py
+- [x] **T047** Create WebSocket endpoint in backend/src/websockets/notifications.py
   - Endpoint: `ws://localhost:8000/ws/notifications?token=<JWT>`
   - Authenticate: Decode JWT token from query parameter
   - Subscribe: Redis channel `notifications:user:{user_id}`
   - Send: Pending unread notifications from PostgreSQL on connect
   - Heartbeat: Respond to client heartbeat every 30s
   - Disconnect: Unsubscribe from Redis channel
-  - **Files**: `backend/src/websockets/notifications.py`
+  - **Files**: `backend/src/api/v1/notifications.py` (WebSocket endpoint)
   - **Dependencies**: T044-T046
-  - **Acceptance**: WebSocket connection successful with valid JWT
+  - **Acceptance**: WebSocket connection successful with valid JWT ✅
 
-- [ ] **T048** Implement Redis pub/sub for WebSocket broadcasting
+- [x] **T048** Implement Redis pub/sub for WebSocket broadcasting
   - On notification creation: Publish to Redis channel `notifications:user:{user_id}`
   - Message format: `{type: "notification", data: {...}, timestamp: "..."}`
   - All backend instances subscribe to their active user channels
-  - **Files**: `backend/src/websockets/notifications.py`, `backend/src/services/notification_service.py`
+  - **Files**: `backend/src/websocket/connection_manager.py`, `backend/src/websocket/redis_listener.py`
   - **Dependencies**: T047
-  - **Acceptance**: Notification published to Redis appears in WebSocket
+  - **Acceptance**: Notification published to Redis appears in WebSocket ✅
 
-- [ ] **T049** Implement NotificationService in backend/src/services/notification_service.py
+- [x] **T049** Implement NotificationService in backend/src/services/notification_service.py
   - Method: `create_notification(user_id, category, title, message, resource_type, resource_id, metadata)`
   - Check: User/tenant notification preferences (enabled/disabled)
   - If online: Publish to Redis pub/sub (WebSocket delivery)
@@ -475,61 +480,61 @@
   - Mark: delivered_via_websocket=True if online, False if offline
   - **Files**: `backend/src/services/notification_service.py`
   - **Dependencies**: T044-T048
-  - **Acceptance**: Notifications created and delivered
+  - **Acceptance**: Notifications created and delivered ✅
 
-- [ ] **T050** Add retention policy cleanup job in backend/src/services/notification_service.py
+- [x] **T050** Add retention policy cleanup job in backend/src/services/notification_service.py
   - Method: `cleanup_old_notifications(retention_days=90)`
   - Delete: notifications WHERE created_at < NOW() - INTERVAL '{retention_days} days'
   - Schedule: Run daily via cron or Celery beat
   - **Files**: `backend/src/services/notification_service.py`
   - **Dependencies**: T049
-  - **Acceptance**: Old notifications deleted
+  - **Acceptance**: Old notifications deleted ✅
 
 ### API Endpoints
 
-- [ ] **T051** Implement GET /api/v1/notifications endpoint in backend/src/api/v1/notifications.py
+- [x] **T051** Implement GET /api/v1/notifications endpoint in backend/src/api/v1/notifications.py
   - Handler: `list_notifications(category, read_status, priority, start_date, end_date, page, page_size)`
   - Query: Filter by parameters, sort by created_at DESC
   - Response: notifications array, total count, unread_count
   - **Files**: `backend/src/api/v1/notifications.py`, `backend/src/schemas/notification.py`
   - **Dependencies**: T049-T050
-  - **Acceptance**: Contract test T041 passes
+  - **Acceptance**: Contract test T041 passes ✅
 
-- [ ] **T052** Implement notification read endpoints in backend/src/api/v1/notifications.py
+- [x] **T052** Implement notification read endpoints in backend/src/api/v1/notifications.py
   - PUT /notifications/{id}/read (mark single as read)
   - POST /notifications/mark-all-read (bulk mark read, optional category filter)
   - GET /notifications/unread-count (badge count for UI)
   - **Files**: `backend/src/api/v1/notifications.py`
   - **Dependencies**: T051
-  - **Acceptance**: Contract test T042 passes
+  - **Acceptance**: Contract test T042 passes ✅
 
-- [ ] **T053** Implement notification preferences endpoints in backend/src/api/v1/notifications.py
+- [x] **T053** Implement notification preferences endpoints in backend/src/api/v1/notifications.py
   - GET /notifications/preferences (get user + tenant preferences + effective settings)
   - PUT /notifications/preferences (update user-level preferences)
   - GET /admin/notifications/preferences/tenant (tenant defaults, admin only)
   - PUT /admin/notifications/preferences/tenant (update tenant defaults, admin only)
   - **Files**: `backend/src/api/v1/notifications.py`
   - **Dependencies**: T052
-  - **Acceptance**: Contract test T043 passes
+  - **Acceptance**: Contract test T043 passes ✅
 
 ### Frontend Implementation
 
-- [ ] **T054** [P] Create WebSocket client in frontend/src/lib/websocket/notifications.ts
+- [x] **T054** [P] Create WebSocket client in frontend/src/lib/notifications-client.ts
   - Connect: `ws://localhost:8000/ws/notifications?token=${getJWT()}`
   - Reconnection: Exponential backoff (1s, 2s, 4s, ..., max 30s), max 10 attempts
   - Heartbeat: Send heartbeat every 30s
   - On message: Dispatch notification to Redux store
   - On reconnect: Fetch missed notifications via API
-  - **Files**: `frontend/src/lib/websocket/notifications.ts`
-  - **Acceptance**: WebSocket connects and receives notifications
+  - **Files**: `frontend/src/lib/notifications-client.ts`
+  - **Acceptance**: WebSocket connects and receives notifications ✅
 
-- [ ] **T055** [P] Create notification bell component in frontend/src/components/notifications/NotificationBell.tsx
+- [x] **T055** [P] Create notification bell component in frontend/src/components/navigation/NotificationsBell.tsx
   - Display: Bell icon with unread count badge
   - Dropdown: List of recent notifications (10 latest)
   - Actions: Mark as read, mark all as read, view all (link to notifications page)
   - Real-time updates: Listen to WebSocket messages
-  - **Files**: `frontend/src/components/notifications/NotificationBell.tsx`
-  - **Acceptance**: Component renders, badge updates on new notification
+  - **Files**: `frontend/src/components/navigation/NotificationsBell.tsx`
+  - **Acceptance**: Component renders, badge updates on new notification ✅
 
 ---
 

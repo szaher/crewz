@@ -5,6 +5,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import relationship
 
 from .base import BaseModel
+from .user_role import user_roles
 
 
 class Role(BaseModel):
@@ -70,7 +71,9 @@ class Role(BaseModel):
     # Many-to-many with users via user_roles table
     users = relationship(
         "User",
-        secondary="user_roles",
+        secondary=user_roles,
+        primaryjoin="Role.id==user_roles.c.role_id",
+        secondaryjoin="User.id==user_roles.c.user_id",
         back_populates="roles",
     )
 

@@ -2,13 +2,14 @@
 
 from fastapi import APIRouter
 
-from . import auth, flows, executions, agents, tools, chat, crews, llm_providers, feedback, users, tenant, tasks, notifications, prompts
+from . import auth, flows, executions, agents, tools, chat, crews, llm_providers, feedback, users, tenant, tasks, notifications, prompts, authz
 
 # Create main API router
 api_router = APIRouter()
 
 # Include all endpoint routers
 api_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+api_router.include_router(authz.router, prefix="/authz", tags=["Authorization"])
 api_router.include_router(flows.router, prefix="/flows", tags=["Flows"])
 api_router.include_router(executions.router, prefix="/executions", tags=["Executions"])
 api_router.include_router(agents.router, prefix="/agents", tags=["Agents"])

@@ -8,15 +8,24 @@ import type { ChatMessage } from '@/types/api';
 import type { PromptTemplate, PromptVariable } from '@/lib/store';
 
 interface ChatWindowProps {
-  sessionId: number;
+  sessionId: string;
   sessionTitle: string;
-  crewId?: number;
+  crewId?: string;
   onManageTools?: () => void;
   onStreamingStart?: () => void;
   onTitleUpdate?: (newTitle: string) => void;
+  onNewSession?: () => void;
+  // Optional model parameters to apply during streaming
+  hyperparams?: {
+    temperature?: number;
+    max_tokens?: number;
+    top_p?: number;
+    frequency_penalty?: number;
+    presence_penalty?: number;
+  };
 }
 
-export default function ChatWindow({ sessionId, sessionTitle, crewId, onManageTools, onStreamingStart, onTitleUpdate }: ChatWindowProps) {
+export default function ChatWindow({ sessionId, sessionTitle, crewId, onManageTools, onStreamingStart, onTitleUpdate, onNewSession, hyperparams }: ChatWindowProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -53,6 +62,7 @@ export default function ChatWindow({ sessionId, sessionTitle, crewId, onManageTo
   const [ttsSupported, setTtsSupported] = useState<boolean>(false);
   const recognitionRef = useRef<any>(null);
   const [showAudioSettings, setShowAudioSettings] = useState<boolean>(false);
+  const [voiceLang, setVoiceLang] = useState<string>('en-US');
 
   const lastUserMessage = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -112,6 +122,14 @@ export default function ChatWindow({ sessionId, sessionTitle, crewId, onManageTo
 
     // Build request URL with query params
     const params = new URLSearchParams({ user_message: userText, store_user: String(!!storeUser) });
+    // Include hyperparameters if provided
+    if (hyperparams) {
+      if (hyperparams.temperature != null) params.set('temperature', String(hyperparams.temperature));
+      if (hyperparams.max_tokens != null) params.set('max_tokens', String(hyperparams.max_tokens));
+      if (hyperparams.top_p != null) params.set('top_p', String(hyperparams.top_p));
+      if (hyperparams.frequency_penalty != null) params.set('frequency_penalty', String(hyperparams.frequency_penalty));
+      if (hyperparams.presence_penalty != null) params.set('presence_penalty', String(hyperparams.presence_penalty));
+    }
     const url = `${baseUrl}/api/v1/chat/sessions/${sessionId}/generate/stream?${params.toString()}`;
 
     // Abort previous stream if running
@@ -126,7 +144,7 @@ export default function ChatWindow({ sessionId, sessionTitle, crewId, onManageTo
     setReceivedFirstToken(false);
 
     // Prepare a draft assistant message for streaming content
-    const draftId = `draft-${Date.now()}`;
+      const draftId = `draft-${Date.now()}`;
     let draftContentLocal = '';
     const upsertDraft = (content: string) => {
       const msg = {
@@ -217,6 +235,12 @@ export default function ChatWindow({ sessionId, sessionTitle, crewId, onManageTo
             } else if (eventType === 'done') {
               // Completed; refresh persisted messages shortly
               setStreaming(false);
+              // Optionally read aloud
+              try {
+                if (readAloud && ttsSupported) {
+                  speak(draftContentLocal);
+                }
+              } catch {}
               setTimeout(async () => {
                 const res2 = await apiClient.get(`/api/v1/chat/sessions/${sessionId}/messages`);
                 if (res2.data) {
@@ -239,16 +263,26 @@ export default function ChatWindow({ sessionId, sessionTitle, crewId, onManageTo
     }
   };
 
-  // Detect Web Speech API support and restore audio prefs
+  // Detect Web Speech API + TTS support and restore audio prefs
   useEffect(() => {
     const rec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     setSpeechSupported(!!rec);
-    // No settings UI — minimalist mic only
+    // TTS support
+    setTtsSupported(typeof window !== 'undefined' && !!(window as any).speechSynthesis && !!(window as any).SpeechSynthesisUtterance);
+    // Restore voice language
+    try {
+      const saved = localStorage.getItem('chat_voice_lang');
+      setVoiceLang(saved || (navigator.language || 'en-US'));
+    } catch {
+      setVoiceLang(navigator.language || 'en-US');
+    }
+    // No settings UI — minimalist mic only by default
   }, []);
 
   useEffect(() => { try { localStorage.setItem('chat_voice_enabled', String(voiceEnabled)); } catch {} }, [voiceEnabled]);
   useEffect(() => { try { localStorage.setItem('chat_voice_autosend', String(autoSendVoice)); } catch {} }, [autoSendVoice]);
   useEffect(() => { try { localStorage.setItem('chat_voice_readaloud', String(readAloud)); } catch {} }, [readAloud]);
+  useEffect(() => { try { localStorage.setItem('chat_voice_lang', voiceLang); } catch {} }, [voiceLang]);
 
   // Abort any active stream on unmount
   useEffect(() => {
@@ -262,7 +296,8 @@ export default function ChatWindow({ sessionId, sessionTitle, crewId, onManageTo
     const Rec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const rec = new Rec();
     recognitionRef.current = rec;
-    rec.lang = 'en-US';
+    // Use selected language for multi-lingual support
+    rec.lang = voiceLang || (navigator.language || 'en-US');
     rec.interimResults = true;
     rec.continuous = false;
     let finalText = '';
@@ -300,6 +335,7 @@ export default function ChatWindow({ sessionId, sessionTitle, crewId, onManageTo
     try {
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
+      u.lang = voiceLang || (navigator.language || 'en-US');
       u.rate = 1.0;
       u.pitch = 1.0;
       window.speechSynthesis.speak(u);
@@ -322,7 +358,7 @@ export default function ChatWindow({ sessionId, sessionTitle, crewId, onManageTo
           prov = pRes?.data?.provider ?? pRes?.data ?? null;
         } else {
           // try default provider as a fallback
-          const defRes = await apiClient.get('/api/v1/llm-providers', { params: { is_default: true, page_size: 1 } });
+          const defRes = await apiClient.get('/api/v1/llm-providers?is_default=true&page_size=1');
           const list = defRes?.data?.providers ?? defRes?.data ?? [];
           prov = Array.isArray(list) ? list[0] : null;
         }
@@ -660,14 +696,31 @@ export default function ChatWindow({ sessionId, sessionTitle, crewId, onManageTo
             </div>
           </div>
           <div className="relative flex items-center gap-2 self-start">
+            {onNewSession && (
+              <button
+                onClick={onNewSession}
+                className="h-9 w-9 inline-flex items-center justify-center border rounded bg-white hover:bg-gray-100 dark:hover:bg-gray-800"
+                title="New Session"
+                aria-label="New session"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M12 5v14"/>
+                  <path d="M5 12h14"/>
+                </svg>
+              </button>
+            )}
             {onManageTools && (
               <button
                 onClick={onManageTools}
-                className="h-9 px-3 text-sm border rounded hover:bg-gray-100 whitespace-nowrap"
+                className="h-9 w-9 inline-flex items-center justify-center border rounded hover:bg-gray-100 dark:hover:bg-gray-800"
                 title="Manage Tools"
                 aria-label="Manage tools"
               >
-                Manage Tools
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M3 6h14"/>
+                  <path d="M3 12h18"/>
+                  <path d="M3 18h10"/>
+                </svg>
               </button>
             )}
           </div>
@@ -764,6 +817,33 @@ export default function ChatWindow({ sessionId, sessionTitle, crewId, onManageTo
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
                 <path d="M12 14a3 3 0 003-3V6a3 3 0 10-6 0v5a3 3 0 003 3z" />
                 <path d="M19 11a1 1 0 10-2 0 5 5 0 11-10 0 1 1 0 10-2 0 7 7 0 0012 4.58V17a1 1 0 112 0v-1a1 1 0 10-2 0v.58A7 7 0 0019 11z" />
+              </svg>
+            </button>
+            {/* Language selector */}
+            <select
+              value={voiceLang}
+              onChange={(e) => setVoiceLang(e.target.value)}
+              title="Voice language"
+              className="px-2 py-1 text-xs border rounded bg-white dark:bg-[#40414f] border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200"
+            >
+              {['en-US','en-GB','es-ES','fr-FR','de-DE','it-IT','pt-PT','pt-BR','ar-SA','hi-IN','ja-JP','ko-KR','zh-CN','zh-TW'].map((code) => (
+                <option key={code} value={code}>{code}</option>
+              ))}
+            </select>
+            {/* Read aloud toggle */}
+            <button
+              type="button"
+              onClick={() => setReadAloud((v) => !v)}
+              disabled={!ttsSupported}
+              className={`p-2 rounded-lg border ${readAloud ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white dark:bg-[#40414f] border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200'} disabled:opacity-50`}
+              title={ttsSupported ? (readAloud ? 'Disable read aloud' : 'Enable read aloud') : 'Text-to-speech not supported'}
+              aria-pressed={readAloud}
+              aria-label="Read aloud"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                <path d="M3 10v4a1 1 0 001 1h3l4 3V6l-4 3H4a1 1 0 00-1 1z" />
+                <path d="M16.5 8.5a5.5 5.5 0 010 7.778" />
+                <path d="M14 6a8 8 0 010 12" />
               </svg>
             </button>
             

@@ -152,11 +152,30 @@ class FlowExecutor:
             # Agent execution node
             agent_id = node_data.get("agent_id")
             task_description = node_data.get("task", "")
-            expected_output = node_data.get("expected_output", "")
+            expected_output = node_data.get("expected_output", "A detailed response to the task")
+
+            # Check if agent_id is an integer (old data before UUID migration)
+            if isinstance(agent_id, int):
+                raise ValueError(
+                    f"Agent node uses old integer ID ({agent_id}). "
+                    f"Please re-edit this flow and select the agent again to use UUID IDs."
+                )
+
+            # Convert string UUID to UUID object if needed
+            from uuid import UUID
+            if isinstance(agent_id, str):
+                try:
+                    agent_id = UUID(agent_id)
+                except ValueError:
+                    raise ValueError(f"Invalid agent UUID: {agent_id}")
+
+            # Extract variables from input_data
+            variables = input_data.get("variables", {})
 
             # Load agent from database
             from ..db import SessionLocal
             from ..models import Agent
+            from crewai import Task as CrewTask, Crew
             db = SessionLocal()
             try:
                 db_agent = db.query(Agent).filter(Agent.id == agent_id).first()
@@ -166,11 +185,38 @@ class FlowExecutor:
                 # Create CrewAI agent
                 crewai_agent = await self.agent_factory.from_db_model(db_agent)
 
-                # Execute task (CrewAI agents don't have execute_task, need to use crew)
-                # For now, return placeholder
-                # TODO: Implement proper agent task execution
+                # Variable substitution helper
+                def substitute_variables(text: str, vars: dict) -> str:
+                    if not text or not vars:
+                        return text
+                    result = text
+                    for k, v in vars.items():
+                        result = result.replace(f'{{{k}}}', str(v))
+                    return result
+
+                # Substitute variables in task description and expected output
+                task_desc = substitute_variables(task_description, variables)
+                expected_out = substitute_variables(expected_output, variables)
+
+                # Create a single task for the agent
+                task = CrewTask(
+                    description=task_desc,
+                    agent=crewai_agent,
+                    expected_output=expected_out,
+                )
+
+                # Create a crew with this single agent and task
+                crew = Crew(
+                    agents=[crewai_agent],
+                    tasks=[task],
+                    verbose=True
+                )
+
+                # Execute crew in a separate thread to avoid blocking
+                result = await asyncio.to_thread(crew.kickoff)
+
                 return {
-                    "result": f"Agent {db_agent.name} would execute: {task_description}",
+                    "result": str(result),
                     "metadata": {"agent_id": agent_id, "agent_name": db_agent.name}
                 }
             finally:
@@ -179,11 +225,22 @@ class FlowExecutor:
         elif node_type == "crew":
             # Crew execution node
             crew_id = node_data.get("crew_id")
-            task_description = node_data.get("task", "")
+
+            # Extract variables from input_data
+            variables = input_data.get("variables", {})
+            tasks_input = input_data.get("tasks", [])
 
             # Load crew from database
             from ..db import SessionLocal
             from ..models import Crew
+            from ..services.task_service import TaskService
+            from ..services.llm_service import LLMService
+            from ..services.docker_service import DockerService
+            from ..crewai.tool_adapter import ToolAdapter
+            from ..models.agent import Agent
+            from crewai import Task as CrewTask
+            import json
+
             db = SessionLocal()
             try:
                 db_crew = db.query(Crew).filter(Crew.id == crew_id).first()
@@ -193,11 +250,94 @@ class FlowExecutor:
                 # Create CrewAI crew
                 crewai_crew = await self.crew_factory.from_db_model(db_crew)
 
-                # Execute crew (kickoff method expects tasks, not description)
-                # For now, return placeholder
-                # TODO: Implement proper crew execution with tasks
+                # Build tasks from database
+                task_service = TaskService(db)
+                stored_tasks = await task_service.get_crew_tasks(crew_id)
+
+                def substitute_variables(text: str, vars: dict) -> str:
+                    if not text or not vars:
+                        return text
+                    result = text
+                    for k, v in vars.items():
+                        result = result.replace(f'{{{k}}}', str(v))
+                    return result
+
+                tasks = []
+                task_map = {}
+
+                if stored_tasks:
+                    # Use stored tasks from database
+                    for db_task in stored_tasks:
+                        # Resolve agent
+                        agent_instance = None
+                        if db_task.agent_id:
+                            agent_model = db.query(Agent).filter(Agent.id == db_task.agent_id).first()
+                            if agent_model:
+                                agent_instance = await self.agent_factory.from_db_model(agent_model)
+                        else:
+                            agents = getattr(crewai_crew, 'agents', [])
+                            agent_instance = agents[0] if agents else None
+
+                        # Context refs
+                        context_tasks = []
+                        if db_task.context:
+                            try:
+                                context_data = json.loads(db_task.context) if isinstance(db_task.context, str) else db_task.context
+                                if isinstance(context_data, dict) and 'task_ids' in context_data:
+                                    for tid in context_data['task_ids']:
+                                        if tid in task_map:
+                                            context_tasks.append(task_map[tid])
+                            except Exception:
+                                pass
+
+                        # Tools (basic: reuse agent tools if any)
+                        task_tools = []
+                        if db_task.tools_config and agent_instance and hasattr(agent_instance, 'tools'):
+                            task_tools = agent_instance.tools
+
+                        description = substitute_variables(db_task.description, variables)
+                        expected_output = substitute_variables(db_task.expected_output, variables)
+
+                        task_kwargs = {
+                            'description': description,
+                            'agent': agent_instance,
+                            'expected_output': expected_output,
+                            'async_execution': db_task.async_execution,
+                        }
+                        if context_tasks:
+                            task_kwargs['context'] = context_tasks
+                        if task_tools:
+                            task_kwargs['tools'] = task_tools
+                        if db_task.output_file:
+                            task_kwargs['output_file'] = db_task.output_file
+
+                        t = CrewTask(**task_kwargs)
+                        tasks.append(t)
+                        task_map[db_task.id] = t
+                else:
+                    # Use tasks from input_data or node config
+                    if not tasks_input:
+                        task_description = node_data.get("task", "Complete the assigned objectives")
+                        tasks_input = [task_description]
+
+                    agents = getattr(crewai_crew, 'agents', [])
+                    for i, task_desc in enumerate(tasks_input):
+                        agent_instance = agents[i % len(agents)] if agents else None
+                        t = CrewTask(
+                            description=substitute_variables(task_desc, variables),
+                            agent=agent_instance,
+                            expected_output=f"Completion of: {task_desc}",
+                        )
+                        tasks.append(t)
+
+                crewai_crew.tasks = tasks
+
+                # Execute crew in a separate thread to avoid blocking
+                result = await asyncio.to_thread(crewai_crew.kickoff)
+
                 return {
-                    "result": f"Crew {db_crew.name} would execute: {task_description}",
+                    "result": str(result),
+                    "task_count": len(tasks),
                     "metadata": {"crew_id": crew_id, "crew_name": db_crew.name}
                 }
             finally:

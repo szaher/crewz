@@ -4,6 +4,7 @@ from sqlalchemy import Column, String, Boolean, ForeignKey, Enum, DateTime
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import relationship, deferred
 from .base import BaseModel
+from .user_role import user_roles
 import enum
 from datetime import datetime
 
@@ -43,9 +44,40 @@ class User(BaseModel):
     )
     roles = relationship(
         "Role",
-        secondary="user_roles",
+        secondary=user_roles,
+        primaryjoin="User.id==user_roles.c.user_id",
+        secondaryjoin="Role.id==user_roles.c.role_id",
         back_populates="users",
     )
+
+    @property
+    def primary_role_slug(self) -> str:
+        """
+        Get the primary role slug for this user.
+        Returns the highest priority role slug from the roles relationship,
+        or falls back to the legacy role enum column.
+        """
+        if self.roles:
+            # Sort by priority (descending) and return the highest priority role
+            sorted_roles = sorted(self.roles, key=lambda r: r.priority, reverse=True)
+            return sorted_roles[0].slug
+        # Fallback to legacy role column
+        return getattr(self.role, 'value', str(self.role))
+
+    @property
+    def is_super_admin(self) -> bool:
+        """Check if user has super-admin role."""
+        return any(r.slug == "super-admin" for r in self.roles)
+
+    @property
+    def is_tenant_admin(self) -> bool:
+        """Check if user has tenant-admin or super-admin role."""
+        return any(r.slug in ("super-admin", "tenant-admin") for r in self.roles)
+
+    @property
+    def is_admin_any(self) -> bool:
+        """Check if user has any admin role (super-admin, tenant-admin, or admin)."""
+        return any(r.slug in ("super-admin", "tenant-admin", "admin") for r in self.roles)
 
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email}, role={self.role})>"

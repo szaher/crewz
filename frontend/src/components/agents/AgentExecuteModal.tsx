@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { useLLMProviders } from '@/lib/hooks/useLLMProviders';
 
@@ -27,10 +28,12 @@ interface AgentExecuteModalProps {
 }
 
 interface ExecutionResult {
-  status: 'success' | 'failed';
+  status: 'success' | 'failed' | 'pending' | 'running' | 'completed';
+  execution_id?: string;
   output?: string;
   error?: string;
-  execution_time_ms: number;
+  execution_time_ms?: number;
+  message?: string;
 }
 
 export default function AgentExecuteModal({
@@ -39,6 +42,7 @@ export default function AgentExecuteModal({
   isOpen,
   onClose
 }: AgentExecuteModalProps) {
+  const router = useRouter();
   const { providers } = useLLMProviders();
   const [agent, setAgent] = useState<Agent | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -125,7 +129,20 @@ export default function AgentExecuteModal({
       const response = await apiClient.post(`/api/v1/agents/${agentId}/execute`, executionData);
 
       if (response.data) {
-        setResult(response.data as ExecutionResult);
+        const result = response.data as ExecutionResult;
+
+        // If execution started successfully (pending/running), redirect to execution page
+        if (result.status === 'pending' || result.status === 'running') {
+          if (result.execution_id) {
+            // Close modal and navigate to execution detail page
+            onClose();
+            router.push(`/executions/${result.execution_id}`);
+            return;
+          }
+        }
+
+        // For other statuses, show the result in the modal
+        setResult(result);
       } else if (response.error) {
         setResult({
           status: 'failed',
@@ -319,14 +336,32 @@ export default function AgentExecuteModal({
 
           {/* Result */}
           {result && (
-            <div className={`mt-6 p-4 rounded-lg ${result.status === 'success' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+            <div className={`mt-6 p-4 rounded-lg ${
+              result.status === 'success' || result.status === 'completed'
+                ? 'bg-green-50 border border-green-200'
+                : result.status === 'pending' || result.status === 'running'
+                ? 'bg-blue-50 border border-blue-200'
+                : 'bg-red-50 border border-red-200'
+            }`}>
               <div className="flex items-center justify-between mb-2">
-                <h4 className={`font-medium ${result.status === 'success' ? 'text-green-900' : 'text-red-900'}`}>
-                  {result.status === 'success' ? '✓ Execution Complete' : '✗ Execution Failed'}
+                <h4 className={`font-medium ${
+                  result.status === 'success' || result.status === 'completed'
+                    ? 'text-green-900'
+                    : result.status === 'pending' || result.status === 'running'
+                    ? 'text-blue-900'
+                    : 'text-red-900'
+                }`}>
+                  {result.status === 'success' || result.status === 'completed'
+                    ? '✓ Execution Complete'
+                    : result.status === 'pending' || result.status === 'running'
+                    ? '⏳ Execution Started'
+                    : '✗ Execution Failed'}
                 </h4>
-                <span className="text-xs text-gray-500">
-                  {result.execution_time_ms}ms
-                </span>
+                {result.execution_time_ms !== undefined && (
+                  <span className="text-xs text-gray-500">
+                    {result.execution_time_ms}ms
+                  </span>
+                )}
               </div>
               {result.output && (
                 <div className="mt-2">
@@ -340,6 +375,19 @@ export default function AgentExecuteModal({
                 <div className="mt-2">
                   <p className="text-sm font-medium text-red-700 mb-1">Error:</p>
                   <p className="text-sm text-red-600">{result.error}</p>
+                </div>
+              )}
+              {result.message && (result.status === 'pending' || result.status === 'running') && (
+                <div className="mt-2">
+                  <p className="text-sm text-blue-700">{result.message}</p>
+                  {result.execution_id && (
+                    <button
+                      onClick={() => router.push(`/executions/${result.execution_id}`)}
+                      className="mt-2 text-sm text-blue-600 hover:text-blue-700 underline"
+                    >
+                      View execution details →
+                    </button>
+                  )}
                 </div>
               )}
             </div>

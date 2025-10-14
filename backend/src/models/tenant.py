@@ -9,6 +9,7 @@ import enum
 class TenantStatus(str, enum.Enum):
     """Tenant status enumeration."""
 
+    PENDING = "pending"  # Awaiting super admin approval
     ACTIVE = "active"
     SUSPENDED = "suspended"
     DELETED = "deleted"

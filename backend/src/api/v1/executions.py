@@ -285,3 +285,350 @@ async def cancel_execution(
     execution_service = ExecutionService(db, flow_service, flow_executor)
     execution = await execution_service.cancel_execution(execution_id)
     return ExecutionResponse.from_orm(execution)
+
+
+# ============================================================================
+# Queue Management Endpoints (T038-T040)
+# ============================================================================
+
+@router.post("/submit", status_code=status.HTTP_202_ACCEPTED)
+async def submit_execution(
+    request: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Submit execution to queue (T038).
+
+    Queue execution request for background processing.
+    Returns immediately with execution ID (<200ms target).
+
+    Rate limits:
+    - Per tenant: Default 10 concurrent (configurable)
+    - Per user: Default 5 concurrent (configurable)
+    """
+    from uuid import uuid4
+    from datetime import datetime, timedelta
+    from ...models.execution_queue import ExecutionQueue, ExecutionStatus, ExecutionPriority, ExecutionType
+    from ...models.execution import Execution
+    from ...middleware.rate_limit import check_rate_limit
+
+    # Extract request parameters
+    execution_type = request.get("execution_type")
+    entity_id = request.get("entity_id")
+    payload = request.get("payload", {})
+    priority = request.get("priority", "normal")
+    timeout_minutes = request.get("timeout_minutes")
+
+    # Validate required fields
+    if not execution_type or not entity_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="execution_type and entity_id are required"
+        )
+
+    # Check rate limits
+    tenant_id = current_user.get("tenant_id")
+    user_id = current_user.get("id")
+
+    rate_limit_result = check_rate_limit(db, tenant_id, user_id)
+    if not rate_limit_result["allowed"]:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded",
+            headers={"Retry-After": str(rate_limit_result.get("retry_after", 60))}
+        )
+
+    # Create execution record
+    execution_id = uuid4()
+    execution = Execution(
+        id=execution_id,
+        execution_type=execution_type,
+        status="pending",
+        user_id=user_id,
+        tenant_id=tenant_id
+    )
+    db.add(execution)
+    db.flush()
+
+    # Create queue entry
+    queue_id = uuid4()
+    scheduled_at = datetime.utcnow()
+    timeout_at = scheduled_at + timedelta(minutes=timeout_minutes or 30)
+
+    queue_entry = ExecutionQueue(
+        id=queue_id,
+        execution_id=execution_id,
+        tenant_id=tenant_id,
+        user_id=user_id,
+        execution_type=ExecutionType(execution_type),
+        entity_id=entity_id,
+        status=ExecutionStatus.PENDING,
+        priority=ExecutionPriority(priority),
+        payload=payload,
+        scheduled_at=scheduled_at,
+        timeout_at=timeout_at,
+        max_retries=3
+    )
+    db.add(queue_entry)
+    db.commit()
+
+    # Submit to Celery queue
+    from ...workers.message_queue.redis_backend import RedisBackend
+    queue_backend = RedisBackend()
+
+    celery_task_id = queue_backend.submit_task(
+        task_name=f"workers.tasks.execute_{execution_type}",
+        kwargs={
+            "execution_id": str(execution_id),
+            "entity_id": str(entity_id),
+            "payload": payload
+        },
+        priority=priority,
+        task_id=str(uuid4())
+    )
+
+    # Update queue entry with Celery task ID
+    queue_entry.celery_task_id = celery_task_id
+    db.commit()
+
+    # Calculate queue position (approximate)
+    queue_position = db.query(ExecutionQueue).filter(
+        ExecutionQueue.tenant_id == tenant_id,
+        ExecutionQueue.status == ExecutionStatus.PENDING,
+        ExecutionQueue.scheduled_at < scheduled_at
+    ).count()
+
+    # Estimate start time based on queue depth
+    avg_execution_time_minutes = 5  # Default estimate
+    estimated_start_time = scheduled_at + timedelta(minutes=avg_execution_time_minutes * queue_position)
+
+    return {
+        "execution_id": str(execution_id),
+        "queue_id": str(queue_id),
+        "status": "pending",
+        "estimated_start_time": estimated_start_time.isoformat(),
+        "queue_position": queue_position
+    }
+
+
+@router.get("/queue/metrics")
+async def get_queue_metrics(
+    tenant_id: str = Query(None),
+    timeframe: str = Query("5m", regex="^(1m|5m|15m|1h|24h)$"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Get queue metrics (T039).
+
+    Current queue depth, processing rate, failure rate.
+    """
+    from datetime import datetime, timedelta
+    from ...models.execution_queue import ExecutionQueue, ExecutionStatus
+    from ...models.execution_metrics import ExecutionMetrics
+    from sqlalchemy import func
+
+    # Use current user's tenant if not admin
+    target_tenant_id = tenant_id if current_user.get("role") == "super_admin" else current_user.get("tenant_id")
+
+    # Parse timeframe
+    timeframe_minutes = {
+        "1m": 1,
+        "5m": 5,
+        "15m": 15,
+        "1h": 60,
+        "24h": 1440
+    }[timeframe]
+
+    since = datetime.utcnow() - timedelta(minutes=timeframe_minutes)
+
+    # Query queue depth
+    queue_query = db.query(ExecutionQueue).filter(
+        ExecutionQueue.tenant_id == target_tenant_id,
+        ExecutionQueue.status.in_([ExecutionStatus.PENDING, ExecutionStatus.RUNNING])
+    )
+
+    queue_depth = queue_query.count()
+    pending_count = queue_query.filter(ExecutionQueue.status == ExecutionStatus.PENDING).count()
+    running_count = queue_query.filter(ExecutionQueue.status == ExecutionStatus.RUNNING).count()
+
+    # Query completed/failed in timeframe
+    completed_query = db.query(ExecutionQueue).filter(
+        ExecutionQueue.tenant_id == target_tenant_id,
+        ExecutionQueue.completed_at >= since
+    )
+
+    completed_last_minute = completed_query.filter(ExecutionQueue.status == ExecutionStatus.COMPLETED).count()
+    failed_last_minute = completed_query.filter(ExecutionQueue.status == ExecutionStatus.FAILED).count()
+
+    # Calculate processing rate (tasks/second)
+    total_processed = completed_last_minute + failed_last_minute
+    processing_rate = total_processed / (timeframe_minutes * 60) if timeframe_minutes > 0 else 0
+
+    # Calculate duration statistics
+    duration_stats = db.query(
+        func.avg(ExecutionQueue.duration_ms).label("avg"),
+        func.percentile_cont(0.95).within_group(ExecutionQueue.duration_ms).label("p95"),
+        func.percentile_cont(0.99).within_group(ExecutionQueue.duration_ms).label("p99")
+    ).filter(
+        ExecutionQueue.tenant_id == target_tenant_id,
+        ExecutionQueue.completed_at >= since,
+        ExecutionQueue.duration_ms.isnot(None)
+    ).first()
+
+    avg_duration_ms = int(duration_stats.avg or 0)
+    p95_duration_ms = int(duration_stats.p95 or 0)
+    p99_duration_ms = int(duration_stats.p99 or 0)
+
+    # Calculate failure rate
+    failure_rate = failed_last_minute / total_processed if total_processed > 0 else 0.0
+
+    return {
+        "queue_depth": queue_depth,
+        "pending_count": pending_count,
+        "running_count": running_count,
+        "completed_last_minute": completed_last_minute,
+        "failed_last_minute": failed_last_minute,
+        "processing_rate": round(processing_rate, 3),
+        "avg_duration_ms": avg_duration_ms,
+        "p95_duration_ms": p95_duration_ms,
+        "p99_duration_ms": p99_duration_ms,
+        "failure_rate": round(failure_rate, 3),
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@router.get("/dlq")
+async def list_dead_letter_tasks(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    List dead letter tasks (T040).
+
+    Get failed tasks after retry exhaustion. Admin only.
+    """
+    from ...models.dead_letter_task import DeadLetterTask
+
+    # Check admin role
+    if current_user.get("role") not in ["super_admin", "tenant_admin"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+    tenant_id = current_user.get("tenant_id")
+
+    # Query dead letter tasks
+    query = db.query(DeadLetterTask).filter(DeadLetterTask.tenant_id == tenant_id)
+
+    total = query.count()
+    tasks = query.offset((page - 1) * page_size).limit(page_size).all()
+
+    return {
+        "tasks": [
+            {
+                "id": str(task.id),
+                "original_queue_id": str(task.original_queue_id),
+                "execution_type": task.execution_type.value if hasattr(task.execution_type, "value") else task.execution_type,
+                "payload": task.payload,
+                "failure_reason": task.failure_reason,
+                "retry_history": task.retry_history,
+                "failure_timestamp": task.failure_timestamp.isoformat(),
+                "is_requeued": task.is_requeued
+            }
+            for task in tasks
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size
+    }
+
+
+@router.post("/dlq/{task_id}/requeue")
+async def requeue_dead_letter_task(
+    task_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Requeue failed task from DLQ (T040).
+
+    Move task from DLQ back to execution queue. Admin only.
+    """
+    from uuid import UUID, uuid4
+    from datetime import datetime
+    from ...models.dead_letter_task import DeadLetterTask
+    from ...models.execution_queue import ExecutionQueue, ExecutionStatus, ExecutionPriority, ExecutionType
+    from ...models.execution import Execution
+
+    # Check admin role
+    if current_user.get("role") not in ["super_admin", "tenant_admin"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+    # Find dead letter task
+    task = db.query(DeadLetterTask).filter(DeadLetterTask.id == UUID(task_id)).first()
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dead letter task not found")
+
+    if task.is_requeued:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Task already requeued")
+
+    # Create new execution
+    execution_id = uuid4()
+    execution = Execution(
+        id=execution_id,
+        execution_type=task.execution_type.value if hasattr(task.execution_type, "value") else task.execution_type,
+        status="pending",
+        user_id=task.user_id,
+        tenant_id=task.tenant_id
+    )
+    db.add(execution)
+    db.flush()
+
+    # Create new queue entry
+    queue_entry = ExecutionQueue(
+        id=uuid4(),
+        execution_id=execution_id,
+        tenant_id=task.tenant_id,
+        user_id=task.user_id,
+        execution_type=ExecutionType(task.execution_type.value if hasattr(task.execution_type, "value") else task.execution_type),
+        entity_id=task.payload.get("entity_id"),
+        status=ExecutionStatus.PENDING,
+        priority=ExecutionPriority.NORMAL,
+        payload=task.payload,
+        scheduled_at=datetime.utcnow(),
+        max_retries=3,
+        retry_count=0  # Reset retry count
+    )
+    db.add(queue_entry)
+
+    # Mark DLQ task as requeued
+    task.is_requeued = True
+    task.requeued_at = datetime.utcnow()
+    task.requeued_by = UUID(current_user.get("id"))
+
+    db.commit()
+
+    # Submit to Celery queue
+    from ...workers.message_queue.redis_backend import RedisBackend
+    queue_backend = RedisBackend()
+
+    celery_task_id = queue_backend.submit_task(
+        task_name=f"workers.tasks.execute_{queue_entry.execution_type.value}",
+        kwargs={
+            "execution_id": str(execution_id),
+            "entity_id": str(queue_entry.entity_id),
+            "payload": task.payload
+        },
+        priority="normal",
+        task_id=str(uuid4())
+    )
+
+    queue_entry.celery_task_id = celery_task_id
+    db.commit()
+
+    return {
+        "message": "Task requeued successfully",
+        "execution_id": str(execution_id)
+    }

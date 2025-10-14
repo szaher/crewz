@@ -5,22 +5,20 @@ import { useRouter } from 'next/navigation';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Navigation from '@/components/shared/Navigation';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
-import TaskForm from '@/components/tasks/TaskForm';
-import TaskList from '@/components/tasks/TaskList';
 import { useTasks } from '@/lib/hooks/useTasks';
 import { useAgents } from '@/lib/hooks/useAgents';
 import { useCrews } from '@/lib/hooks/useCrews';
-import type { Task, TaskCreate, TaskUpdate } from '@/types/task';
+import type { Task } from '@/types/task';
 
 export default function TasksPage() {
   const router = useRouter();
-  const { tasks, loading, error, fetchTasks, createTask, updateTask, deleteTask, unassignFromCrew } = useTasks();
+  const { tasks, loading, error, fetchTasks, deleteTask, unassignFromCrew } = useTasks();
   const { agents, refetch: refetchAgents } = useAgents();
   const { crews, refetch: refetchCrews } = useCrews();
 
-  const [showTaskForm, setShowTaskForm] = useState(false);
   const [filterCrew, setFilterCrew] = useState<string | 'all'>('all');
   const [filterAgent, setFilterAgent] = useState<string | 'all'>('all');
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     fetchTasks();
@@ -29,24 +27,16 @@ export default function TasksPage() {
   }, [fetchTasks, refetchAgents, refetchCrews]);
 
   const handleCreateTask = () => {
-    setShowTaskForm(true);
+    router.push('/tasks/new');
   };
 
   const handleEditTask = (task: Task) => {
     router.push(`/tasks/${task.id}`);
   };
 
-  const handleSaveTask = async (taskData: TaskCreate | TaskUpdate) => {
-    try {
-      await createTask(taskData as TaskCreate);
-      setShowTaskForm(false);
-      fetchTasks();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to save task');
-    }
-  };
-
   const handleDeleteTask = async (taskId: string) => {
+    if (!confirm('Are you sure you want to delete this task?')) return;
+
     try {
       await deleteTask(taskId);
       fetchTasks();
@@ -56,6 +46,8 @@ export default function TasksPage() {
   };
 
   const handleUnassignTask = async (taskId: string) => {
+    if (!confirm('Remove this task from its crew? The task will not be deleted.')) return;
+
     try {
       await unassignFromCrew(taskId);
       fetchTasks();
@@ -64,18 +56,29 @@ export default function TasksPage() {
     }
   };
 
-  // Build agent names map for task list
+  // Build agent and crew names maps
   const agentNames = agents.reduce((acc, agent) => {
     acc[agent.id] = agent.name;
     return acc;
   }, {} as Record<string, string>);
 
+  const crewNames = crews.reduce((acc, crew) => {
+    acc[crew.id] = crew.name;
+    return acc;
+  }, {} as Record<string, string>);
+
   // Filter tasks
   const filteredTasks = tasks.filter(task => {
+    if (search && !task.name.toLowerCase().includes(search.toLowerCase()) &&
+        !task.description.toLowerCase().includes(search.toLowerCase())) {
+      return false;
+    }
     if (filterCrew !== 'all' && task.crew_id !== filterCrew) return false;
     if (filterAgent !== 'all' && task.agent_id !== filterAgent) return false;
     return true;
   });
+
+  const hasActiveFilters = search || filterCrew !== 'all' || filterAgent !== 'all';
 
   return (
     <ProtectedRoute>
@@ -95,21 +98,38 @@ export default function TasksPage() {
               </div>
               <button
                 onClick={handleCreateTask}
-                className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
               >
                 + Create Task
               </button>
             </div>
 
             {/* Filters */}
-            <div className="bg-white p-4 rounded-lg border border-gray-200 mb-6">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium text-gray-700">Filter by Crew:</label>
+            <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Search */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Search
+                  </label>
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search tasks..."
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Crew Filter */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Filter by Crew
+                  </label>
                   <select
                     value={filterCrew}
                     onChange={(e) => setFilterCrew(e.target.value === 'all' ? 'all' : e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:border-blue-500 focus:ring-blue-500"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="all">All Crews</option>
                     {crews.map(crew => (
@@ -118,12 +138,15 @@ export default function TasksPage() {
                   </select>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium text-gray-700">Filter by Agent:</label>
+                {/* Agent Filter */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Filter by Agent
+                  </label>
                   <select
                     value={filterAgent}
                     onChange={(e) => setFilterAgent(e.target.value === 'all' ? 'all' : e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:border-blue-500 focus:ring-blue-500"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="all">All Agents</option>
                     {agents.map(agent => (
@@ -131,35 +154,24 @@ export default function TasksPage() {
                     ))}
                   </select>
                 </div>
+              </div>
 
-                {(filterCrew !== 'all' || filterAgent !== 'all') && (
+              {/* Clear Filters */}
+              {hasActiveFilters && (
+                <div className="mt-4">
                   <button
                     onClick={() => {
+                      setSearch('');
                       setFilterCrew('all');
                       setFilterAgent('all');
                     }}
-                    className="text-sm text-blue-600 hover:text-blue-800"
+                    className="text-sm text-blue-600 hover:text-blue-700"
                   >
-                    Clear Filters
+                    Clear all filters
                   </button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
-
-            {/* Task Form */}
-            {showTaskForm && (
-              <div className="bg-white p-6 rounded-lg border border-gray-200 mb-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                  Create New Task
-                </h2>
-                <TaskForm
-                  onSave={handleSaveTask}
-                  onCancel={() => {
-                    setShowTaskForm(false);
-                  }}
-                />
-              </div>
-            )}
 
             {/* Content */}
             {error ? (
@@ -179,40 +191,138 @@ export default function TasksPage() {
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
               </div>
             ) : filteredTasks.length === 0 ? (
-              <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+              <div className="flex flex-col items-center justify-center py-12">
                 <p className="text-gray-500 mb-4">
-                  {tasks.length === 0
-                    ? 'No tasks yet. Create your first task to get started.'
-                    : 'No tasks match your filters.'}
+                  {hasActiveFilters
+                    ? 'No tasks match your filters.'
+                    : 'No tasks yet. Create your first task to get started.'}
                 </p>
-                {tasks.length === 0 && (
+                {!hasActiveFilters && (
                   <button
                     onClick={handleCreateTask}
-                    className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
                   >
                     Create Task
                   </button>
                 )}
               </div>
             ) : (
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <p className="text-sm text-gray-600">
-                    Showing {filteredTasks.length} of {tasks.length} tasks
-                  </p>
-                </div>
-                <TaskList
-                  tasks={filteredTasks}
-                  onEdit={handleEditTask}
-                  onDelete={handleDeleteTask}
-                  onUnassign={handleUnassignTask}
-                  agentNames={agentNames}
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredTasks.map((task) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    agentName={task.agent_id ? agentNames[task.agent_id] : undefined}
+                    crewName={task.crew_id ? crewNames[task.crew_id] : undefined}
+                    onEdit={() => handleEditTask(task)}
+                    onDelete={() => handleDeleteTask(task.id)}
+                    onUnassign={task.crew_id ? () => handleUnassignTask(task.id) : undefined}
+                  />
+                ))}
               </div>
             )}
           </div>
         </div>
       </div>
     </ProtectedRoute>
+  );
+}
+
+// Task Card Component
+function TaskCard({
+  task,
+  agentName,
+  crewName,
+  onEdit,
+  onDelete,
+  onUnassign
+}: {
+  task: Task;
+  agentName?: string;
+  crewName?: string;
+  onEdit: () => void;
+  onDelete: () => void;
+  onUnassign?: () => void;
+}) {
+  return (
+    <div className="bg-white p-6 rounded-lg border border-gray-200 hover:shadow-lg transition-shadow">
+      <div className="flex items-start justify-between mb-2">
+        <h3 className="text-lg font-semibold text-gray-900 flex-1">
+          {task.name}
+        </h3>
+        <span className="px-2 py-1 text-xs font-medium rounded bg-blue-100 text-blue-800">
+          Order: {task.order}
+        </span>
+      </div>
+
+      <p className="text-sm text-gray-600 mt-2 line-clamp-2">
+        {task.description}
+      </p>
+
+      {/* Expected Output */}
+      <div className="mt-3">
+        <span className="text-xs font-medium text-gray-500">Expected Output:</span>
+        <p className="text-sm text-gray-700 line-clamp-2">{task.expected_output}</p>
+      </div>
+
+      {/* Badges */}
+      <div className="flex flex-wrap gap-2 mt-4">
+        {task.async_execution && (
+          <span className="px-2 py-1 text-xs font-medium rounded bg-purple-100 text-purple-800">
+            Async
+          </span>
+        )}
+        <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-700">
+          {task.output_format}
+        </span>
+        {task.output_file && (
+          <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-700">
+            📄 {task.output_file}
+          </span>
+        )}
+      </div>
+
+      {/* Assignments */}
+      {(agentName || crewName) && (
+        <div className="mt-4 space-y-1 text-xs text-gray-600">
+          {agentName && (
+            <div>
+              <span className="font-medium">Agent:</span> {agentName}
+            </div>
+          )}
+          {crewName && (
+            <div>
+              <span className="font-medium">Crew:</span> {crewName}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="mt-4 flex gap-2">
+        <button
+          onClick={onEdit}
+          className="flex-1 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
+        >
+          Edit
+        </button>
+        {onUnassign ? (
+          <button
+            onClick={onUnassign}
+            className="px-4 py-2 text-sm font-medium text-orange-600 bg-orange-50 rounded-md hover:bg-orange-100"
+            title="Remove from crew"
+          >
+            Unassign
+          </button>
+        ) : (
+          <button
+            onClick={onDelete}
+            className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-md hover:bg-red-100"
+          >
+            Delete
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
