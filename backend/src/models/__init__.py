@@ -27,6 +27,7 @@ from .role import Role
 from .user_role import user_roles
 from .policy import Policy
 from .authorization_audit_log import AuthorizationAuditLog
+from .tenant_registration import TenantRegistration
 
 __all__ = [
     "Tenant",
@@ -55,4 +56,5 @@ __all__ = [
     "user_roles",
     "Policy",
     "AuthorizationAuditLog",
+    "TenantRegistration",
 ]

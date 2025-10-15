@@ -27,12 +27,18 @@ export default function NotificationsBell() {
   useEffect(() => {
     if (!ENABLED) return;
     if (!token) return;
-    // Load unread count initially
+    // Load unread count and recent notifications initially
     (async () => {
       try {
-        const res = await apiClient.get('/api/v1/notifications?unread_only=true&limit=1');
-        if (res.data && typeof res.data.unread_count === 'number') {
-          useNotificationStore.getState().setUnread(res.data.unread_count);
+        const res = await apiClient.get('/api/v1/notifications?limit=10');
+        if (res.data) {
+          if (typeof res.data.unread_count === 'number') {
+            useNotificationStore.getState().setUnread(res.data.unread_count);
+          }
+          if (Array.isArray(res.data.notifications)) {
+            // Load recent notifications into store
+            useNotificationStore.getState().setRecent(res.data.notifications);
+          }
         }
       } catch {}
     })();
@@ -71,13 +77,13 @@ export default function NotificationsBell() {
         )}
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden z-20">
-          <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-2">
-            <span className="text-sm font-medium">Notifications</span>
+        <div className="fixed right-4 top-16 w-96 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl overflow-hidden z-50">
+          <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold">Notifications</span>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">{unreadCount} unread</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">{unreadCount} unread</span>
               <button
-                className="text-xs px-2 py-1 border rounded hover:bg-gray-50 dark:hover:bg-gray-800"
+                className="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 onClick={async () => {
                   try {
                     await apiClient.post('/api/v1/notifications/read-all', {});
@@ -92,14 +98,14 @@ export default function NotificationsBell() {
               </button>
             </div>
           </div>
-          <div className="max-h-80 overflow-y-auto">
+          <div className="max-h-96 overflow-y-auto">
             {recent.length === 0 ? (
-              <div className="p-4 text-sm text-gray-500">No notifications yet</div>
+              <div className="p-4 text-sm text-gray-500 dark:text-gray-400 text-center">No notifications yet</div>
             ) : (
               recent.map((n, idx) => (
-                <div key={idx} className="px-3 py-2 border-b border-gray-100 dark:border-gray-800">
-                  <div className="text-sm font-medium">{n.title}</div>
-                  {n.message && <div className="text-xs text-gray-600 dark:text-gray-400">{n.message}</div>}
+                <div key={idx} className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{n.title}</div>
+                  {n.message && <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">{n.message}</div>}
                 </div>
               ))
             )}

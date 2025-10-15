@@ -307,6 +307,7 @@ interface NotificationState {
   unreadCount: number;
   recent: AppNotification[];
   setUnread: (count: number) => void;
+  setRecent: (notifications: AppNotification[]) => void;
   pushNotification: (n: AppNotification) => void;
   clear: () => void;
 }
@@ -315,6 +316,7 @@ export const useNotificationStore = create<NotificationState>((set) => ({
   unreadCount: 0,
   recent: [],
   setUnread: (count) => set({ unreadCount: count }),
+  setRecent: (notifications) => set({ recent: notifications.slice(0, 20) }),
   pushNotification: (n) =>
     set((state) => ({ recent: [n, ...state.recent].slice(0, 20), unreadCount: state.unreadCount + 1 })),
   clear: () => set({ recent: [], unreadCount: 0 }),

@@ -88,6 +88,14 @@ class ExecutionEventPublisher:
             data={"error": error},
         )
 
+    async def publish_cancellation(self, execution_id: int) -> None:
+        """Publish execution cancelled event."""
+        self._publish_event(
+            execution_id=execution_id,
+            event_type="execution_cancelled",
+            data={},
+        )
+
     async def publish_node_started(
         self, execution_id: int, node_id: str, node_type: str
     ) -> None:

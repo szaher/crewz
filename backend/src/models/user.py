@@ -32,6 +32,7 @@ class User(BaseModel):
     full_name = Column(String(255), nullable=False)
     role = Column(Enum(UserRole), nullable=False, default=UserRole.MEMBER)
     is_active = Column(Boolean, nullable=False, default=True)
+    is_super_admin = Column(Boolean, nullable=False, default=False, index=True)
     # Invitation / password reset
     password_reset_token = deferred(Column(String(255), nullable=True))
     password_reset_expires = deferred(Column(DateTime, nullable=True))
@@ -64,10 +65,9 @@ class User(BaseModel):
         # Fallback to legacy role column
         return getattr(self.role, 'value', str(self.role))
 
-    @property
-    def is_super_admin(self) -> bool:
-        """Check if user has super-admin role."""
-        return any(r.slug == "super-admin" for r in self.roles)
+    def check_super_admin_role(self) -> bool:
+        """Check if user has super-admin role via roles relationship."""
+        return any(r.slug == "super-admin" for r in self.roles) if self.roles else False
 
     @property
     def is_tenant_admin(self) -> bool:

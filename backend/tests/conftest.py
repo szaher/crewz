@@ -194,3 +194,57 @@ async def test_chat_session(db_session, test_user: dict, test_llm_provider: dict
         "user_id": session.user_id,
         "title": session.title,
     }
+
+
+@pytest.fixture(scope="function")
+async def auth_headers(test_user: dict) -> dict:
+    """Create authorization headers for regular user."""
+    # In real tests, this would generate a JWT token
+    # For contract tests, we use a mock token
+    return {
+        "Authorization": "Bearer test_token_regular_user"
+    }
+
+
+@pytest.fixture(scope="function")
+async def super_admin_user(db_session) -> dict:
+    """Create a super admin test user."""
+    # Create tenant for super admin
+    tenant = Tenant(
+        name="Platform Admin Tenant",
+        schema_name="platform_admin",
+        api_key="super_admin_api_key_123",
+    )
+    db_session.add(tenant)
+    db_session.commit()
+
+    # Create super admin user
+    user = User(
+        tenant_id=tenant.id,
+        email="superadmin@platform.local",
+        password_hash="hashed_password",
+        full_name="Super Admin",
+        role="super_admin",
+        is_super_admin=True,  # Super admin flag
+    )
+    db_session.add(user)
+    db_session.commit()
+
+    return {
+        "id": user.id,
+        "email": user.email,
+        "password": "superadmin123",
+        "tenant_id": tenant.id,
+        "role": user.role,
+        "is_super_admin": True,
+    }
+
+
+@pytest.fixture(scope="function")
+async def super_admin_headers(super_admin_user: dict) -> dict:
+    """Create authorization headers for super admin."""
+    # In real tests, this would generate a JWT token with super_admin role
+    # For contract tests, we use a mock token
+    return {
+        "Authorization": "Bearer test_token_super_admin"
+    }

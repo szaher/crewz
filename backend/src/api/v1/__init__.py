@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from . import auth, flows, executions, agents, tools, chat, crews, llm_providers, feedback, users, tenant, tasks, notifications, prompts, authz
+from . import auth, flows, executions, agents, tools, chat, crews, llm_providers, feedback, users, tenant, tasks, notifications, prompts, authz, tenant_registration
 
 # Create main API router
 api_router = APIRouter()
@@ -22,6 +22,7 @@ api_router.include_router(llm_providers.router, tags=["LLM Providers"])
 api_router.include_router(feedback.router, prefix="/feedback", tags=["Feedback"])
 api_router.include_router(users.router, prefix="/users", tags=["Users"])
 api_router.include_router(tenant.router, prefix="/tenant", tags=["Tenant"])
+api_router.include_router(tenant_registration.router, tags=["Tenant Management"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["Notifications"])
 
 __all__ = ["api_router"]

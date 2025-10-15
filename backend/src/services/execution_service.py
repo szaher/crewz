@@ -142,9 +142,12 @@ class ExecutionService:
     async def cancel_execution(self, execution_id: int) -> Execution:
         """Cancel a running execution."""
         execution = await self.get_execution(execution_id)
-        # Event publisher for SSE
-        from ..services.execution_events import ExecutionEventPublisher
-        event_publisher = ExecutionEventPublisher()
+        # Initialize event publisher (best-effort)
+        try:
+            from ..services.execution_events import ExecutionEventPublisher
+            event_publisher = ExecutionEventPublisher()
+        except Exception:
+            event_publisher = None
 
         if execution.status not in ["pending", "running"]:
             raise HTTPException(
@@ -156,59 +159,99 @@ class ExecutionService:
         self.db.commit()
         self.db.refresh(execution)
 
-        # Send cancellation signal to running task
-        # Publish cancellation event via Redis for background workers to pick up
-        from ..services.execution_events import ExecutionEventPublisher
-        event_publisher = ExecutionEventPublisher()
-        await event_publisher.publish_cancellation(execution_id)
+        # Publish cancellation event via Redis (best-effort)
+        if event_publisher:
+            try:
+                await event_publisher.publish_cancellation(execution_id)
+            except Exception:
+                pass
 
         return execution
 
     async def _execute_async(self, execution_id: int) -> None:
         """
-        Execute a flow/crew asynchronously.
+        Execute a flow/crew asynchronously using a fresh DB session.
 
         Args:
             execution_id: Execution ID to run
         """
-        execution = await self.get_execution(execution_id)
+        from ..db.postgres import SessionLocal
+        from ..models.execution import Execution as ExecutionModel
 
+        db = SessionLocal()
         try:
-            # Update status to running
-            execution.status = "running"
-            self.db.commit()
-            # Publish execution started event (best-effort)
+            execution = db.query(ExecutionModel).filter(ExecutionModel.id == execution_id).first()
+            if not execution:
+                return
+
+            # Prepare event publisher (do not fail execution if Redis is unavailable)
             try:
-                await event_publisher.publish_execution_started(execution_id, execution.input_data or {})
+                from ..services.execution_events import ExecutionEventPublisher
+                event_publisher = ExecutionEventPublisher()
             except Exception:
-                pass
+                event_publisher = None
+
+            # Mark running
+            execution.status = "running"
+            db.commit()
+
+            if event_publisher:
+                try:
+                    await event_publisher.publish_execution_started(execution_id, execution.input_data or {})
+                except Exception:
+                    pass
 
             if execution.execution_type == "flow":
-                # Execute flow
-                flow = await self.flow_service.get_flow(execution.flow_id)
-                output = await self.flow_executor.execute_flow(
+                import time
+                start_time = time.time()
+
+                # Build services tied to this DB session
+                from ..services.flow_service import FlowService
+                from ..services.llm_service import LLMService
+                from ..services.docker_service import DockerService
+                from ..crewai.tool_adapter import ToolAdapter
+                from ..crewai.agent_factory import AgentFactory
+                from ..crewai.crew_factory import CrewFactory
+                from ..crewai.flow_executor import FlowExecutor
+                flow_service = FlowService(db)
+                llm_service = LLMService(db)
+                docker_service = DockerService()
+                tool_adapter = ToolAdapter(docker_service)
+                agent_factory = AgentFactory(llm_service, tool_adapter)
+                crew_factory = CrewFactory(agent_factory)
+                flow_executor = FlowExecutor(crew_factory, agent_factory, event_publisher)
+
+                flow = await flow_service.get_flow(execution.flow_id)
+                output = await flow_executor.execute_flow(
                     flow=flow,
                     execution=execution,
                     input_data=execution.input_data,
                 )
 
-                # Update execution with output
                 execution.output_data = output
+                execution.execution_time_ms = int((time.time() - start_time) * 1000)
                 execution.status = "completed"
-                # Publish completion event and notification
-                try:
-                    await event_publisher.publish_execution_completed(execution_id, output or {})
-                except Exception:
-                    pass
+                db.commit()
+
+                if event_publisher:
+                    try:
+                        await event_publisher.publish_execution_completed(execution_id, output or {})
+                    except Exception:
+                        pass
+                # Notification (best-effort)
                 try:
                     from .notification_service import NotificationService
                     from .notification_events import NotificationPublisher
                     from ..schemas.notifications import NotificationCreate
-                    ns = NotificationService(self.db)
+                    ns = NotificationService(db)
                     title = f"Flow #{execution.flow_id} completed"
-                    n = await ns.create_notification(
+                    # Get tenant_id from user
+                    from ..models.user import User
+                    user = db.query(User).filter(User.id == execution.user_id).first()
+                    tenant_id_val = user.tenant_id if user else None
+                    _ = await ns.create_notification(
                         user_id=execution.user_id,
-                        tenant_id=getattr(getattr(flow, 'tenant', None), 'id', None) or getattr(flow, 'tenant_id', 1),
+                        tenant_id=tenant_id_val,
                         data=NotificationCreate(
                             type="success",
                             title=title,
@@ -224,14 +267,9 @@ class ExecutionService:
                     })
                 except Exception:
                     pass
-                try:
-                    await event_publisher.publish_execution_completed(execution_id, execution.output_data or {})
-                except Exception:
-                    pass
 
             elif execution.execution_type == "crew":
-                # Execute crew directly (without flow)
-                import time
+                import time, json
                 from ..services.llm_service import LLMService
                 from ..services.docker_service import DockerService
                 from ..services.task_service import TaskService
@@ -242,23 +280,17 @@ class ExecutionService:
                 from ..models.agent import Agent
 
                 start_time = time.time()
-
-                # Load crew model
-                crew_service = CrewService(self.db)
+                crew_service = CrewService(db)
                 crew_model = await crew_service.get_crew(execution.crew_id)
 
-                # Initialize dependencies
-                llm_service = LLMService(self.db)
+                llm_service = LLMService(db)
                 docker_service = DockerService()
                 tool_adapter = ToolAdapter(docker_service)
                 agent_factory = AgentFactory(llm_service, tool_adapter)
                 crew_factory = CrewFactory(agent_factory)
-
-                # Create CrewAI crew
                 crewai_crew = await crew_factory.from_db_model(crew_model)
 
-                # Build tasks
-                task_service = TaskService(self.db)
+                task_service = TaskService(db)
                 stored_tasks = await task_service.get_crew_tasks(execution.crew_id)
 
                 variables = {}
@@ -276,24 +308,19 @@ class ExecutionService:
                     return result
 
                 from crewai import Task as CrewTask
-                import json
-
                 tasks: list = []
                 task_map: dict = {}
-
                 if stored_tasks:
                     for db_task in stored_tasks:
-                        # Resolve agent
                         agent_instance = None
                         if db_task.agent_id:
-                            agent_model = self.db.query(Agent).filter(Agent.id == db_task.agent_id).first()
+                            agent_model = db.query(Agent).filter(Agent.id == db_task.agent_id).first()
                             if agent_model:
                                 agent_instance = await agent_factory.from_db_model(agent_model)
                         else:
                             agents = getattr(crewai_crew, 'agents', [])
                             agent_instance = agents[0] if agents else None
 
-                        # Context refs
                         context_tasks = []
                         if db_task.context:
                             try:
@@ -305,7 +332,6 @@ class ExecutionService:
                             except Exception:
                                 pass
 
-                        # Tools (basic: reuse agent tools if any)
                         task_tools = []
                         if db_task.tools_config and agent_instance and hasattr(agent_instance, 'tools'):
                             task_tools = agent_instance.tools
@@ -330,7 +356,6 @@ class ExecutionService:
                         tasks.append(t)
                         task_map[db_task.id] = t
                 else:
-                    # Dynamic tasks from input
                     tasks_input = []
                     try:
                         tasks_input = execution.input_data.get('tasks', []) if isinstance(execution.input_data, dict) else []
@@ -338,7 +363,6 @@ class ExecutionService:
                         tasks_input = []
                     if not tasks_input:
                         tasks_input = ['Complete the assigned objectives as a team']
-
                     agents = getattr(crewai_crew, 'agents', [])
                     for i, task_desc in enumerate(tasks_input):
                         agent_instance = agents[i % len(agents)] if agents else None
@@ -350,27 +374,31 @@ class ExecutionService:
                         tasks.append(t)
 
                 crewai_crew.tasks = tasks
-
-                # Execute crew in a separate thread to avoid blocking
                 result = await asyncio.to_thread(crewai_crew.kickoff)
 
-                # Update execution
                 execution.output_data = {"output": str(result), "task_count": len(tasks)}
                 execution.execution_time_ms = int((time.time() - start_time) * 1000)
                 execution.status = "completed"
-                try:
-                    await event_publisher.publish_execution_completed(execution_id, execution.output_data or {})
-                except Exception:
-                    pass
+                db.commit()
+
+                if event_publisher:
+                    try:
+                        await event_publisher.publish_execution_completed(execution_id, execution.output_data or {})
+                    except Exception:
+                        pass
                 try:
                     from .notification_service import NotificationService
                     from .notification_events import NotificationPublisher
                     from ..schemas.notifications import NotificationCreate
-                    ns = NotificationService(self.db)
+                    ns = NotificationService(db)
                     title = f"Crew #{execution.crew_id} completed"
-                    n = await ns.create_notification(
+                    # Get tenant_id from user
+                    from ..models.user import User
+                    user = db.query(User).filter(User.id == execution.user_id).first()
+                    tenant_id_val = user.tenant_id if user else None
+                    _ = await ns.create_notification(
                         user_id=execution.user_id,
-                        tenant_id=getattr(getattr(crew_model, 'tenant', None), 'id', None) if 'crew_model' in locals() else 1,
+                        tenant_id=tenant_id_val,
                         data=NotificationCreate(
                             type="success",
                             title=title,
@@ -386,55 +414,58 @@ class ExecutionService:
                     })
                 except Exception:
                     pass
-                try:
-                    await event_publisher.publish_execution_completed(execution_id, execution.output_data or {})
-                except Exception:
-                    pass
 
             else:
                 raise ValueError(f"Unknown execution type: {execution.execution_type}")
 
         except Exception as e:
-            # Execution failed
-            execution.status = "failed"
-            execution.error = str(e)
+            # Update to failed and notify
             try:
-                await event_publisher.publish_execution_failed(execution_id, execution.error)
+                execution = db.query(ExecutionModel).filter(ExecutionModel.id == execution_id).first()
+                if execution:
+                    execution.status = "failed"
+                    execution.error = str(e)
+                    db.commit()
+                    if 'event_publisher' in locals() and event_publisher:
+                        try:
+                            await event_publisher.publish_execution_failed(execution_id, execution.error)
+                        except Exception:
+                            pass
+                    try:
+                        from .notification_service import NotificationService
+                        from .notification_events import NotificationPublisher
+                        from ..schemas.notifications import NotificationCreate
+                        ns = NotificationService(db)
+                        title = f"{str(execution.execution_type).capitalize()} execution failed"
+                        # Get tenant_id from user
+                        from ..models.user import User
+                        user = db.query(User).filter(User.id == execution.user_id).first()
+                        tenant_id_val = user.tenant_id if user else None
+                        _ = await ns.create_notification(
+                            user_id=execution.user_id,
+                            tenant_id=tenant_id_val,
+                            data=NotificationCreate(
+                                type="error",
+                                title=title,
+                                message=str(e),
+                                data={"execution_id": str(execution.id), "type": execution.execution_type},
+                            ),
+                        )
+                        NotificationPublisher().publish(execution.user_id, {
+                            "type": "error",
+                            "title": title,
+                            "message": str(e),
+                            "data": {"execution_id": str(execution.id), "type": execution.execution_type},
+                        })
+                    except Exception:
+                        pass
             except Exception:
                 pass
-            # Send failure notification
-            try:
-                from .notification_service import NotificationService
-                from .notification_events import NotificationPublisher
-                from ..schemas.notifications import NotificationCreate
-                ns = NotificationService(self.db)
-                what = execution.execution_type
-                title = f"{what.capitalize()} execution failed"
-                _ = await ns.create_notification(
-                    user_id=execution.user_id,
-                    tenant_id=1,
-                    data=NotificationCreate(
-                        type="error",
-                        title=title,
-                        message=execution.error,
-                        data={"execution_id": str(execution.id), "type": execution.execution_type},
-                    ),
-                )
-                NotificationPublisher().publish(execution.user_id, {
-                    "type": "error",
-                    "title": title,
-                    "message": execution.error,
-                    "data": {"execution_id": str(execution.id), "type": execution.execution_type},
-                })
-            except Exception:
-                pass
-            try:
-                await event_publisher.publish_execution_failed(execution_id, execution.error)
-            except Exception:
-                pass
-
         finally:
-            self.db.commit()
+            try:
+                db.close()
+            except Exception:
+                pass
 
     def create_agent_execution(
         self,
