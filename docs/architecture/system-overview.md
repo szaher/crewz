@@ -6,6 +6,71 @@ The Dynamic CrewAI Orchestration Platform is a sophisticated multi-tenant SaaS a
 
 ## High-Level Architecture
 
+```mermaid
+flowchart TD
+    subgraph Client
+        browser["User Browser"]
+    end
+
+    subgraph Frontend["Frontend Layer"]
+        nextjs["Next.js App Router"]
+        ws_client["WebSocket Client"]
+        api_client["REST API Client"]
+        nextjs --> ws_client
+        nextjs --> api_client
+    end
+
+    subgraph Backend["Backend API Layer (FastAPI)"]
+        gateway["API Gateway & Routing"]
+        auth["Auth & RBAC"]
+        subgraph services["Business Services"]
+            agents_service["Agent Service"]
+            crews_service["Crew Service"]
+            flows_service["Flow Service"]
+            exec_service["Execution Service"]
+        end
+        gateway --> auth
+        auth --> agents_service
+        auth --> crews_service
+        auth --> flows_service
+        auth --> exec_service
+    end
+
+    subgraph Async["Async & Execution"]
+        celery["Celery Workers"]
+        orchestrator["Flow Execution Orchestrator"]
+        tool_runtime["Tool Runtime (Docker DinD)"]
+    end
+
+    subgraph Data["Data Persistence"]
+        postgres[("PostgreSQL\nSchema-per-tenant")]
+        mongodb[("MongoDB\nExecution Logs")]
+        redis[("Redis\nCache & Broker")]
+    end
+
+    subgraph Integrations
+        llm[("LLM Providers")]
+        observability[("Prometheus / Grafana / OpenTelemetry")]
+    end
+
+    browser --> nextjs
+    ws_client --> gateway
+    api_client --> gateway
+    gateway --> postgres
+    gateway --> mongodb
+    gateway --> redis
+    gateway --> celery
+    celery --> orchestrator
+    orchestrator --> llm
+    orchestrator --> tool_runtime
+    tool_runtime --> redis
+    celery --> redis
+    redis --> celery
+    gateway -. metrics .-> observability
+    celery -. traces .-> observability
+    orchestrator -. logs .-> observability
+```
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Frontend Layer                          │
