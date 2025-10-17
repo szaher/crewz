@@ -1,6 +1,7 @@
 """Crew model for CrewAI crews."""
 
 from sqlalchemy import Column, String, Text, Boolean, Integer, ForeignKey, Table, Enum
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 import enum
@@ -17,8 +18,8 @@ class CrewProcess(str, enum.Enum):
 crew_agents = Table(
     "crew_agents",
     BaseModel.metadata,
-    Column("crew_id", Integer, ForeignKey("crews.id"), primary_key=True),
-    Column("agent_id", Integer, ForeignKey("agents.id"), primary_key=True),
+    Column("crew_id", postgresql.UUID(as_uuid=True), ForeignKey("crews.id"), primary_key=True),
+    Column("agent_id", postgresql.UUID(as_uuid=True), ForeignKey("agents.id"), primary_key=True),
     Column("order", Integer, nullable=False, default=0),
 )
 
@@ -40,7 +41,7 @@ class Crew(BaseModel):
 
     # Manager LLM for hierarchical process
     manager_llm_provider_id = Column(
-        Integer, ForeignKey("llm_providers.id"), nullable=True, index=True
+        postgresql.UUID(as_uuid=True), ForeignKey("llm_providers.id"), nullable=True, index=True
     )
 
     # Relationships

@@ -1,6 +1,7 @@
 """Feedback model for user feedback on executions and agents."""
 
 from sqlalchemy import Column, String, Text, Integer, Float, ForeignKey, Enum, JSON
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 import enum
@@ -32,13 +33,13 @@ class Feedback(BaseModel):
     __tablename__ = "feedback"
 
     # Tenant and user
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    tenant_id = Column(postgresql.UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    user_id = Column(postgresql.UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
 
     # Feedback type and target
     feedback_type = Column(String(20), nullable=False, index=True)  # FeedbackType enum values
-    execution_id = Column(Integer, ForeignKey("executions.id"), nullable=True, index=True)
-    agent_id = Column(Integer, ForeignKey("agents.id"), nullable=True, index=True)
+    execution_id = Column(postgresql.UUID(as_uuid=True), ForeignKey("executions.id"), nullable=True, index=True)
+    agent_id = Column(postgresql.UUID(as_uuid=True), ForeignKey("agents.id"), nullable=True, index=True)
     chat_session_id = Column(String(255), nullable=True, index=True)  # MongoDB ID
 
     # Rating (1-5 stars)

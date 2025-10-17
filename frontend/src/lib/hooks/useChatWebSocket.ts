@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import type { ChatMessage } from '@/types/api';
 
 interface UseChatWebSocketProps {
-  sessionId: number;
+  sessionId: string;
   token: string | null;
   onMessage: (message: ChatMessage) => void;
   onStatusChange?: (status: 'thinking' | 'responding') => void;

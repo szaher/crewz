@@ -17,7 +17,7 @@ export default function FlowEditorPage() {
   const params = useParams();
   const router = useRouter();
   const isNew = params.id === 'new';
-  const flowId = !isNew && params.id ? Number(params.id) : null;
+  const flowId = !isNew && params.id ? String(params.id) : null;
   const { setCurrentFlow, currentFlow } = useFlowStore();
   const [selectedNode, setSelectedNode] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -57,7 +57,7 @@ export default function FlowEditorPage() {
     }
 
     // Don't load if flowId is invalid
-    if (!flowId || isNaN(flowId)) {
+    if (!flowId) {
       setLoading(false);
       return;
     }
@@ -141,7 +141,7 @@ export default function FlowEditorPage() {
     );
   }
 
-  if (!isNew && (!flowId || isNaN(flowId))) {
+  if (!isNew && !flowId) {
     return (
       <ProtectedRoute>
         <div className="flex h-screen bg-gray-50 dark:bg-gray-900">

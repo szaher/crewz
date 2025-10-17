@@ -59,7 +59,7 @@ class PromptCategoryResponse(PromptCategoryBase):
     """Prompt category response schema."""
 
     id: UUID
-    tenant_id: int
+    tenant_id: UUID
     created_at: datetime
     updated_at: datetime
 
@@ -82,7 +82,7 @@ class PromptTemplateBase(BaseModel):
 
     # Model recommendations
     suggested_model: Optional[str] = Field(None, max_length=100, description="Suggested LLM model (e.g., 'gpt-4', 'claude-3-opus')")
-    suggested_provider_id: Optional[int] = Field(None, description="Suggested LLM provider ID")
+    suggested_provider_id: Optional[UUID] = Field(None, description="Suggested LLM provider ID")
 
     # Model parameters
     model_parameters: Optional[ModelParameters] = Field(default_factory=ModelParameters, description="Default model parameters")
@@ -125,7 +125,7 @@ class PromptTemplateUpdate(BaseModel):
     is_active: Optional[bool] = None
     is_command_enabled: Optional[bool] = None
     suggested_model: Optional[str] = Field(None, max_length=100)
-    suggested_provider_id: Optional[int] = None
+    suggested_provider_id: Optional[UUID] = None
     model_parameters: Optional[ModelParameters] = None
 
 
@@ -133,8 +133,8 @@ class PromptTemplateResponse(PromptTemplateBase):
     """Prompt template response schema."""
 
     id: UUID
-    tenant_id: int
-    user_id: int
+    tenant_id: UUID
+    user_id: UUID
     version: int
     variables: Optional[Dict[str, PromptVariableSchema]] = Field(default_factory=dict)
     usage_count: int
@@ -165,7 +165,7 @@ class PromptExecutionRequest(BaseModel):
 
     variables: Dict[str, Any] = Field(default_factory=dict, description="Variables to render in the prompt")
     model: Optional[str] = Field(None, description="Override suggested model")
-    provider_id: Optional[int] = Field(None, description="Override suggested provider")
+    provider_id: Optional[UUID] = Field(None, description="Override suggested provider")
     parameters: Optional[ModelParameters] = Field(None, description="Override model parameters")
     context_type: str = Field(default="direct", description="Execution context: chat, task, direct, command")
     context_id: Optional[UUID] = Field(None, description="Context reference ID")
@@ -193,7 +193,7 @@ class PromptRatingResponse(BaseModel):
 
     id: UUID
     prompt_id: UUID
-    user_id: int
+    user_id: UUID
     rating: int
     created_at: datetime
     updated_at: datetime
@@ -222,11 +222,11 @@ class PromptFeedbackResponse(BaseModel):
 
     id: UUID
     prompt_id: UUID
-    user_id: int
+    user_id: UUID
     feedback_type: str
     content: str
     is_resolved: bool
-    resolved_by: Optional[int] = None
+    resolved_by: Optional[UUID] = None
     resolved_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime

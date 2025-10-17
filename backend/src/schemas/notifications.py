@@ -3,6 +3,7 @@
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+from uuid import UUID
 
 
 class NotificationCreate(BaseModel):
@@ -13,7 +14,7 @@ class NotificationCreate(BaseModel):
 
 
 class NotificationOut(BaseModel):
-    id: int
+    id: UUID
     type: str
     title: str
     message: Optional[str]

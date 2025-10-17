@@ -83,7 +83,7 @@ services:
       - MONGODB_URL=mongodb://crewai:dev_password@mongodb:27017/
       - REDIS_URL=redis://redis:6379/0
       - ENCRYPTION_KEY=QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=
-      - ALLOWED_ORIGINS=http://localhost:3001,http://localhost:3000,http://frontend:3000
+      - ALLOWED_ORIGINS=http://localhost:3001,http://localhost:3000,http://frontend:3000,http://192.168.1.178:3001
       - ALLOWED_ORIGIN_REGEX=${ALLOWED_ORIGIN_REGEX:-^https?://(localhost|127\.0\.0\.1|frontend|192\.168\.[0-9]+\.[0-9]+)(:[0-9]+)?$}
       - ALLOW_ALL_ORIGINS=${ALLOW_ALL_ORIGINS:-true}
       - CLICKHOUSE_HOST=clickhouse
@@ -92,6 +92,7 @@ services:
       - CLICKHOUSE_PASSWORD=dev_password
       - CLICKHOUSE_DATABASE=crewai_analytics
       - JWT_SECRET=dev_secret_change_in_production
+      - NOTIFICATIONS_ENABLED=1
       # Toggle verbosity via env (override in your shell or .env)
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - LOG_FORMAT=${LOG_FORMAT:-json}
@@ -101,7 +102,7 @@ services:
       - FRONTEND_URL=http://localhost:3000
       - ENVIRONMENT=development
     ports:
-      - "8000:8000"
+      - "0.0.0.0:8000:8000"
     volumes:
       - ./backend:/app
       - /var/run/docker.sock:/var/run/docker.sock  # For Docker-in-Docker tool execution
@@ -124,11 +125,10 @@ services:
       target: development
     container_name: crewai-frontend
     environment:
-      - NEXT_PUBLIC_WS_URL=ws://localhost:8000
-      - API_URL=http://backend:8000
+      # Let frontend infer API/WS host from the browser URL for LAN access
       - HOST=0.0.0.0
     ports:
-      - "3001:3000"
+      - "0.0.0.0:3001:3000"
     volumes:
       - ./frontend:/app
       - /app/node_modules

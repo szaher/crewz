@@ -105,7 +105,7 @@ async def list_feedback(
 
 @router.get("/{feedback_id}", response_model=FeedbackResponse)
 async def get_feedback(
-    feedback_id: int,
+    feedback_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -120,7 +120,7 @@ async def get_feedback(
 
 @router.put("/{feedback_id}", response_model=FeedbackResponse)
 async def update_feedback(
-    feedback_id: int,
+    feedback_id: str,
     request: FeedbackUpdate,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
@@ -146,7 +146,7 @@ async def update_feedback(
 
 @router.delete("/{feedback_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_feedback(
-    feedback_id: int,
+    feedback_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):

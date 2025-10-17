@@ -1,6 +1,7 @@
 """Execution model for flow and crew runs."""
 
 from sqlalchemy import Column, String, Integer, ForeignKey, JSON, Enum, Text
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 import enum
@@ -39,12 +40,12 @@ class Execution(BaseModel):
     status = Column(Enum(ExecutionStatus, values_callable=lambda x: [e.value for e in x]), nullable=False, default=ExecutionStatus.PENDING.value)
 
     # References (nullable - only one will be populated based on type)
-    flow_id = Column(Integer, ForeignKey("flows.id"), nullable=True, index=True)
-    crew_id = Column(Integer, ForeignKey("crews.id"), nullable=True, index=True)
-    agent_id = Column(Integer, ForeignKey("agents.id"), nullable=True, index=True)
-    tool_id = Column(Integer, ForeignKey("tools.id"), nullable=True, index=True)
-    task_id = Column(Integer, ForeignKey("tasks.id"), nullable=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    flow_id = Column(postgresql.UUID(as_uuid=True), ForeignKey("flows.id"), nullable=True, index=True)
+    crew_id = Column(postgresql.UUID(as_uuid=True), ForeignKey("crews.id"), nullable=True, index=True)
+    agent_id = Column(postgresql.UUID(as_uuid=True), ForeignKey("agents.id"), nullable=True, index=True)
+    tool_id = Column(postgresql.UUID(as_uuid=True), ForeignKey("tools.id"), nullable=True, index=True)
+    task_id = Column(postgresql.UUID(as_uuid=True), ForeignKey("tasks.id"), nullable=True, index=True)
+    user_id = Column(postgresql.UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
 
     # Execution data
     input_data = Column(JSON, nullable=False, default=dict)

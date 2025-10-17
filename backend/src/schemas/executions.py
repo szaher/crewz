@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 from enum import Enum
+from uuid import UUID
 
 
 class ExecutionStatus(str, Enum):
@@ -30,26 +31,26 @@ class ExecutionCreate(BaseModel):
     """Create execution request schema."""
 
     execution_type: ExecutionType
-    flow_id: Optional[int] = None
-    crew_id: Optional[int] = None
-    agent_id: Optional[int] = None
-    tool_id: Optional[int] = None
-    task_id: Optional[int] = None
+    flow_id: Optional[UUID] = None
+    crew_id: Optional[UUID] = None
+    agent_id: Optional[UUID] = None
+    tool_id: Optional[UUID] = None
+    task_id: Optional[UUID] = None
     input_data: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ExecutionResponse(BaseModel):
     """Execution response schema."""
 
-    id: int
+    id: UUID
     execution_type: ExecutionType
     status: ExecutionStatus
-    flow_id: Optional[int]
-    crew_id: Optional[int]
-    agent_id: Optional[int]
-    tool_id: Optional[int]
-    task_id: Optional[int]
-    user_id: int
+    flow_id: Optional[UUID]
+    crew_id: Optional[UUID]
+    agent_id: Optional[UUID]
+    tool_id: Optional[UUID]
+    task_id: Optional[UUID]
+    user_id: UUID
     input_data: Dict[str, Any]
     output_data: Optional[Dict[str, Any]]
     error: Optional[str]

@@ -148,20 +148,54 @@ async def startup_event():
     except Exception as e:
         logger.error("redis_init_failed", error=str(e))
 
+    # Seed system roles (idempotent)
+    try:
+        from .db import SessionLocal
+        from .services.role_seed import seed_system_roles
+
+        db = SessionLocal()
+        try:
+            seed_system_roles(db)
+            logger.info("system_roles_seeded")
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error("system_roles_seed_failed", error=str(e))
+
     # Seed default prompts (idempotent) unless disabled
     try:
         seed_enabled = os.getenv("SEED_DEFAULT_PROMPTS", "true").lower() != "false"
         if seed_enabled:
             from .db import SessionLocal
             from .services.prompt_seed import seed_default_prompts
+            from .models import Tenant, User
+
             db = SessionLocal()
             try:
-                seed_default_prompts(db, tenant_id=int(os.getenv("DEFAULT_TENANT_ID", "1")))
-                logger.info("default_prompts_seeded")
+                # Import TenantStatus enum
+                from .models.tenant import TenantStatus
+
+                # Query first active tenant and first active user (typically admin) for seeding
+                first_tenant = db.query(Tenant).filter(Tenant.status == TenantStatus.ACTIVE).first()
+                first_user = db.query(User).filter(User.is_active == True).first()
+
+                if first_tenant and first_user:
+                    seed_default_prompts(db, tenant_id=first_tenant.id, user_id=first_user.id)
+                    logger.info("default_prompts_seeded", tenant_id=str(first_tenant.id), user_id=str(first_user.id))
+                else:
+                    logger.warning("default_prompts_skipped", reason="no_active_tenant_or_user")
             finally:
                 db.close()
     except Exception as e:
         logger.error("default_prompts_seed_failed", error=str(e))
+
+    # Start Redis notification listener for WebSocket notifications
+    try:
+        from .websocket.redis_listener import start_notification_listener
+        await start_notification_listener()
+        logger.info("redis_notification_listener_started")
+    except Exception as e:
+        logger.error("redis_notification_listener_failed", error=str(e))
 
 
 # Shutdown event
@@ -169,6 +203,14 @@ async def startup_event():
 async def shutdown_event():
     """Cleanup on shutdown"""
     logger.info("shutting_down_crewai_platform")
+
+    # Stop Redis notification listener
+    try:
+        from .websocket.redis_listener import stop_notification_listener
+        await stop_notification_listener()
+        logger.info("redis_notification_listener_stopped")
+    except Exception as e:
+        logger.error("redis_notification_listener_stop_failed", error=str(e))
 
     # Using SQLAlchemy engine pool; no explicit close required here.
     # Redis client is managed as a process-global; no explicit close on shutdown.

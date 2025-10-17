@@ -33,7 +33,7 @@ class ChatService:
         self.llm_service = llm_service
 
     async def _handle_prompt_command(
-        self, user_message: str, session_id: int, user_id: int, tenant_id: int
+        self, user_message: str, session_id: str, user_id: int, tenant_id: int
     ) -> Optional[str]:
         """
         Handle prompt commands (e.g., /slug var=value).
@@ -82,7 +82,7 @@ class ChatService:
             execution_request = PromptExecutionRequest(
                 variables=variables,
                 context_type="command",
-                context_id=UUID(int=session_id) if session_id else None,
+                context_id=UUID(session_id) if session_id else None,
             )
 
             result = await prompt_service.execute_prompt(
@@ -162,7 +162,7 @@ class ChatService:
             query = query.filter(or_(ChatSession.title.ilike(like), ChatSession.system_prompt.ilike(like)))
         return query.order_by(ChatSession.created_at.desc()).all()
 
-    async def get_session(self, session_id: int) -> ChatSession:
+    async def get_session(self, session_id: str) -> ChatSession:
         """Get chat session by ID."""
         session = (
             self.db.query(ChatSession).filter(ChatSession.id == session_id).first()
@@ -178,7 +178,7 @@ class ChatService:
 
     # Note: list_sessions with filters defined above is the canonical one.
 
-    async def delete_session(self, session_id: int) -> None:
+    async def delete_session(self, session_id: str) -> None:
         """Delete (deactivate) a chat session."""
         session = await self.get_session(session_id)
         session.is_active = False
@@ -209,7 +209,7 @@ class ChatService:
         mongo_collection = get_mongo_collection("chat_messages")
 
         message_doc = {
-            "session_id": data.session_id,
+            "session_id": str(data.session_id),
             "role": data.role,
             "content": data.content,
             "metadata": data.metadata,
@@ -229,7 +229,7 @@ class ChatService:
         )
 
     async def get_messages(
-        self, session_id: int, limit: int = 100
+        self, session_id: str, limit: int = 100
     ) -> List[ChatMessageResponse]:
         """
         Get messages from a chat session.
@@ -248,7 +248,7 @@ class ChatService:
         mongo_collection = get_mongo_collection("chat_messages")
 
         cursor = (
-            mongo_collection.find({"session_id": session_id})
+            mongo_collection.find({"session_id": str(session_id)})
             .sort("created_at", 1)
             .limit(limit)
         )

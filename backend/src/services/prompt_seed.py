@@ -1,13 +1,14 @@
 """Seed a set of rich default prompt templates and categories."""
 
 from typing import List, Dict, Any
+from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from .prompt_service import PromptService
 from ..models import PromptTemplate, PromptCategory
 
 
-def _ensure_category(db: Session, tenant_id: int, name: str, description: str | None = None) -> PromptCategory:
+def _ensure_category(db: Session, tenant_id: UUID, name: str, description: str | None = None) -> PromptCategory:
     cat = (
         db.query(PromptCategory)
         .filter(and_(PromptCategory.tenant_id == tenant_id, PromptCategory.name == name))
@@ -25,7 +26,7 @@ def _ensure_category(db: Session, tenant_id: int, name: str, description: str | 
     return cat
 
 
-def _exists_slug(db: Session, tenant_id: int, slug: str) -> bool:
+def _exists_slug(db: Session, tenant_id: UUID, slug: str) -> bool:
     return (
         db.query(PromptTemplate)
         .filter(and_(PromptTemplate.tenant_id == tenant_id, PromptTemplate.slug == slug))
@@ -34,10 +35,15 @@ def _exists_slug(db: Session, tenant_id: int, slug: str) -> bool:
     )
 
 
-def seed_default_prompts(db: Session, tenant_id: int = 1) -> None:
+def seed_default_prompts(db: Session, tenant_id: UUID, user_id: UUID) -> None:
     """Create a handful of rich prompts (with and without variables) for first-time use.
 
     Safe to run multiple times — will upsert by slug.
+
+    Args:
+        db: Database session
+        tenant_id: UUID of the tenant to seed prompts for
+        user_id: UUID of the user creating the prompts (typically admin/system user)
     """
     # Categories
     writing = _ensure_category(db, tenant_id, "Writing", "Writing tasks and content generation")
@@ -414,7 +420,7 @@ def seed_default_prompts(db: Session, tenant_id: int = 1) -> None:
 
         tpl = PromptTemplate(
             tenant_id=tenant_id,
-            user_id=1,  # system/admin user; adjust if needed
+            user_id=user_id,
             category_id=p["category"].id,
             name=p["name"],
             slug=p["slug"],

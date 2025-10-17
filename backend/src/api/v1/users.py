@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from typing import List
 
 from ...db.postgres import get_db
 from ..middleware.auth import require_auth
@@ -13,14 +14,29 @@ from ...schemas.user_profile import (
     UserCreateRequest,
     UserUpdateRequest,
     UserListResponse,
+    RoleInfo,
 )
 from pydantic import BaseModel, Field, EmailStr
 from ...services.auth_service import AuthService
+from ...services.user_role_service import UserRoleService
 import secrets
 from datetime import datetime, timedelta
 
 
 router = APIRouter()
+
+
+def _format_user_roles(user: User) -> List[RoleInfo]:
+    """Format user roles for API response."""
+    return [
+        RoleInfo(
+            id=role.id,
+            slug=role.slug,
+            name=role.name,
+            is_system_role=role.is_system_role,
+        )
+        for role in user.roles
+    ]
 
 
 @router.get("/me", response_model=UserProfileResponse)
@@ -32,12 +48,13 @@ async def get_me(
     user = db.query(User).filter(User.id == current_user["id"]).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    role_val = getattr(user.role, 'value', user.role)
+
     return UserProfileResponse(
         id=user.id,
         email=user.email,
         full_name=user.full_name,
-        role=role_val,
+        role=user.primary_role_slug,  # Use property from model
+        roles=_format_user_roles(user),
         tenant_id=user.tenant_id,
         is_active=bool(user.is_active),
     )
@@ -128,12 +145,12 @@ async def list_users(
     total = query.count()
     users = query.order_by(User.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
     def _map(u: User) -> UserAdminResponse:
-        role_val = getattr(u.role, 'value', u.role)
         return UserAdminResponse(
             id=u.id,
             email=u.email,
             full_name=u.full_name,
-            role=role_val,
+            role=u.primary_role_slug,  # Use property from model
+            roles=_format_user_roles(u),
             is_active=bool(u.is_active),
             created_at=u.created_at.isoformat(),
         )
@@ -155,25 +172,42 @@ async def create_user(
     if existing:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
 
-    # Create user
+    # Create user with legacy role set to first role in list for backward compatibility
+    first_role_slug = body.role_slugs[0] if body.role_slugs else 'member'
     user = User(
         tenant_id=current_user["tenant_id"],
         email=body.email,
         password_hash=AuthService.hash_password(body.password),
         full_name=body.full_name,
-        role=body.role,
+        role=first_role_slug,  # Legacy field
         is_active=True,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
 
-    role_val = getattr(user.role, 'value', user.role)
+    # Assign roles using UserRoleService
+    role_service = UserRoleService(db)
+    for role_slug in body.role_slugs:
+        try:
+            role_service.assign_role(
+                user_id=user.id,
+                role_slug=role_slug,
+                assigned_by_id=current_user["id"],
+                tenant_id=None,  # System roles
+            )
+        except ValueError as e:
+            # Log error but continue - role might not exist
+            pass
+
+    db.refresh(user)  # Refresh to get updated roles
+
     return UserAdminResponse(
         id=user.id,
         email=user.email,
         full_name=user.full_name,
-        role=role_val,
+        role=user.primary_role_slug,
+        roles=_format_user_roles(user),
         is_active=bool(user.is_active),
         created_at=user.created_at.isoformat(),
     )
@@ -181,7 +215,7 @@ async def create_user(
 
 @router.put("/{user_id}", response_model=UserAdminResponse)
 async def update_user(
-    user_id: int,
+    user_id: str,
     body: UserUpdateRequest,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
@@ -199,8 +233,20 @@ async def update_user(
 
     if body.full_name is not None:
         user.full_name = body.full_name
-    if body.role is not None:
-        user.role = body.role
+
+    if body.role_slugs is not None:
+        # Update roles using UserRoleService
+        role_service = UserRoleService(db)
+        role_service.replace_user_roles(
+            user_id=user.id,
+            role_slugs=body.role_slugs,
+            assigned_by_id=current_user["id"],
+            tenant_id=None,  # System roles
+        )
+        # Update legacy role field to first role
+        if body.role_slugs:
+            user.role = body.role_slugs[0]
+
     if body.is_active is not None:
         user.is_active = body.is_active
     if body.password is not None:
@@ -209,12 +255,12 @@ async def update_user(
     db.commit()
     db.refresh(user)
 
-    role_val = getattr(user.role, 'value', user.role)
     return UserAdminResponse(
         id=user.id,
         email=user.email,
         full_name=user.full_name,
-        role=role_val,
+        role=user.primary_role_slug,
+        roles=_format_user_roles(user),
         is_active=bool(user.is_active),
         created_at=user.created_at.isoformat(),
     )
@@ -222,7 +268,7 @@ async def update_user(
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
-    user_id: int,
+    user_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -249,7 +295,7 @@ async def delete_user(
 class InviteUserRequest(BaseModel):
     email: EmailStr
     full_name: str = Field(..., min_length=1, max_length=255)
-    role: str = Field('member', pattern=r'^(admin|member|viewer)$')
+    role_slugs: List[str] = Field(default=['member'], description="List of role slugs to assign")
     expires_in_hours: int = Field(168, ge=1, le=24*30)  # default 7 days
 
 
@@ -275,12 +321,13 @@ async def invite_user(
     expires = datetime.utcnow() + timedelta(hours=body.expires_in_hours)
 
     temp_password = secrets.token_urlsafe(12)
+    first_role_slug = body.role_slugs[0] if body.role_slugs else 'member'
     user = User(
         tenant_id=current_user["tenant_id"],
         email=body.email,
         password_hash=AuthService.hash_password(temp_password),
         full_name=body.full_name,
-        role=body.role,
+        role=first_role_slug,  # Legacy field
         is_active=True,
         password_reset_token=token,
         password_reset_expires=expires,
@@ -288,5 +335,19 @@ async def invite_user(
     )
     db.add(user)
     db.commit()
+    db.refresh(user)
+
+    # Assign roles using UserRoleService
+    role_service = UserRoleService(db)
+    for role_slug in body.role_slugs:
+        try:
+            role_service.assign_role(
+                user_id=user.id,
+                role_slug=role_slug,
+                assigned_by_id=current_user["id"],
+                tenant_id=None,  # System roles
+            )
+        except ValueError:
+            pass  # Role might not exist
 
     return InviteUserResponse(invite_token=token, expires_at=expires.isoformat())

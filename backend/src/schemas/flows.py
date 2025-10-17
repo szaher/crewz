@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from enum import Enum
+from uuid import UUID
 
 
 class FlowStatus(str, Enum):
@@ -58,7 +59,7 @@ class FlowUpdate(BaseModel):
 class FlowResponse(BaseModel):
     """Flow response schema."""
 
-    id: int
+    id: UUID
     name: str
     description: Optional[str]
     status: FlowStatus

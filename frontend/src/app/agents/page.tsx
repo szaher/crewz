@@ -15,8 +15,9 @@ export default function AgentsPage() {
   const { agents, loading, error, refetch } = useAgents();
 
   const [showAgentForm, setShowAgentForm] = useState(false);
-  const [editingAgentId, setEditingAgentId] = useState<number | undefined>();
+  const [editingAgentId, setEditingAgentId] = useState<string | undefined>();
   const [executingAgent, setExecutingAgent] = useState<any | null>(null);
+  const [search, setSearch] = useState('');
 
   const providerFilter = searchParams?.get('llm_provider_id');
 
@@ -37,9 +38,8 @@ export default function AgentsPage() {
     setShowAgentForm(true);
   };
 
-  const handleEditAgent = (agentId: number) => {
-    setEditingAgentId(agentId);
-    setShowAgentForm(true);
+  const handleEditAgent = (agentId: string) => {
+    router.push(`/agents/${agentId}`);
   };
 
   const handleSaveAgent = () => {
@@ -79,34 +79,71 @@ export default function AgentsPage() {
         <div className="flex-1 overflow-auto">
           <div className="max-w-7xl mx-auto p-6">
             <Breadcrumbs />
-            <div className="flex items-center justify-between mb-2">
-              <h1 className="text-3xl font-bold text-gray-900">Agents</h1>
-              <div className="flex gap-2">
-                <button
-                  onClick={handleCreateAgent}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-                >
-                  Create Agent
-                </button>
+
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">Agents</h1>
+                <p className="text-sm text-gray-600 mt-1">
+                  Create and manage AI agents with specific roles and capabilities
+                </p>
               </div>
+              <button
+                onClick={handleCreateAgent}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+              >
+                + Create Agent
+              </button>
             </div>
 
-            {providerFilter && (
-              <div className="mb-4 flex items-center gap-3">
-                <span className="text-sm text-gray-600">Active filter:</span>
-                <span className="inline-flex items-center gap-2 text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded">
-                  Agents · provider #{providerFilter}
-                  <button
-                    onClick={clearFilter}
-                    className="ml-1 text-blue-700 hover:text-blue-900"
-                    aria-label="Clear filter"
-                    title="Clear filter"
-                  >
-                    ✕
-                  </button>
-                </span>
+            {/* Filters */}
+            <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Search
+                  </label>
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search agents..."
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
               </div>
-            )}
+
+              {providerFilter && (
+                <div className="mt-4 flex items-center gap-3">
+                  <span className="text-sm text-gray-600">Active filter:</span>
+                  <span className="inline-flex items-center gap-2 text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded">
+                    Provider #{providerFilter}
+                    <button
+                      onClick={clearFilter}
+                      className="ml-1 text-blue-700 hover:text-blue-900"
+                      aria-label="Clear filter"
+                      title="Clear filter"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                </div>
+              )}
+
+              {(search || providerFilter) && (
+                <div className="mt-4">
+                  <button
+                    onClick={() => {
+                      setSearch('');
+                      if (providerFilter) clearFilter();
+                    }}
+                    className="text-sm text-blue-600 hover:text-blue-700"
+                  >
+                    Clear all filters
+                  </button>
+                </div>
+              )}
+            </div>
 
             {error ? (
               <div className="flex flex-col items-center justify-center py-12">
@@ -124,22 +161,41 @@ export default function AgentsPage() {
               <div className="flex items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
               </div>
-            ) : agents.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <p className="text-gray-500 mb-4">No agents yet. Create your first agent to get started.</p>
-                <button
-                  onClick={handleCreateAgent}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-                >
-                  Create Agent
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {(providerFilter
-                  ? agents.filter((a: any) => (a as any).llm_provider_id === Number(providerFilter))
-                  : agents
-                ).map((agent) => (
+            ) : (() => {
+              // Filter agents by search and provider
+              const filtered = agents.filter((agent: any) => {
+                if (search && !agent.name.toLowerCase().includes(search.toLowerCase()) &&
+                    !agent.role.toLowerCase().includes(search.toLowerCase()) &&
+                    !agent.goal.toLowerCase().includes(search.toLowerCase())) {
+                  return false;
+                }
+                if (providerFilter && agent.llm_provider_id !== Number(providerFilter)) {
+                  return false;
+                }
+                return true;
+              });
+
+              const hasFilters = search || providerFilter;
+
+              return filtered.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <p className="text-gray-500 mb-4">
+                    {hasFilters
+                      ? 'No agents match your filters.'
+                      : 'No agents yet. Create your first agent to get started.'}
+                  </p>
+                  {!hasFilters && (
+                    <button
+                      onClick={handleCreateAgent}
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                    >
+                      Create Agent
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filtered.map((agent) => (
                   <div
                     key={agent.id}
                     className="bg-white p-6 rounded-lg border border-gray-200 hover:shadow-lg transition-shadow"
@@ -169,9 +225,10 @@ export default function AgentsPage() {
                       </button>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>

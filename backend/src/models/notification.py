@@ -1,6 +1,7 @@
 """Notification model for user in-app alerts."""
 
-from sqlalchemy import Column, Integer, String, JSON, Boolean, ForeignKey, DateTime, Text
+from sqlalchemy import Column, String, JSON, Boolean, ForeignKey, DateTime, Text
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
@@ -10,8 +11,8 @@ from .base import BaseModel
 class Notification(BaseModel):
     __tablename__ = "notifications"
 
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    tenant_id = Column(postgresql.UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    user_id = Column(postgresql.UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
 
     # Basic contents
     type = Column(String(50), nullable=False, default="info")

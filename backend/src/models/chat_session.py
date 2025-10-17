@@ -1,6 +1,7 @@
 """Chat session model for conversational AI interactions."""
 
-from sqlalchemy import Column, String, Text, Integer, ForeignKey, Boolean
+from sqlalchemy import Column, String, Text, ForeignKey, Boolean
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 
@@ -14,12 +15,12 @@ class ChatSession(BaseModel):
 
     __tablename__ = "chat_sessions"
 
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(postgresql.UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     title = Column(String(255), nullable=True)
 
     # LLM configuration for this session
     llm_provider_id = Column(
-        Integer, ForeignKey("llm_providers.id"), nullable=False, index=True
+        postgresql.UUID(as_uuid=True), ForeignKey("llm_providers.id"), nullable=False, index=True
     )
     system_prompt = Column(Text, nullable=True)
 
@@ -32,7 +33,7 @@ class ChatSession(BaseModel):
     # Relationships
     user = relationship("User", back_populates="chat_sessions")
     llm_provider = relationship("LLMProvider")
-    folder_id = Column(Integer, ForeignKey("chat_folders.id"), nullable=True, index=True)
+    folder_id = Column(postgresql.UUID(as_uuid=True), ForeignKey("chat_folders.id"), nullable=True, index=True)
     folder = relationship("ChatFolder", back_populates="sessions")
 
     def __repr__(self):

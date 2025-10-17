@@ -1,12 +1,13 @@
 """Authentication middleware for JWT verification."""
 
 from typing import Optional, Dict, Any
+from uuid import UUID
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from ...db.postgres import get_db
-from ...utils.jwt import verify_token, get_user_id_from_token
+from ...utils.jwt import verify_token, get_user_id_from_token, extract_tenant_from_token
 from ...services.auth_service import AuthService
 
 # HTTP Bearer token scheme
@@ -38,10 +39,9 @@ async def get_current_user(
     except HTTPException:
         raise
 
-    # Extract user info from token
-    user_id = int(payload.get("sub"))
-    tenant_id = payload.get("tenant_id")
-    tenant_schema = payload.get("tenant_schema")
+    # Extract user info from token using utility functions
+    user_id = get_user_id_from_token(token)  # Returns UUID
+    tenant_id, tenant_schema = extract_tenant_from_token(token)  # Returns (UUID, str)
     role = payload.get("role")
 
     # Fetch user from database to ensure it still exists and is active
@@ -59,6 +59,9 @@ async def get_current_user(
             detail="User account is inactive",
         )
 
+    # Check if user has super-admin role
+    is_super_admin = user.is_super_admin if hasattr(user, 'is_super_admin') else False
+
     return {
         "id": user.id,
         "email": user.email,
@@ -66,6 +69,7 @@ async def get_current_user(
         "role": role,
         "tenant_id": tenant_id,
         "tenant_schema": tenant_schema,
+        "is_super_admin": is_super_admin,
     }
 
 

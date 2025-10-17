@@ -2,7 +2,8 @@
 
 import os
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
+from uuid import UUID
 from jose import JWTError, jwt
 from fastapi import HTTPException, status
 
@@ -13,8 +14,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))  # 24
 
 
 def create_access_token(
-    user_id: int,
-    tenant_id: int,
+    user_id: Union[int, UUID],
+    tenant_id: Union[int, UUID],
     tenant_schema: str,
     role: str,
     expires_delta: Optional[timedelta] = None,
@@ -23,8 +24,8 @@ def create_access_token(
     Create a JWT access token.
 
     Args:
-        user_id: User ID
-        tenant_id: Tenant ID
+        user_id: User ID (int or UUID)
+        tenant_id: Tenant ID (int or UUID)
         tenant_schema: PostgreSQL schema name for the tenant
         role: User role (admin, member, viewer)
         expires_delta: Token expiration time
@@ -38,8 +39,8 @@ def create_access_token(
     expire = datetime.utcnow() + expires_delta
 
     to_encode = {
-        "sub": str(user_id),
-        "tenant_id": tenant_id,
+        "sub": str(user_id),  # Convert UUID to string for JSON serialization
+        "tenant_id": str(tenant_id),  # Convert UUID to string for JSON serialization
         "tenant_schema": tenant_schema,
         "role": role,
         "exp": expire,
@@ -74,7 +75,7 @@ def verify_token(token: str) -> Dict[str, Any]:
         )
 
 
-def extract_tenant_from_token(token: str) -> tuple[int, str]:
+def extract_tenant_from_token(token: str) -> tuple[UUID, str]:
     """
     Extract tenant information from JWT token.
 
@@ -98,10 +99,19 @@ def extract_tenant_from_token(token: str) -> tuple[int, str]:
             detail="Token missing tenant information",
         )
 
-    return tenant_id, tenant_schema
+    # Convert tenant_id string to UUID
+    try:
+        tenant_id_uuid = UUID(tenant_id)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid tenant ID format in token",
+        )
+
+    return tenant_id_uuid, tenant_schema
 
 
-def get_user_id_from_token(token: str) -> int:
+def get_user_id_from_token(token: str) -> UUID:
     """
     Extract user ID from JWT token.
 
@@ -109,7 +119,7 @@ def get_user_id_from_token(token: str) -> int:
         token: JWT token string
 
     Returns:
-        User ID
+        User ID as UUID
 
     Raises:
         HTTPException: If token is invalid or missing user ID
@@ -123,4 +133,13 @@ def get_user_id_from_token(token: str) -> int:
             detail="Token missing user ID",
         )
 
-    return int(user_id)
+    # Convert user_id string to UUID
+    try:
+        user_id_uuid = UUID(user_id)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user ID format in token",
+        )
+
+    return user_id_uuid

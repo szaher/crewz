@@ -18,8 +18,6 @@ import ReactFlow, {
   ReactFlowProvider,
   NodeTypes,
   EdgeTypes,
-  getBezierPath,
-  EdgeProps,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useFlowStore } from '@/lib/store';
@@ -32,62 +30,7 @@ import LLMNode from './nodes/LLMNode';
 import ConditionNode from './nodes/ConditionNode';
 import InputNode from './nodes/InputNode';
 import OutputNode from './nodes/OutputNode';
-
-// Custom edge with delete button
-function DeletableEdge({
-  id,
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  sourcePosition,
-  targetPosition,
-  style = {},
-  markerEnd,
-  data,
-}: EdgeProps) {
-  const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-  });
-
-  return (
-    <>
-      <path
-        id={id}
-        style={style}
-        className="react-flow__edge-path"
-        d={edgePath}
-        markerEnd={markerEnd}
-      />
-      <foreignObject
-        width={20}
-        height={20}
-        x={labelX - 10}
-        y={labelY - 10}
-        className="edgebutton-foreignobject"
-        requiredExtensions="http://www.w3.org/1999/xhtml"
-      >
-        <div className="flex items-center justify-center w-full h-full">
-          <button
-            className="w-5 h-5 bg-red-500 text-white rounded-full text-xs font-bold hover:bg-red-600 flex items-center justify-center shadow-md cursor-pointer border border-white"
-            onClick={(event) => {
-              event.stopPropagation();
-              data?.onDelete?.(id);
-            }}
-            title="Delete connection"
-          >
-            ×
-          </button>
-        </div>
-      </foreignObject>
-    </>
-  );
-}
+import DeletableEdge from './DeletableEdge';
 
 // Register custom node types
 const nodeTypes: NodeTypes = {
@@ -107,7 +50,7 @@ const edgeTypes: EdgeTypes = {
 };
 
 interface FlowCanvasProps {
-  flowId?: number;
+  flowId?: string;
   readOnly?: boolean;
   onNodeSelect?: (node: Node | null) => void;
 }

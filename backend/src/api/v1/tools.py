@@ -67,7 +67,7 @@ async def create_tool(
 
 @router.get("/{tool_id}", response_model=ToolResponse)
 async def get_tool(
-    tool_id: int,
+    tool_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -79,7 +79,7 @@ async def get_tool(
 
 @router.put("/{tool_id}", response_model=ToolResponse)
 async def update_tool(
-    tool_id: int,
+    tool_id: str,
     request: ToolUpdate,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
@@ -92,7 +92,7 @@ async def update_tool(
 
 @router.delete("/{tool_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_tool(
-    tool_id: int,
+    tool_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -103,115 +103,39 @@ async def delete_tool(
 
 @router.post("/{tool_id}/execute")
 async def execute_tool(
-    tool_id: int,
+    tool_id: str,
     input_data: dict,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
     """
-    Execute a tool directly with provided input.
+    Execute a tool asynchronously.
 
-    Executes the tool and returns the output.
+    Returns immediately with execution ID and status "pending".
+    The execution happens in the background.
+
     Supports custom Python tools and Docker tools.
     """
-    import time
+    from ...services.execution_service import ExecutionService
+
+    # Get tool for name
     tool_service = ToolService(db)
     tool = await tool_service.get_tool(tool_id)
 
-    start_time = time.time()
+    # Create execution and start it asynchronously
+    execution_service = ExecutionService(db, None, None)
+    execution = await execution_service.execute_tool_async(
+        tool_id=tool_id,
+        user_id=current_user.get("id"),
+        input_data=input_data,
+    )
 
-    try:
-        if tool.tool_type == "custom":
-            # Execute custom Python tool directly
-            import sys
-            import os
-
-            # Ensure user site-packages are in path (for pip install --user)
-            import site
-            user_site = site.getusersitepackages()
-            if user_site not in sys.path:
-                sys.path.insert(0, user_site)
-
-            # Create a namespace with full access for tool execution
-            # Tools are user-created, so we trust them in this context
-            namespace = {
-                '__builtins__': __builtins__,
-                '__name__': '__main__',
-                '__file__': '<tool>',
-            }
-
-            # Execute the tool code
-            exec(tool.code, namespace)
-
-            # Find the function in the namespace
-            func_name = None
-            for name, obj in namespace.items():
-                if callable(obj) and not name.startswith('_'):
-                    func_name = name
-                    break
-
-            if not func_name:
-                raise ValueError("No callable function found in tool code")
-
-            func = namespace[func_name]
-
-            # Execute with input_data
-            if isinstance(input_data, dict):
-                result = func(**input_data)
-            else:
-                result = func(input_data)
-
-            execution_time_ms = int((time.time() - start_time) * 1000)
-
-            return {
-                "tool_id": tool_id,
-                "tool_name": tool.name,
-                "tool_type": tool.tool_type,
-                "input_data": input_data,
-                "status": "success",
-                "output": str(result),
-                "execution_time_ms": execution_time_ms
-            }
-
-        elif tool.tool_type == "docker":
-            # Execute Docker tool
-            from ...services.docker_service import DockerService
-            docker_service = DockerService()
-
-            # Convert input to string for Docker
-            import json
-            input_str = json.dumps(input_data) if isinstance(input_data, dict) else str(input_data)
-
-            result = await docker_service.execute_tool(
-                tool_id=tool_id,
-                input_data=input_str,
-                docker_image=tool.docker_image,
-                docker_command=tool.docker_command,
-                timeout=30
-            )
-
-            execution_time_ms = int((time.time() - start_time) * 1000)
-
-            return {
-                "tool_id": tool_id,
-                "tool_name": tool.name,
-                "tool_type": tool.tool_type,
-                "input_data": input_data,
-                "status": "success",
-                "output": result,
-                "execution_time_ms": execution_time_ms
-            }
-        else:
-            raise ValueError(f"Unsupported tool type: {tool.tool_type}")
-
-    except Exception as e:
-        execution_time_ms = int((time.time() - start_time) * 1000)
-        return {
-            "tool_id": tool_id,
-            "tool_name": tool.name,
-            "tool_type": tool.tool_type,
-            "input_data": input_data,
-            "status": "failed",
-            "error": str(e),
-            "execution_time_ms": execution_time_ms
-        }
+    return {
+        "execution_id": str(execution.id),
+        "tool_id": tool_id,
+        "tool_name": tool.name,
+        "tool_type": tool.tool_type,
+        "input_data": input_data,
+        "status": execution.status,
+        "message": "Execution started in background. Check execution status for results."
+    }

@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 from enum import Enum
-from typing import List, Dict
+from uuid import UUID
 
 
 class ChatRole(str, Enum):
@@ -20,26 +20,26 @@ class ChatSessionCreate(BaseModel):
 
     title: Optional[str] = Field(None, max_length=255)
     # If omitted, backend will use tenant's default provider
-    llm_provider_id: Optional[int] = None
+    llm_provider_id: Optional[UUID] = None
     system_prompt: Optional[str] = None
     # Optional tool IDs to associate with this session (stored in Mongo metadata)
-    tool_ids: Optional[List[int]] = None
+    tool_ids: Optional[List[UUID]] = None
     # Optional folder
-    folder_id: Optional[int] = None
+    folder_id: Optional[UUID] = None
 
 
 class ChatSessionResponse(BaseModel):
     """Chat session response schema."""
 
-    id: int
-    user_id: int
+    id: UUID
+    user_id: UUID
     title: Optional[str]
-    llm_provider_id: int
+    llm_provider_id: UUID
     system_prompt: Optional[str]
     is_active: bool
     created_at: datetime
     updated_at: datetime
-    folder_id: Optional[int] = None
+    folder_id: Optional[UUID] = None
 
     class Config:
         from_attributes = True
@@ -48,7 +48,7 @@ class ChatSessionResponse(BaseModel):
 class ChatMessageCreate(BaseModel):
     """Create chat message request schema."""
 
-    session_id: int
+    session_id: UUID
     role: ChatRole
     content: str = Field(..., min_length=1)
     metadata: Dict[str, Any] = Field(default_factory=dict)
@@ -58,7 +58,7 @@ class ChatMessageResponse(BaseModel):
     """Chat message response schema."""
 
     id: str  # MongoDB ObjectId as string
-    session_id: int
+    session_id: UUID
     role: ChatRole
     content: str
     metadata: Dict[str, Any]
@@ -71,7 +71,7 @@ class ChatMessageResponse(BaseModel):
 class ChatDirectRequest(BaseModel):
     """Direct chat without creating a session."""
 
-    provider_id: Optional[int] = None
+    provider_id: Optional[UUID] = None
     messages: List[Dict[str, str]] = Field(
         ..., description="List of chat messages with role and content"
     )
@@ -90,7 +90,7 @@ class ChatFolderCreate(BaseModel):
 
 
 class ChatFolderResponse(BaseModel):
-    id: int
+    id: UUID
     name: str
     created_at: datetime
     updated_at: datetime

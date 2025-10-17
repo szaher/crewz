@@ -77,7 +77,7 @@ async def create_task(
 
 @router.get("/{task_id}", response_model=TaskResponse)
 async def get_task(
-    task_id: int,
+    task_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -89,7 +89,7 @@ async def get_task(
 
 @router.put("/{task_id}", response_model=TaskResponse)
 async def update_task(
-    task_id: int,
+    task_id: str,
     request: TaskUpdate,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
@@ -102,7 +102,7 @@ async def update_task(
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_task(
-    task_id: int,
+    task_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -113,7 +113,7 @@ async def delete_task(
 
 @router.put("/{task_id}/unassign", response_model=TaskResponse)
 async def unassign_task_from_crew(
-    task_id: int,
+    task_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -130,7 +130,7 @@ async def unassign_task_from_crew(
 
 @router.get("/crew/{crew_id}/tasks", response_model=list[TaskResponse])
 async def get_crew_tasks(
-    crew_id: int,
+    crew_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -142,7 +142,7 @@ async def get_crew_tasks(
 
 @router.post("/crew/{crew_id}/reorder", response_model=list[TaskResponse])
 async def reorder_crew_tasks(
-    crew_id: int,
+    crew_id: str,
     task_orders: dict[int, int],
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
@@ -189,7 +189,7 @@ async def get_workflow_templates(
 
 @router.post("/crew/{crew_id}/from-template", response_model=List[TaskResponse])
 async def create_tasks_from_template(
-    crew_id: int,
+    crew_id: str,
     template_name: str,
     agent_id: Optional[int] = None,
     db: Session = Depends(get_db),
@@ -233,7 +233,7 @@ async def create_tasks_from_template(
 
 @router.post("/crew/{crew_id}/from-workflow", response_model=List[TaskResponse])
 async def create_tasks_from_workflow(
-    crew_id: int,
+    crew_id: str,
     workflow_name: str,
     agent_ids: Optional[List[int]] = Query(None),
     db: Session = Depends(get_db),

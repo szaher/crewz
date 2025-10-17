@@ -3,6 +3,7 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
+from uuid import UUID
 
 
 class AgentCreate(BaseModel):
@@ -15,7 +16,7 @@ class AgentCreate(BaseModel):
     backstory: str = Field(..., min_length=1, description="Agent's backstory")
 
     # LLM configuration
-    llm_provider_id: int = Field(..., description="LLM provider ID")
+    llm_provider_id: UUID = Field(..., description="LLM provider ID")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="LLM temperature")
     max_tokens: Optional[int] = Field(None, gt=0, description="Maximum tokens for LLM")
 
@@ -33,7 +34,7 @@ class AgentCreate(BaseModel):
     max_retry_limit: int = Field(default=2, ge=0, description="Maximum retry attempts")
 
     # Tools
-    tool_ids: List[int] = Field(default_factory=list, description="Tool IDs")
+    tool_ids: List[UUID] = Field(default_factory=list, description="Tool IDs")
 
 
 class AgentUpdate(BaseModel):
@@ -43,7 +44,7 @@ class AgentUpdate(BaseModel):
     role: Optional[str] = Field(None, min_length=1, max_length=255)
     goal: Optional[str] = Field(None, min_length=1)
     backstory: Optional[str] = Field(None, min_length=1)
-    llm_provider_id: Optional[int] = None
+    llm_provider_id: Optional[UUID] = None
     temperature: Optional[float] = Field(None, ge=0.0, le=2.0)
     max_tokens: Optional[int] = Field(None, gt=0)
     allow_delegation: Optional[bool] = None
@@ -55,18 +56,18 @@ class AgentUpdate(BaseModel):
     allow_code_execution: Optional[bool] = None
     respect_context_window: Optional[bool] = None
     max_retry_limit: Optional[int] = Field(None, ge=0)
-    tool_ids: Optional[List[int]] = None
+    tool_ids: Optional[List[UUID]] = None
 
 
 class AgentResponse(BaseModel):
     """Agent response schema."""
 
-    id: int
+    id: UUID
     name: str
     role: str
     goal: str
     backstory: str
-    llm_provider_id: int
+    llm_provider_id: UUID
     temperature: float
     max_tokens: Optional[int]
     allow_delegation: bool

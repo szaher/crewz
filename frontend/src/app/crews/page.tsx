@@ -7,6 +7,7 @@ import Navigation from '@/components/shared/Navigation';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import CrewBuilder from '@/components/crews/CrewBuilder';
 import ExecuteModal from '@/components/shared/ExecuteModal';
+import { PermissionGate } from '@/components/PermissionGate';
 import { useCrews } from '@/lib/hooks/useCrews';
 
 export default function CrewsPage() {
@@ -17,7 +18,6 @@ export default function CrewsPage() {
   const error = crewsError;
 
   const [showCrewBuilder, setShowCrewBuilder] = useState(false);
-  const [editingCrewId, setEditingCrewId] = useState<number | undefined>();
   const [executingCrew, setExecutingCrew] = useState<any | null>(null);
 
   const loadData = () => {
@@ -38,16 +38,14 @@ export default function CrewsPage() {
   };
 
   const handleCreateCrew = () => {
-    setEditingCrewId(undefined);
     setShowCrewBuilder(true);
   };
 
-  const handleEditCrew = (crewId: number) => {
-    setEditingCrewId(crewId);
-    setShowCrewBuilder(true);
+  const handleEditCrew = (crewId: string) => {
+    router.push(`/crews/${crewId}`);
   };
 
-  const handleSaveCrew = (crewId: number) => {
+  const handleSaveCrew = () => {
     setShowCrewBuilder(false);
     void loadData();
   };
@@ -62,7 +60,6 @@ export default function CrewsPage() {
               <Breadcrumbs />
             </div>
             <CrewBuilder
-              crewId={editingCrewId}
               onSave={handleSaveCrew}
             />
           </div>
@@ -82,12 +79,14 @@ export default function CrewsPage() {
         <div className="flex items-center justify-between mb-2">
           <h1 className="text-3xl font-bold text-gray-900">Crews</h1>
           <div className="flex gap-2">
-            <button
-              onClick={handleCreateCrew}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-            >
-              Create Crew
-            </button>
+            <PermissionGate resourceType="crew" action="write">
+              <button
+                onClick={handleCreateCrew}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+              >
+                Create Crew
+              </button>
+            </PermissionGate>
           </div>
         </div>
 
@@ -129,12 +128,14 @@ export default function CrewsPage() {
           crews.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12">
               <p className="text-gray-500 mb-4">No crews yet. Create your first crew to get started.</p>
-              <button
-                onClick={handleCreateCrew}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-              >
-                Create Crew
-              </button>
+              <PermissionGate resourceType="crew" action="write">
+                <button
+                  onClick={handleCreateCrew}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                >
+                  Create Crew
+                </button>
+              </PermissionGate>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -160,18 +161,22 @@ export default function CrewsPage() {
                   </span>
                 </div>
                 <div className="mt-4 flex gap-2">
-                  <button
-                    onClick={() => setExecutingCrew(crew)}
-                    className="flex-1 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
-                  >
-                    ▶ Execute
-                  </button>
-                  <button
-                    onClick={() => handleEditCrew(crew.id)}
-                    className="flex-1 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
-                  >
-                    Edit
-                  </button>
+                  <PermissionGate resourceType="crew" action="execute" resourceId={crew.id}>
+                    <button
+                      onClick={() => setExecutingCrew(crew)}
+                      className="flex-1 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
+                    >
+                      ▶ Execute
+                    </button>
+                  </PermissionGate>
+                  <PermissionGate resourceType="crew" action="write" resourceId={crew.id}>
+                    <button
+                      onClick={() => handleEditCrew(crew.id)}
+                      className="flex-1 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
+                    >
+                      Edit
+                    </button>
+                  </PermissionGate>
                 </div>
               </div>
             ))}

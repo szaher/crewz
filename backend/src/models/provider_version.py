@@ -1,6 +1,7 @@
 """LLM Provider version model for tracking provider configuration changes."""
 
 from sqlalchemy import Column, String, Text, Integer, ForeignKey, JSON, Enum
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import relationship, backref
 from .base import BaseModel
 import enum
@@ -24,7 +25,7 @@ class ProviderVersion(BaseModel):
     __tablename__ = "provider_versions"
 
     # Reference to the provider
-    provider_id = Column(Integer, ForeignKey("llm_providers.id", ondelete="CASCADE"), nullable=False, index=True)
+    provider_id = Column(postgresql.UUID(as_uuid=True), ForeignKey("llm_providers.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Version metadata
     version_number = Column(Integer, nullable=False)

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { useFlows } from '@/lib/hooks/useFlows';
 
 interface FlowNameEditorProps {
-  flowId: number;
+  flowId: string;
   initialName: string;
   onUpdate?: (newName: string) => void;
 }

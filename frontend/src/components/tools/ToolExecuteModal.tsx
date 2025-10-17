@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 
 interface Tool {
@@ -18,17 +19,20 @@ interface ToolExecuteModalProps {
 }
 
 interface ExecutionResult {
-  tool_id: number;
-  tool_name: string;
-  tool_type: string;
-  input_data: Record<string, any>;
-  status: 'success' | 'failed';
+  execution_id?: string;
+  tool_id?: number;
+  tool_name?: string;
+  tool_type?: string;
+  input_data?: Record<string, any>;
+  status: 'success' | 'failed' | 'pending' | 'running' | 'completed';
   output?: string;
   error?: string;
-  execution_time_ms: number;
+  message?: string;
+  execution_time_ms?: number;
 }
 
 export default function ToolExecuteModal({ tool, isOpen, onClose }: ToolExecuteModalProps) {
+  const router = useRouter();
   const [inputData, setInputData] = useState<Record<string, string>>({});
   const [executing, setExecuting] = useState(false);
   const [result, setResult] = useState<ExecutionResult | null>(null);
@@ -45,7 +49,20 @@ export default function ToolExecuteModal({ tool, isOpen, onClose }: ToolExecuteM
       const response = await apiClient.post(`/api/v1/tools/${tool.id}/execute`, inputData);
 
       if (response.data) {
-        setResult(response.data as ExecutionResult);
+        const result = response.data as ExecutionResult;
+
+        // If execution started successfully (pending/running), redirect to execution page
+        if (result.status === 'pending' || result.status === 'running') {
+          if (result.execution_id) {
+            // Close modal and navigate to execution detail page
+            handleClose();
+            router.push(`/executions/${result.execution_id}`);
+            return;
+          }
+        }
+
+        // For other statuses, show the result in the modal
+        setResult(result);
       } else if (response.error) {
         setResult({
           tool_id: tool.id,
@@ -148,23 +165,53 @@ export default function ToolExecuteModal({ tool, isOpen, onClose }: ToolExecuteM
           {result && (
             <div className="mt-6">
               <h3 className="text-sm font-medium text-gray-900 mb-2">Result</h3>
-              <div className={`p-4 rounded-md ${result.status === 'success' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+              <div className={`p-4 rounded-md ${
+                result.status === 'success' || result.status === 'completed'
+                  ? 'bg-green-50 border border-green-200'
+                  : result.status === 'pending' || result.status === 'running'
+                  ? 'bg-blue-50 border border-blue-200'
+                  : 'bg-red-50 border border-red-200'
+              }`}>
                 {/* Status Header */}
                 <div className="flex items-center justify-between mb-2">
-                  <span className={`text-sm font-medium ${result.status === 'success' ? 'text-green-800' : 'text-red-800'}`}>
-                    {result.status === 'success' ? '✓ Success' : '✗ Failed'}
+                  <span className={`text-sm font-medium ${
+                    result.status === 'success' || result.status === 'completed'
+                      ? 'text-green-800'
+                      : result.status === 'pending' || result.status === 'running'
+                      ? 'text-blue-800'
+                      : 'text-red-800'
+                  }`}>
+                    {result.status === 'success' || result.status === 'completed'
+                      ? '✓ Success'
+                      : result.status === 'pending' || result.status === 'running'
+                      ? '⏳ Execution Started'
+                      : '✗ Failed'}
                   </span>
-                  <span className="text-xs text-gray-500">
-                    {result.execution_time_ms}ms
-                  </span>
+                  {result.execution_time_ms !== undefined && (
+                    <span className="text-xs text-gray-500">
+                      {result.execution_time_ms}ms
+                    </span>
+                  )}
                 </div>
 
-                {/* Output/Error */}
+                {/* Output/Error/Message */}
                 <div className="mt-2">
-                  {result.status === 'success' ? (
+                  {result.status === 'success' || result.status === 'completed' ? (
                     <pre className="text-sm text-gray-800 whitespace-pre-wrap break-words font-mono bg-white p-3 rounded border border-green-200 max-h-64 overflow-y-auto">
                       {result.output}
                     </pre>
+                  ) : result.status === 'pending' || result.status === 'running' ? (
+                    <div>
+                      <p className="text-sm text-blue-700">{result.message || 'Execution is in progress...'}</p>
+                      {result.execution_id && (
+                        <button
+                          onClick={() => router.push(`/executions/${result.execution_id}`)}
+                          className="mt-2 text-sm text-blue-600 hover:text-blue-700 underline"
+                        >
+                          View execution details →
+                        </button>
+                      )}
+                    </div>
                   ) : (
                     <div className="text-sm text-red-800">
                       <p className="font-medium">Error:</p>

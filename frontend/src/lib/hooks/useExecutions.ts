@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { apiClient } from '../api-client';
 
 export interface Execution {
-  id: number;
-  flow_id: number;
+  id: string; // UUID
+  flow_id: string; // UUID
   flow_name?: string;
   execution_type: 'flow' | 'crew';
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
@@ -22,8 +22,8 @@ export interface ExecutionDetails extends Execution {
 }
 
 export interface ExecutionLog {
-  id: number;
-  execution_id: number;
+  id: string; // UUID
+  execution_id: string; // UUID
   level: 'debug' | 'info' | 'warning' | 'error';
   message: string;
   timestamp: string;
@@ -58,25 +58,25 @@ export function useExecutions() {
     }
   }, []);
 
-  const getExecution = async (id: number): Promise<Execution> => {
+  const getExecution = async (id: string): Promise<Execution> => {
     const response = await apiClient.get(`/api/v1/executions/${id}`);
     if (response.error) throw new Error(response.error);
     return response.data;
   };
 
-  const getExecutionDetails = async (id: number): Promise<ExecutionDetails> => {
+  const getExecutionDetails = async (id: string): Promise<ExecutionDetails> => {
     const response = await apiClient.get(`/api/v1/executions/${id}/details`);
     if (response.error) throw new Error(response.error);
     return response.data;
   };
 
-  const getExecutionLogs = async (id: number): Promise<ExecutionLog[]> => {
+  const getExecutionLogs = async (id: string): Promise<ExecutionLog[]> => {
     const response = await apiClient.get(`/api/v1/executions/${id}/logs`);
     if (response.error) throw new Error(response.error);
     return response.data?.logs || [];
   };
 
-  const cancelExecution = async (id: number): Promise<void> => {
+  const cancelExecution = async (id: string): Promise<void> => {
     const response = await apiClient.post(`/api/v1/executions/${id}/cancel`, {});
     if (response.error) throw new Error(response.error);
 
@@ -86,7 +86,7 @@ export function useExecutions() {
     );
   };
 
-  const executeFlow = async (flowId: number, inputs?: Record<string, any>): Promise<Execution> => {
+  const executeFlow = async (flowId: string, inputs?: Record<string, any>): Promise<Execution> => {
     const response = await apiClient.post(`/api/v1/flows/${flowId}/execute`, { inputs });
     if (response.error) throw new Error(response.error);
 
@@ -103,7 +103,7 @@ export function useExecutions() {
 
   // SSE streaming for live logs
   const streamExecutionLogs = (
-    executionId: number,
+    executionId: string,
     onLog: (log: ExecutionLog) => void,
     onError?: (error: Error) => void
   ): (() => void) => {

@@ -1,6 +1,7 @@
 """Agent model for CrewAI agents."""
 
 from sqlalchemy import Column, String, Text, Integer, Float, Boolean, ForeignKey, Table
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 
@@ -9,8 +10,8 @@ from .base import BaseModel
 agent_tools = Table(
     "agent_tools",
     BaseModel.metadata,
-    Column("agent_id", Integer, ForeignKey("agents.id"), primary_key=True),
-    Column("tool_id", Integer, ForeignKey("tools.id"), primary_key=True),
+    Column("agent_id", postgresql.UUID(as_uuid=True), ForeignKey("agents.id"), primary_key=True),
+    Column("tool_id", postgresql.UUID(as_uuid=True), ForeignKey("tools.id"), primary_key=True),
 )
 
 
@@ -30,7 +31,7 @@ class Agent(BaseModel):
 
     # LLM configuration
     llm_provider_id = Column(
-        Integer, ForeignKey("llm_providers.id"), nullable=False, index=True
+        postgresql.UUID(as_uuid=True), ForeignKey("llm_providers.id"), nullable=False, index=True
     )
     temperature = Column(Float, nullable=False, default=0.7)
     max_tokens = Column(Integer, nullable=True)

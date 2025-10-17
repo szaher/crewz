@@ -26,8 +26,14 @@ export default function Navigation() {
     { name: 'Executions', path: '/executions', icon: '⚙️' },
     { name: 'Observability', path: '/observability', icon: '📈' },
     { name: 'Chat', path: '/chat', icon: '💬' },
-    ...(user?.role === 'admin' ? [{ name: 'Users', path: '/users', icon: '🧑‍🤝‍🧑' }] : []),
   ];
+
+  const adminItems = user?.role === 'admin' ? [
+    { name: 'Users', path: '/users', icon: '🧑‍🤝‍🧑' },
+    { name: 'Roles', path: '/roles', icon: '👤' },
+    { name: 'Policies', path: '/policies', icon: '🔒' },
+    { name: 'Audit Logs', path: '/audit', icon: '📋' },
+  ] : [];
 
   const isActive = (path: string) => {
     return pathname?.startsWith(path);
@@ -59,7 +65,7 @@ export default function Navigation() {
       </div>
 
       {/* Navigation Items */}
-      <div className="flex-1 p-4 space-y-1">
+      <div className="flex-1 p-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => (
           <button
             key={item.path}
@@ -76,6 +82,33 @@ export default function Navigation() {
             <span className="text-sm">{item.name}</span>
           </button>
         ))}
+
+        {/* Admin Section */}
+        {adminItems.length > 0 && (
+          <>
+            <div className="pt-4 pb-2 px-4">
+              <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Administration
+              </h3>
+            </div>
+            {adminItems.map((item) => (
+              <button
+                key={item.path}
+                onClick={() => router.push(item.path)}
+                className={`
+                  w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors
+                  ${isActive(item.path)
+                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-medium'
+                    : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
+                  }
+                `}
+              >
+                <span className="text-xl">{item.icon}</span>
+                <span className="text-sm">{item.name}</span>
+              </button>
+            ))}
+          </>
+        )}
       </div>
 
       {/* User Profile Menu */}

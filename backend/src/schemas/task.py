@@ -3,6 +3,7 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
+from uuid import UUID
 from ..models.task import TaskOutputFormat
 
 
@@ -12,8 +13,8 @@ class TaskBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: str = Field(..., min_length=1)
     expected_output: str = Field(..., min_length=1)
-    agent_id: Optional[int] = None
-    crew_id: Optional[int] = None
+    agent_id: Optional[UUID] = None
+    crew_id: Optional[UUID] = None
     order: int = Field(default=0, ge=0)
     async_execution: bool = False
     output_format: TaskOutputFormat = TaskOutputFormat.TEXT
@@ -34,8 +35,8 @@ class TaskUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = Field(None, min_length=1)
     expected_output: Optional[str] = Field(None, min_length=1)
-    agent_id: Optional[int] = None
-    crew_id: Optional[int] = None
+    agent_id: Optional[UUID] = None
+    crew_id: Optional[UUID] = None
     order: Optional[int] = Field(None, ge=0)
     async_execution: Optional[bool] = None
     output_format: Optional[TaskOutputFormat] = None
@@ -48,7 +49,7 @@ class TaskUpdate(BaseModel):
 class TaskResponse(TaskBase):
     """Schema for task response."""
 
-    id: int
+    id: UUID
     created_at: datetime
     updated_at: datetime
 

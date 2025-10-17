@@ -21,6 +21,7 @@ from ...api.middleware.auth import require_auth
 from ...services.notification_service import NotificationService
 from ...services.notification_events import NotificationPublisher
 from ...schemas.notifications import NotificationCreate
+from ...db.mongodb import get_mongo_collection
 
 router = APIRouter()
 
@@ -106,9 +107,24 @@ async def create_session(
     return ChatSessionResponse.from_orm(session)
 
 
+@router.get("/sessions/{session_id}", response_model=ChatSessionResponse)
+async def get_session(
+    session_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """Fetch a single chat session by ID (owner-only)."""
+    llm_service = LLMService(db)
+    chat_service = ChatService(db, llm_service)
+    session = await chat_service.get_session(session_id)
+    if session.user_id != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return ChatSessionResponse.from_orm(session)
+
+
 @router.put("/sessions/{session_id}", response_model=ChatSessionResponse)
 async def update_session(
-    session_id: int,
+    session_id: str,
     payload: dict,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
@@ -150,7 +166,7 @@ async def update_session(
 
 @router.put("/sessions/{session_id}/tools", response_model=dict)
 async def update_session_tools(
-    session_id: int,
+    session_id: str,
     body: dict,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
@@ -183,7 +199,7 @@ async def update_session_tools(
 
 @router.get("/sessions/{session_id}/tools", response_model=dict)
 async def get_session_tools(
-    session_id: int,
+    session_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -199,6 +215,58 @@ async def get_session_tools(
     doc = await col.find_one({"session_id": session_id})
     tool_ids = (doc or {}).get("tool_ids", [])
     return {"tool_ids": tool_ids}
+
+
+@router.get("/sessions/{session_id}/params", response_model=dict)
+async def get_session_hyperparams(
+    session_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """Return saved model hyperparameters for a session (from Mongo)."""
+    llm_service = LLMService(db)
+    chat_service = ChatService(db, llm_service)
+    session = await chat_service.get_session(session_id)
+    if session.user_id != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    col = get_mongo_collection("chat_sessions")
+    doc = await col.find_one({"session_id": session_id})
+    hyperparams = (doc or {}).get("hyperparams", {})
+    return {"hyperparams": hyperparams}
+
+
+@router.put("/sessions/{session_id}/params", response_model=dict)
+async def update_session_hyperparams(
+    session_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """Update model hyperparameters for a session (stored in Mongo)."""
+    llm_service = LLMService(db)
+    chat_service = ChatService(db, llm_service)
+    session = await chat_service.get_session(session_id)
+    if session.user_id != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Accept only known numeric params
+    allowed = {"temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"}
+    hyperparams = {k: body.get(k) for k in allowed if k in body}
+
+    # Basic validation
+    def _is_num(x):
+        return isinstance(x, (int, float))
+
+    for k, v in list(hyperparams.items()):
+        if v is None:
+            continue
+        if not _is_num(v):
+            raise HTTPException(status_code=400, detail=f"{k} must be a number")
+
+    col = get_mongo_collection("chat_sessions")
+    await col.update_one({"session_id": session_id}, {"$set": {"hyperparams": hyperparams}}, upsert=True)
+    return {"ok": True, "hyperparams": hyperparams}
 
 
 @router.get("/folders", response_model=List[dict])
@@ -238,7 +306,7 @@ async def create_folder(
 
 @router.put("/folders/{folder_id}", response_model=dict)
 async def rename_folder(
-    folder_id: int,
+    folder_id: str,
     body: dict,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
@@ -258,7 +326,7 @@ async def rename_folder(
 
 @router.delete("/folders/{folder_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_folder(
-    folder_id: int,
+    folder_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -286,6 +354,26 @@ async def direct_chat(
     - If `provider_id` is omitted, uses the tenant's default active provider.
     - Does not persist messages.
     """
+    # Validate messages
+    if not payload.messages or len(payload.messages) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Messages list cannot be empty"
+        )
+
+    # Validate message format
+    for i, msg in enumerate(payload.messages):
+        if "role" not in msg or "content" not in msg:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Message at index {i} must have 'role' and 'content' fields"
+            )
+        if msg["role"] not in ["system", "user", "assistant"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Message at index {i} has invalid role: {msg['role']}"
+            )
+
     # Resolve provider
     provider_id = payload.provider_id
     if provider_id is None:
@@ -327,7 +415,7 @@ async def direct_chat(
 
 @router.get("/sessions/{session_id}/messages", response_model=List[ChatMessageResponse])
 async def get_messages(
-    session_id: int,
+    session_id: str,
     limit: int = 100,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
@@ -365,7 +453,7 @@ async def send_message(
 
 @router.post("/sessions/{session_id}/generate")
 async def generate_response(
-    session_id: int,
+    session_id: str,
     user_message: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
@@ -416,9 +504,15 @@ async def generate_response(
 
 @router.get("/sessions/{session_id}/generate/stream")
 async def generate_response_stream(
-    session_id: int,
+    session_id: str,
     user_message: str,
     store_user: bool = True,
+    # Optional model hyperparameters
+    temperature: float = 0.7,
+    max_tokens: Optional[int] = None,
+    top_p: Optional[float] = None,
+    frequency_penalty: Optional[float] = None,
+    presence_penalty: Optional[float] = None,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -447,6 +541,15 @@ async def generate_response_stream(
         session = await chat_service.get_session(session_id)
         history = await chat_service.get_messages(session_id)
 
+        # Load saved hyperparams if not provided explicitly
+        saved_hp: dict = {}
+        try:
+            col = get_mongo_collection("chat_sessions")
+            doc = await col.find_one({"session_id": session_id})
+            saved_hp = (doc or {}).get("hyperparams", {})
+        except Exception:
+            saved_hp = {}
+
         llm_messages: list[dict] = []
         if session.system_prompt:
             llm_messages.append({"role": "system", "content": session.system_prompt})
@@ -460,9 +563,28 @@ async def generate_response_stream(
 
         assembled: list[str] = []
         try:
+            extra_kwargs = {}
+            # Prefer query params; fallback to saved values
+            if top_p is None:
+                top_p_val = saved_hp.get("top_p")
+            else:
+                top_p_val = top_p
+            if top_p_val is not None:
+                extra_kwargs["top_p"] = top_p_val
+            freq = frequency_penalty if frequency_penalty is not None else saved_hp.get("frequency_penalty")
+            pres = presence_penalty if presence_penalty is not None else saved_hp.get("presence_penalty")
+            if freq is not None:
+                extra_kwargs["frequency_penalty"] = freq
+            if pres is not None:
+                extra_kwargs["presence_penalty"] = pres
+            temp_val = temperature if temperature is not None else saved_hp.get("temperature", 0.7)
+            max_toks_val = max_tokens if max_tokens is not None else saved_hp.get("max_tokens")
             async for chunk in llm_service.chat_completion_stream(
                 provider_id=session.llm_provider_id,  # type: ignore[arg-type]
                 messages=llm_messages,
+                temperature=float(temp_val) if temp_val is not None else 0.7,
+                max_tokens=int(max_toks_val) if max_toks_val is not None else None,
+                **extra_kwargs,
             ):
                 assembled.append(chunk)
                 yield f"event: delta\ndata: {json.dumps({'token': chunk})}\n\n"
@@ -513,7 +635,7 @@ async def generate_response_stream(
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_session(
-    session_id: int,
+    session_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -530,7 +652,7 @@ async def delete_session(
 @router.websocket("/sessions/{session_id}/ws")
 async def websocket_chat(
     websocket: WebSocket,
-    session_id: int,
+    session_id: str,
     token: Optional[str] = Query(None),
 ):
     """
@@ -625,9 +747,33 @@ async def websocket_chat(
                 # Stream response
                 assembled: list[str] = []
                 try:
+                    # Load saved hyperparams for defaults
+                    saved_hp: dict = {}
+                    try:
+                        col = get_mongo_collection("chat_sessions")
+                        doc = await col.find_one({"session_id": session_id})
+                        saved_hp = (doc or {}).get("hyperparams", {})
+                    except Exception:
+                        saved_hp = {}
+
+                    extra_kwargs = {}
+                    temp = data.get("temperature", saved_hp.get("temperature", 0.7))
+                    max_toks = data.get("max_tokens", saved_hp.get("max_tokens"))
+                    top_p_val = data.get("top_p", saved_hp.get("top_p"))
+                    freq_pen = data.get("frequency_penalty", saved_hp.get("frequency_penalty"))
+                    pres_pen = data.get("presence_penalty", saved_hp.get("presence_penalty"))
+                    if top_p_val is not None:
+                        extra_kwargs["top_p"] = top_p_val
+                    if freq_pen is not None:
+                        extra_kwargs["frequency_penalty"] = freq_pen
+                    if pres_pen is not None:
+                        extra_kwargs["presence_penalty"] = pres_pen
                     async for chunk in llm_service.chat_completion_stream(
                         provider_id=session.llm_provider_id,
                         messages=llm_messages,
+                        temperature=(float(temp) if temp is not None else 0.7),
+                        max_tokens=(int(max_toks) if max_toks is not None else None),
+                        **extra_kwargs,
                     ):
                         assembled.append(chunk)
                         await websocket.send_json({"type": "delta", "token": chunk})

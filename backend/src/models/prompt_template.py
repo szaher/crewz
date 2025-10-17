@@ -15,8 +15,8 @@ class PromptTemplate(Base):
     __tablename__ = "prompt_templates"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     category_id = Column(UUID(as_uuid=True), ForeignKey("prompt_categories.id"), nullable=True, index=True)
 
     # Core fields
@@ -27,7 +27,7 @@ class PromptTemplate(Base):
 
     # Model recommendations
     suggested_model = Column(String(100), nullable=True)
-    suggested_provider_id = Column(Integer, ForeignKey("llm_providers.id"), nullable=True)
+    suggested_provider_id = Column(UUID(as_uuid=True), ForeignKey("llm_providers.id"), nullable=True)
 
     # Execution parameters
     default_temperature = Column(Numeric(3, 2), default=0.7)

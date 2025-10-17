@@ -3,6 +3,7 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime
+from uuid import UUID
 
 
 class LoginRequest(BaseModel):
@@ -24,8 +25,8 @@ class RegisterRequest(BaseModel):
 class TokenPayload(BaseModel):
     """JWT token payload schema."""
 
-    sub: int  # user_id
-    tenant_id: int
+    sub: str  # user_id as string (UUID)
+    tenant_id: str  # tenant_id as string (UUID)
     tenant_schema: str
     role: str
     exp: datetime
@@ -36,15 +37,15 @@ class LoginResponse(BaseModel):
 
     access_token: str
     token_type: str = "bearer"
-    user_id: int
-    tenant_id: int
+    user_id: UUID
+    tenant_id: UUID
     role: str
 
 
 class RegisterResponse(BaseModel):
     """Registration response schema."""
 
-    user_id: int
-    tenant_id: int
+    user_id: UUID
+    tenant_id: UUID
     email: str
     message: str = "Registration successful"

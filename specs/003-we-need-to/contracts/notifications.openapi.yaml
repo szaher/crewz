@@ -1,0 +1,451 @@
+openapi: 3.0.3
+info:
+  title: Notifications API
+  description: |
+    API for real-time notification delivery and management.
+
+    Features:
+    - WebSocket real-time delivery (<1s target)
+    - Persistent storage for offline users
+    - Read/unread tracking
+    - Bulk operations
+    - User and tenant-level preferences
+    - Automatic retention policy enforcement
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8000/api/v1
+  - url: ws://localhost:8000/ws
+    description: WebSocket server
+
+tags:
+  - name: Notifications
+    description: Notification CRUD
+  - name: Preferences
+    description: Notification preferences
+  - name: WebSocket
+    description: Real-time notification stream
+
+security:
+  - BearerAuth: []
+
+paths:
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: List notifications
+      description: Get notifications for current user with filtering
+      operationId: listNotifications
+      parameters:
+        - name: category
+          in: query
+          schema:
+            $ref: '#/components/schemas/NotificationCategory'
+        - name: read_status
+          in: query
+          schema:
+            type: string
+            enum: [all, read, unread]
+            default: all
+        - name: priority
+          in: query
+          schema:
+            $ref: '#/components/schemas/NotificationPriority'
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Notifications list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notifications:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Notification'
+                  total:
+                    type: integer
+                  unread_count:
+                    type: integer
+
+  /notifications/unread-count:
+    get:
+      tags: [Notifications]
+      summary: Get unread count
+      description: Get total unread notifications count (for badge)
+      operationId: getUnreadCount
+      responses:
+        '200':
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  unread_count:
+                    type: integer
+                  unread_by_category:
+                    type: object
+                    additionalProperties:
+                      type: integer
+                    example:
+                      execution_completed: 3
+                      execution_failed: 1
+                      system_alert: 2
+
+  /notifications/{notification_id}/read:
+    put:
+      tags: [Notifications]
+      summary: Mark notification as read
+      operationId: markAsRead
+      parameters:
+        - name: notification_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Notification marked as read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+
+  /notifications/mark-all-read:
+    post:
+      tags: [Notifications]
+      summary: Mark all notifications as read
+      description: Bulk mark as read for current user
+      operationId: markAllAsRead
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                category:
+                  $ref: '#/components/schemas/NotificationCategory'
+                  description: "Optional: mark only specific category"
+      responses:
+        '200':
+          description: Notifications marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  marked_count:
+                    type: integer
+
+  /notifications/preferences:
+    get:
+      tags: [Preferences]
+      summary: Get notification preferences
+      description: Get preferences for current user (includes tenant-level defaults)
+      operationId: getNotificationPreferences
+      responses:
+        '200':
+          description: Notification preferences
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_preferences:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/NotificationPreference'
+                  tenant_preferences:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/NotificationPreference'
+                  effective_preferences:
+                    type: object
+                    description: "Computed preferences (user overrides tenant)"
+                    additionalProperties:
+                      type: object
+                      properties:
+                        enabled:
+                          type: boolean
+                        source:
+                          type: string
+                          enum: [user, tenant, default]
+
+    put:
+      tags: [Preferences]
+      summary: Update notification preferences
+      description: Update user-level preferences (overrides tenant)
+      operationId: updateNotificationPreferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [preferences]
+              properties:
+                preferences:
+                  type: array
+                  items:
+                    type: object
+                    required: [category, enabled]
+                    properties:
+                      category:
+                        $ref: '#/components/schemas/NotificationCategory'
+                      enabled:
+                        type: boolean
+                      delivery_channels:
+                        type: array
+                        items:
+                          type: string
+                          enum: [websocket]
+                        default: [websocket]
+      responses:
+        '200':
+          description: Preferences updated
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NotificationPreference'
+
+  /admin/notifications/preferences/tenant:
+    get:
+      tags: [Preferences]
+      summary: Get tenant-level preferences
+      description: Admin only. Get tenant-wide notification defaults.
+      operationId: getTenantNotificationPreferences
+      responses:
+        '200':
+          description: Tenant preferences
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NotificationPreference'
+
+    put:
+      tags: [Preferences]
+      summary: Update tenant-level preferences
+      description: Admin only. Set tenant-wide defaults.
+      operationId: updateTenantNotificationPreferences
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                preferences:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      category:
+                        $ref: '#/components/schemas/NotificationCategory'
+                      enabled:
+                        type: boolean
+      responses:
+        '200':
+          description: Tenant preferences updated
+
+  /admin/notifications/retention:
+    get:
+      tags: [Preferences]
+      summary: Get retention policy
+      description: Get notification retention configuration
+      operationId: getRetentionPolicy
+      responses:
+        '200':
+          description: Retention policy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  retention_days:
+                    type: integer
+                    example: 90
+                  last_cleanup_at:
+                    type: string
+                    format: date-time
+                  notifications_deleted_last_cleanup:
+                    type: integer
+
+    put:
+      tags: [Preferences]
+      summary: Update retention policy
+      operationId: updateRetentionPolicy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                retention_days:
+                  type: integer
+                  minimum: 7
+                  maximum: 365
+      responses:
+        '200':
+          description: Retention policy updated
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    NotificationCategory:
+      type: string
+      enum:
+        - execution_started
+        - execution_completed
+        - execution_failed
+        - execution_timeout
+        - invitation_received
+        - team_mention
+        - system_alert
+
+    NotificationPriority:
+      type: string
+      enum: [low, normal, high, critical]
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        category:
+          $ref: '#/components/schemas/NotificationCategory'
+        priority:
+          $ref: '#/components/schemas/NotificationPriority'
+        title:
+          type: string
+        message:
+          type: string
+        resource_type:
+          type: string
+          nullable: true
+        resource_id:
+          type: string
+          format: uuid
+          nullable: true
+        resource_link:
+          type: string
+          nullable: true
+          description: "Deep link (e.g., /executions/xxx)"
+        metadata:
+          type: object
+          nullable: true
+          description: "Additional structured data"
+        read_status:
+          type: boolean
+        read_at:
+          type: string
+          format: date-time
+          nullable: true
+        delivered_via_websocket:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    NotificationPreference:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        scope:
+          type: string
+          enum: [tenant, user]
+        scope_id:
+          type: string
+          format: uuid
+        category:
+          $ref: '#/components/schemas/NotificationCategory'
+        enabled:
+          type: boolean
+        delivery_channels:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+# WebSocket protocol (non-OpenAPI standard, documented here for reference)
+x-websocket-protocol:
+  endpoint: /ws/notifications
+  authentication: "?token=<JWT>" query parameter
+  message-format:
+    type: JSON
+    schema:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [notification, heartbeat, ack]
+        data:
+          $ref: '#/components/schemas/Notification'
+        timestamp:
+          type: string
+          format: date-time
+  client-to-server:
+    - type: heartbeat
+      description: Client sends every 30s to keep connection alive
+    - type: ack
+      description: Client acknowledges receipt of notification
+      properties:
+        notification_id:
+          type: string
+          format: uuid
+  server-to-client:
+    - type: notification
+      description: New notification pushed to client
+    - type: heartbeat
+      description: Server responds to client heartbeat
+  connection-flow: |
+    1. Client connects: ws://localhost:8000/ws/notifications?token=<JWT>
+    2. Server authenticates token
+    3. Server subscribes to Redis channel: notifications:user:{user_id}
+    4. Server sends pending unread notifications from DB
+    5. Real-time: Redis pub/sub → WebSocket push
+    6. Heartbeat every 30s (client → server → client)
+    7. On disconnect: Server unsubscribes from Redis
+  reconnection:
+    strategy: Exponential backoff
+    max-attempts: 10
+    base-delay: 1s
+    max-delay: 30s
+    behavior: Fetch missed notifications on reconnect

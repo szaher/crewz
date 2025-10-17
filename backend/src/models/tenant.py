@@ -9,6 +9,7 @@ import enum
 class TenantStatus(str, enum.Enum):
     """Tenant status enumeration."""
 
+    PENDING = "pending"  # Awaiting super admin approval
     ACTIVE = "active"
     SUSPENDED = "suspended"
     DELETED = "deleted"
@@ -38,6 +39,9 @@ class Tenant(BaseModel):
 
     # Relationships
     users = relationship("User", back_populates="tenant", cascade="all, delete-orphan")
+    permissions = relationship("Permission", back_populates="tenant", cascade="all, delete-orphan")
+    roles = relationship("Role", back_populates="tenant", cascade="all, delete-orphan")
+    policies = relationship("Policy", back_populates="tenant", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Tenant(id={self.id}, name={self.name}, schema={self.schema_name})>"

@@ -32,3 +32,27 @@ def get_redis():
         Redis client instance
     """
     return get_redis_client()
+
+
+def get_redis_url() -> str:
+    """
+    Get Redis connection URL from environment.
+
+    Returns:
+        Redis URL string
+    """
+    return os.getenv("REDIS_URL", "redis://localhost:6379")
+
+
+async def check_redis_health() -> bool:
+    """
+    Check if Redis connection is healthy.
+
+    Returns:
+        True if Redis is healthy, False otherwise
+    """
+    try:
+        client = get_redis_client()
+        return client.ping()
+    except Exception:
+        return False
