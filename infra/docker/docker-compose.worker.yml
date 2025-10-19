@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # Celery Worker 1
+  worker1:
+    build:
+      context: ../..
+      dockerfile: infra/docker/worker.Dockerfile
+    container_name: crewai-worker1
+    hostname: worker1
+    environment:
+      - ENABLE_WORKER_ARCHITECTURE=true
+      - DATABASE_URL=postgresql://crewai:dev_password@crewai-postgres:5432/crewai_platform
+      - REDIS_URL=redis://crewai-redis:6379/0
+      - CELERY_BROKER_URL=redis://crewai-redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://crewai-redis:6379/1
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - S3_BUCKET=${S3_BUCKET:-crewai-artifacts}
+      - S3_REGION=${S3_REGION:-us-east-1}
+    networks:
+      - crewai-network
+    volumes:
+      - ../../backend/src:/app/src:ro  # Mount code as read-only
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "celery", "-A", "src.workers.celery_app", "inspect", "ping", "-d", "celery@worker1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Celery Worker 2
+  worker2:
+    build:
+      context: ../..
+      dockerfile: infra/docker/worker.Dockerfile
+    container_name: crewai-worker2
+    hostname: worker2
+    environment:
+      - ENABLE_WORKER_ARCHITECTURE=true
+      - DATABASE_URL=postgresql://crewai:dev_password@crewai-postgres:5432/crewai_platform
+      - REDIS_URL=redis://crewai-redis:6379/0
+      - CELERY_BROKER_URL=redis://crewai-redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://crewai-redis:6379/1
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - S3_BUCKET=${S3_BUCKET:-crewai-artifacts}
+      - S3_REGION=${S3_REGION:-us-east-1}
+    networks:
+      - crewai-network
+    volumes:
+      - ../../backend/src:/app/src:ro  # Mount code as read-only
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "celery", "-A", "src.workers.celery_app", "inspect", "ping", "-d", "celery@worker2"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  crewai-network:
+    external: true

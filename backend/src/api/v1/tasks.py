@@ -75,6 +75,35 @@ async def create_task(
     return TaskResponse.from_orm(task)
 
 
+@router.get("/templates", response_model=List[Dict[str, Any]])
+async def get_task_templates(
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Get all available task templates.
+
+    Returns a list of pre-configured task templates based on common CrewAI patterns.
+    """
+    return TaskTemplates.get_all_templates()
+
+
+@router.get("/templates/workflows", response_model=Dict[str, List[Dict[str, Any]]])
+async def get_workflow_templates(
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Get pre-configured workflow templates.
+
+    Returns workflows consisting of multiple tasks designed to work together.
+    Available workflows:
+    - research_and_report: Complete research, analysis, and reporting workflow
+    - code_development: Planning, coding, and review workflow
+    - data_pipeline: Data extraction, analysis, and summarization
+    - content_creation: Research, writing, and review for content
+    """
+    return TaskTemplates.get_workflow_templates()
+
+
 @router.get("/{task_id}", response_model=TaskResponse)
 async def get_task(
     task_id: str,
@@ -156,35 +185,6 @@ async def reorder_crew_tasks(
     task_service = TaskService(db)
     tasks = await task_service.reorder_crew_tasks(crew_id, task_orders)
     return [TaskResponse.from_orm(task) for task in tasks]
-
-
-@router.get("/templates", response_model=List[Dict[str, Any]])
-async def get_task_templates(
-    current_user: dict = Depends(require_auth),
-):
-    """
-    Get all available task templates.
-
-    Returns a list of pre-configured task templates based on common CrewAI patterns.
-    """
-    return TaskTemplates.get_all_templates()
-
-
-@router.get("/templates/workflows", response_model=Dict[str, List[Dict[str, Any]]])
-async def get_workflow_templates(
-    current_user: dict = Depends(require_auth),
-):
-    """
-    Get pre-configured workflow templates.
-
-    Returns workflows consisting of multiple tasks designed to work together.
-    Available workflows:
-    - research_and_report: Complete research, analysis, and reporting workflow
-    - code_development: Planning, coding, and review workflow
-    - data_pipeline: Data extraction, analysis, and summarization
-    - content_creation: Research, writing, and review for content
-    """
-    return TaskTemplates.get_workflow_templates()
 
 
 @router.post("/crew/{crew_id}/from-template", response_model=List[TaskResponse])

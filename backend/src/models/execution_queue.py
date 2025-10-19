@@ -15,6 +15,7 @@ from .base import BaseModel
 class ExecutionStatus(str, enum.Enum):
     """Execution status states"""
     PENDING = "pending"
+    QUEUED = "queued"  # Added for worker architecture - execution in queue
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"

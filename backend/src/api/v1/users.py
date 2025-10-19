@@ -57,6 +57,7 @@ async def get_me(
         roles=_format_user_roles(user),
         tenant_id=user.tenant_id,
         is_active=bool(user.is_active),
+        is_super_admin=bool(user.is_super_admin),
     )
 
 

@@ -1,0 +1,157 @@
+openapi: 3.0.3
+info:
+  title: Execution Queue API
+  version: 1.0.0
+  description: API for queueing, monitoring, and controlling crew/flow/task executions
+
+paths:
+  /api/v1/executions/queue:
+    post:
+      summary: Queue new execution
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [execution_type, entity_id, input_params]
+              properties:
+                execution_type:
+                  type: string
+                  enum: [crew, flow, task]
+                entity_id:
+                  type: string
+                  format: uuid
+                input_params:
+                  type: object
+                priority:
+                  type: integer
+                  minimum: 0
+                  maximum: 10
+                  default: 5
+                timeout_seconds:
+                  type: integer
+                  minimum: 60
+                  maximum: 3600
+                  default: 600
+      responses:
+        '201':
+          description: Execution queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+                    format: uuid
+                  queue_position:
+                    type: integer
+                  estimated_start_time:
+                    type: string
+                    format: date-time
+        '401':
+          description: Unauthorized
+
+  /api/v1/executions/{job_id}/status:
+    get:
+      summary: Get execution status
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Execution status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [pending, queued, in_progress, completed, failed, cancelled]
+                  queue_position:
+                    type: integer
+                    nullable: true
+                  worker_id:
+                    type: string
+                    format: uuid
+                    nullable: true
+                  started_at:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  progress_percent:
+                    type: integer
+                    minimum: 0
+                    maximum: 100
+                    nullable: true
+
+  /api/v1/executions/{job_id}/cancel:
+    post:
+      summary: Cancel execution
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Cancellation requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cancelled:
+                    type: boolean
+                  final_state_logged:
+                    type: boolean
+
+  /api/v1/executions/{job_id}/re-execute:
+    post:
+      summary: Re-execute with same inputs
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '201':
+          description: New execution queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  new_job_id:
+                    type: string
+                    format: uuid
+                  version_number:
+                    type: integer
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

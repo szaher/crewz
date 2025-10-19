@@ -80,7 +80,7 @@ export default function UserProfileMenu() {
           <div className="px-4 py-3 border-b border-gray-200">
             <p className="text-xs text-gray-500">Role</p>
             <span className="inline-block mt-1 px-2 py-1 text-xs font-medium rounded bg-purple-100 text-purple-800">
-              {user.role}
+              {user.is_super_admin ? 'Super Admin' : user.role}
             </span>
           </div>
 

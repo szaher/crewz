@@ -16,6 +16,7 @@ export default function Navigation() {
 
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', icon: '📊' },
+    { name: 'Queue', path: '/queue', icon: '📋' },
     { name: 'Flows', path: '/flows', icon: '🔀' },
     { name: 'Crews', path: '/crews', icon: '👥' },
     { name: 'Agents', path: '/agents', icon: '🤖' },
@@ -24,15 +25,24 @@ export default function Navigation() {
     { name: 'Tools', path: '/tools', icon: '🔧' },
     { name: 'Prompts', path: '/prompts', icon: '📝' },
     { name: 'Executions', path: '/executions', icon: '⚙️' },
+    { name: 'Artifacts', path: '/artifacts', icon: '📦' },
     { name: 'Observability', path: '/observability', icon: '📈' },
     { name: 'Chat', path: '/chat', icon: '💬' },
   ];
 
-  const adminItems = user?.role === 'admin' ? [
+  const adminItems = (user?.role === 'admin' || user?.is_super_admin) ? [
     { name: 'Users', path: '/users', icon: '🧑‍🤝‍🧑' },
     { name: 'Roles', path: '/roles', icon: '👤' },
     { name: 'Policies', path: '/policies', icon: '🔒' },
     { name: 'Audit Logs', path: '/audit', icon: '📋' },
+  ] : [];
+
+  const superAdminItems = user?.is_super_admin ? [
+    { name: 'Tenants', path: '/tenants', icon: '🏢' },
+  ] : [];
+
+  const tenantAdminItems = currentTenant ? [
+    { name: 'Tenant Settings', path: '/tenant/settings', icon: '⚙️' },
   ] : [];
 
   const isActive = (path: string) => {
@@ -92,6 +102,64 @@ export default function Navigation() {
               </h3>
             </div>
             {adminItems.map((item) => (
+              <button
+                key={item.path}
+                onClick={() => router.push(item.path)}
+                className={`
+                  w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors
+                  ${isActive(item.path)
+                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-medium'
+                    : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
+                  }
+                `}
+              >
+                <span className="text-xl">{item.icon}</span>
+                <span className="text-sm">{item.name}</span>
+              </button>
+            ))}
+          </>
+        )}
+
+        {/* Super Admin Section */}
+        {superAdminItems.length > 0 && (
+          <>
+            {adminItems.length === 0 && (
+              <div className="pt-4 pb-2 px-4">
+                <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Super Admin
+                </h3>
+              </div>
+            )}
+            {superAdminItems.map((item) => (
+              <button
+                key={item.path}
+                onClick={() => router.push(item.path)}
+                className={`
+                  w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors
+                  ${isActive(item.path)
+                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-medium'
+                    : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
+                  }
+                `}
+              >
+                <span className="text-xl">{item.icon}</span>
+                <span className="text-sm">{item.name}</span>
+              </button>
+            ))}
+          </>
+        )}
+
+        {/* Tenant Admin Section */}
+        {tenantAdminItems.length > 0 && (
+          <>
+            {adminItems.length === 0 && superAdminItems.length === 0 && (
+              <div className="pt-4 pb-2 px-4">
+                <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Tenant Management
+                </h3>
+              </div>
+            )}
+            {tenantAdminItems.map((item) => (
               <button
                 key={item.path}
                 onClick={() => router.push(item.path)}

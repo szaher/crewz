@@ -1,0 +1,77 @@
+openapi: 3.0.3
+info:
+  title: Artifact API
+  version: 1.0.0
+
+paths:
+  /api/v1/executions/{job_id}/artifacts:
+    get:
+      summary: List execution artifacts
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Artifact list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    artifact_id:
+                      type: string
+                      format: uuid
+                    file_name:
+                      type: string
+                    file_size:
+                      type: integer
+                    mime_type:
+                      type: string
+                    artifact_type:
+                      type: string
+                      enum: [output_file, log_file, screenshot, data_export]
+                    version:
+                      type: integer
+                    download_url:
+                      type: string
+                      format: uri
+
+  /api/v1/artifacts/{artifact_id}/download:
+    get:
+      summary: Download artifact
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: artifact_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Pre-signed S3 URL or file stream
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  download_url:
+                    type: string
+                    format: uri
+                    description: Pre-signed S3 URL (1 hour expiry)
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

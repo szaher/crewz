@@ -124,38 +124,25 @@ async def execute_flow(
 
     Returns execution record. Monitor progress via GET /executions/{execution_id}/stream
     """
-    # Initialize services with proper dependencies
-    flow_service = FlowService(db)
+    from uuid import UUID
+    from ...services.execution_service_worker import ExecutionServiceWorker
+    from ...config.settings import Settings
 
-    from ...crewai.flow_executor import FlowExecutor
-    from ...crewai.crew_factory import CrewFactory
-    from ...crewai.agent_factory import AgentFactory
-    from ...services.execution_events import ExecutionEventPublisher
-    from ...services.llm_service import LLMService
-    from ...services.docker_service import DockerService
-    from ...crewai.tool_adapter import ToolAdapter
-
-    # Initialize factories with dependencies
-    llm_service = LLMService(db)
-    docker_service = DockerService()
-    tool_adapter = ToolAdapter(docker_service)
-    agent_factory = AgentFactory(llm_service, tool_adapter)
-    crew_factory = CrewFactory(agent_factory)
-    event_publisher = ExecutionEventPublisher()
-    flow_executor = FlowExecutor(crew_factory, agent_factory, event_publisher)
-
-    execution_service = ExecutionService(db, flow_service, flow_executor)
-
-    execution_request = ExecutionCreate(
-        execution_type="flow",
-        flow_id=flow_id,
-        input_data=input_data,
+    # Initialize worker service which handles both worker and legacy execution paths
+    settings = Settings()
+    execution_service_worker = ExecutionServiceWorker(
+        db_session=db,
+        settings=settings
     )
 
-    # Use async creation that accepts ExecutionCreate and schedules execution
-    execution = await execution_service.create_execution_async(
-        execution_request,
-        user_id=current_user["id"],
+    # Queue the execution (will use workers if enabled, otherwise falls back to legacy)
+    execution = execution_service_worker.queue_execution(
+        execution_type="flow",
+        entity_id=UUID(flow_id),
+        input_params=input_data,
+        user_id=current_user["id"] if isinstance(current_user["id"], UUID) else UUID(current_user["id"]),
+        priority=5,
+        timeout_seconds=600
     )
 
     return ExecutionResponse.from_orm(execution)

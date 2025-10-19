@@ -42,6 +42,7 @@ class Tenant(BaseModel):
     permissions = relationship("Permission", back_populates="tenant", cascade="all, delete-orphan")
     roles = relationship("Role", back_populates="tenant", cascade="all, delete-orphan")
     policies = relationship("Policy", back_populates="tenant", cascade="all, delete-orphan")
+    executions = relationship("ExecutionQueue", back_populates="tenant", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Tenant(id={self.id}, name={self.name}, schema={self.schema_name})>"

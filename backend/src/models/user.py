@@ -50,6 +50,7 @@ class User(BaseModel):
         secondaryjoin="Role.id==user_roles.c.role_id",
         back_populates="users",
     )
+    executions = relationship("ExecutionQueue", back_populates="user", cascade="all, delete-orphan")
 
     @property
     def primary_role_slug(self) -> str:
