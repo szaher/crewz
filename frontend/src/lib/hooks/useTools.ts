@@ -1,35 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiClient } from '../api-client';
+import type { Tool as ApiTool, ToolCreate as ApiToolCreate, ToolUpdate as ApiToolUpdate } from '@/types/api';
 
-export interface Tool {
-  id: number;
-  name: string;
-  description?: string;
-  implementation_type: 'python' | 'api' | 'builtin';
-  code?: string;
-  api_endpoint?: string;
-  parameters_schema?: Record<string, any>;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface CreateToolData {
-  name: string;
-  description?: string;
-  implementation_type: 'python' | 'api' | 'builtin';
-  code?: string;
-  api_endpoint?: string;
-  parameters_schema?: Record<string, any>;
-}
-
-export interface UpdateToolData {
-  name?: string;
-  description?: string;
-  implementation_type?: 'python' | 'api' | 'builtin';
-  code?: string;
-  api_endpoint?: string;
-  parameters_schema?: Record<string, any>;
-}
+// Re-export types from api.ts for consistency
+export type Tool = ApiTool;
+export type CreateToolData = ApiToolCreate;
+export type UpdateToolData = ApiToolUpdate;
 
 export function useTools() {
   const [tools, setTools] = useState<Tool[]>([]);
@@ -62,7 +38,7 @@ export function useTools() {
     return newTool;
   };
 
-  const updateTool = async (id: number, data: UpdateToolData): Promise<Tool> => {
+  const updateTool = async (id: string, data: UpdateToolData): Promise<Tool> => {
     const response = await apiClient.put(`/api/v1/tools/${id}`, data);
     if (response.error) throw new Error(response.error);
 
@@ -72,20 +48,20 @@ export function useTools() {
     return updatedTool;
   };
 
-  const deleteTool = async (id: number): Promise<void> => {
+  const deleteTool = async (id: string): Promise<void> => {
     const response = await apiClient.delete(`/api/v1/tools/${id}`);
     if (response.error) throw new Error(response.error);
 
     setTools(prev => prev.filter(t => t.id !== id));
   };
 
-  const getTool = async (id: number): Promise<Tool> => {
+  const getTool = async (id: string): Promise<Tool> => {
     const response = await apiClient.get(`/api/v1/tools/${id}`);
     if (response.error) throw new Error(response.error);
     return response.data;
   };
 
-  const validateTool = async (id: number): Promise<{ valid: boolean; errors?: string[] }> => {
+  const validateTool = async (id: string): Promise<{ valid: boolean; errors?: string[] }> => {
     const response = await apiClient.post(`/api/v1/tools/${id}/validate`, {});
     if (response.error) throw new Error(response.error);
     return response.data;
