@@ -11,6 +11,7 @@ class ExecutionStatus(str, Enum):
     """Execution status enumeration."""
 
     PENDING = "pending"
+    QUEUED = "queued"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"

@@ -6,7 +6,7 @@ FastAPI application entry point
 import os
 import logging
 from typing import List, Optional
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
@@ -268,6 +268,53 @@ async def root():
 from .api.v1 import api_router
 
 app.include_router(api_router, prefix="/api/v1")
+
+
+# ===== WEBSOCKET ROUTES (Phase 004) =====
+
+# WebSocket endpoint for execution output streaming
+@app.websocket("/ws/executions/{execution_id}/stream")
+async def websocket_execution_stream(
+    websocket: WebSocket,
+    execution_id: str,
+    token: Optional[str] = None
+):
+    """
+    WebSocket endpoint for streaming execution output in real-time.
+
+    Features:
+    - JWT authentication via query parameter
+    - Replays last 100 buffered lines on connection
+    - Streams live execution events from Redis pub/sub
+    - Events: execution.started, execution.output, execution.progress, execution.completed, execution.error
+
+    Usage:
+        ws://localhost:8000/ws/executions/{execution_id}/stream?token={jwt_token}
+    """
+    from .websocket.execution_stream import stream_execution_output
+    await stream_execution_output(websocket, execution_id, token)
+
+
+# WebSocket endpoint for queue position updates
+@app.websocket("/ws/executions/{execution_id}/queue")
+async def websocket_queue_updates(
+    websocket: WebSocket,
+    execution_id: str,
+    token: Optional[str] = None
+):
+    """
+    WebSocket endpoint for streaming queue position updates.
+
+    Features:
+    - JWT authentication via query parameter
+    - Real-time queue position and estimated wait time
+    - Closes when execution starts or fails
+
+    Usage:
+        ws://localhost:8000/ws/executions/{execution_id}/queue?token={jwt_token}
+    """
+    from .websocket.queue_updates import stream_queue_updates
+    await stream_queue_updates(websocket, execution_id, token)
 
 
 if __name__ == "__main__":

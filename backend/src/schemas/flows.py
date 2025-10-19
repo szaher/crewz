@@ -27,7 +27,7 @@ class NodeData(BaseModel):
 class EdgeData(BaseModel):
     """Flow edge data schema."""
 
-    id: str
+    id: Optional[str] = None
     source: str  # Source node ID
     target: str  # Target node ID
     sourceHandle: Optional[str] = None

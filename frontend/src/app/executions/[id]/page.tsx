@@ -7,6 +7,10 @@ import Navigation from '@/components/shared/Navigation';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import ExecutionDetail from '@/components/executions/ExecutionDetail';
 import ExecutionLogs from '@/components/executions/ExecutionLogs';
+import LiveExecutionStream from '@/components/executions/LiveExecutionStream';
+import QueuePosition from '@/components/executions/QueuePosition';
+import ArtifactList from '@/components/executions/ArtifactList';
+import ExecutionActions from '@/components/executions/ExecutionActions';
 import { useExecutions } from '@/lib/hooks/useExecutions';
 import type { Execution } from '@/types/api';
 
@@ -18,11 +22,10 @@ export default function ExecutionPage() {
   const rawId = params.id;
   const executionId = rawId && rawId !== 'undefined' ? String(rawId) : null;
 
-  const { getExecution, cancelExecution } = useExecutions();
+  const { getExecution } = useExecutions();
   const [execution, setExecution] = useState<Execution | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [cancelling, setCancelling] = useState(false);
 
   const loadExecution = useCallback(async () => {
     // Validate executionId before making API call
@@ -50,21 +53,6 @@ export default function ExecutionPage() {
   useEffect(() => {
     void loadExecution();
   }, [loadExecution]);
-
-  const handleCancel = async () => {
-    if (!execution || execution.status !== 'running') return;
-
-    setCancelling(true);
-    try {
-      await cancelExecution(executionId);
-      // Reload execution to get updated status
-      await loadExecution();
-    } catch (err) {
-      console.error('Failed to cancel execution:', err);
-    } finally {
-      setCancelling(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -130,22 +118,56 @@ export default function ExecutionPage() {
           >
             ← Back
           </button>
-
-          {execution?.status === 'running' && (
-            <button
-              onClick={handleCancel}
-              disabled={cancelling}
-              className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50"
-            >
-              {cancelling ? 'Cancelling...' : 'Cancel Execution'}
-            </button>
-          )}
         </div>
 
         {/* Execution Detail */}
         {execution && <ExecutionDetail execution={execution} />}
 
-        {/* Live Logs */}
+        {/* ===== NEW WORKER ARCHITECTURE COMPONENTS (Phase 004) ===== */}
+
+        {/* Queue Position (only shown if execution is queued) */}
+        {execution && execution.queue_position !== undefined && execution.queue_position !== null && (
+          <div className="mt-6">
+            <QueuePosition
+              executionId={executionId}
+              initialPosition={execution.queue_position}
+              initialEstimatedWait={execution.estimated_start_seconds || null}
+            />
+          </div>
+        )}
+
+        {/* Execution Actions (Cancel/Re-execute) */}
+        {execution && (
+          <div className="mt-6">
+            <ExecutionActions
+              executionId={executionId}
+              status={execution.status}
+              onActionComplete={loadExecution}
+            />
+          </div>
+        )}
+
+        {/* Live Execution Stream (WebSocket) - Feature flag controlled */}
+        {execution && (execution.status === 'running' || execution.status === 'queued') && (
+          <div className="mt-6">
+            <LiveExecutionStream
+              executionId={executionId}
+              enabled={true} // Enabled for live streaming
+            />
+          </div>
+        )}
+
+        {/* Artifacts List (downloads) */}
+        {execution && execution.artifacts && execution.artifacts.length > 0 && (
+          <div className="mt-6">
+            <ArtifactList
+              executionId={executionId}
+              artifacts={execution.artifacts}
+            />
+          </div>
+        )}
+
+        {/* Live Logs (existing) */}
         <div className="mt-6">
           <ExecutionLogs executionId={executionId} />
         </div>

@@ -140,6 +140,151 @@ async def check_registration_status(
 
 # Super admin endpoints
 
+@router.get("/admin/tenants", response_model=list)
+async def list_all_tenants(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    status_filter: Optional[str] = Query(None, description="Filter by status: active, inactive, suspended"),
+    search: Optional[str] = Query(None, description="Search by name"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth)
+):
+    """
+    List all tenants (super admin only).
+    """
+    _ensure_super_admin(current_user)
+
+    # Build query
+    query = db.query(Tenant)
+
+    # Apply filters
+    if status_filter:
+        query = query.filter(Tenant.status == status_filter)
+
+    if search:
+        query = query.filter(Tenant.name.ilike(f"%{search}%"))
+
+    # Get total count
+    total = query.count()
+
+    # Get paginated results
+    tenants = query.order_by(Tenant.created_at.desc()).offset(
+        (page - 1) * page_size
+    ).limit(page_size).all()
+
+    # Get user counts for each tenant
+    result = []
+    for tenant in tenants:
+        user_count = db.query(User).filter(User.tenant_id == tenant.id).count()
+
+        status_val = getattr(tenant.status, 'value', str(tenant.status))
+
+        result.append({
+            "id": str(tenant.id),
+            "name": tenant.name,
+            "schema_name": tenant.schema_name,
+            "status": status_val,
+            "user_count": user_count,
+            "created_at": tenant.created_at.isoformat() if tenant.created_at else None,
+            "api_key": tenant.api_key,
+            "max_users": tenant.max_users,
+            "max_agents": tenant.max_agents,
+            "max_flows": tenant.max_flows,
+        })
+
+    return result
+
+
+@router.get("/admin/tenants/{tenant_id}")
+async def get_tenant_details(
+    tenant_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth)
+):
+    """
+    Get detailed tenant information (super admin only).
+    """
+    _ensure_super_admin(current_user)
+
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tenant not found"
+        )
+
+    # Get statistics
+    user_count = db.query(User).filter(User.tenant_id == tenant_id).count()
+
+    status_val = getattr(tenant.status, 'value', str(tenant.status))
+
+    return {
+        "id": str(tenant.id),
+        "name": tenant.name,
+        "schema_name": tenant.schema_name,
+        "status": status_val,
+        "user_count": user_count,
+        "created_at": tenant.created_at.isoformat() if tenant.created_at else None,
+        "api_key": tenant.api_key,
+        "max_users": tenant.max_users,
+        "max_agents": tenant.max_agents,
+        "max_flows": tenant.max_flows,
+    }
+
+
+@router.patch("/admin/tenants/{tenant_id}")
+async def update_tenant_admin(
+    tenant_id: UUID,
+    name: Optional[str] = None,
+    status: Optional[str] = None,
+    max_users: Optional[int] = None,
+    max_agents: Optional[int] = None,
+    max_flows: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth)
+):
+    """
+    Update tenant settings (super admin only).
+    """
+    _ensure_super_admin(current_user)
+
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tenant not found"
+        )
+
+    # Update fields
+    if name is not None:
+        tenant.name = name
+    if status is not None:
+        tenant.status = TenantStatus(status)
+    if max_users is not None:
+        tenant.max_users = max_users
+    if max_agents is not None:
+        tenant.max_agents = max_agents
+    if max_flows is not None:
+        tenant.max_flows = max_flows
+
+    db.commit()
+    db.refresh(tenant)
+
+    status_val = getattr(tenant.status, 'value', str(tenant.status))
+
+    return {
+        "id": str(tenant.id),
+        "name": tenant.name,
+        "schema_name": tenant.schema_name,
+        "status": status_val,
+        "created_at": tenant.created_at.isoformat() if tenant.created_at else None,
+        "api_key": tenant.api_key,
+        "max_users": tenant.max_users,
+        "max_agents": tenant.max_agents,
+        "max_flows": tenant.max_flows,
+    }
+
+
 @router.get("/admin/tenants/pending", response_model=PendingRegistrationsResponse)
 async def list_pending_registrations(
     page: int = Query(1, ge=1),

@@ -79,9 +79,12 @@ services:
       target: development
     container_name: crewai-backend
     environment:
+      - ENABLE_WORKER_ARCHITECTURE=true
       - DATABASE_URL=postgresql://crewai:dev_password@postgres:5432/crewai_platform
       - MONGODB_URL=mongodb://crewai:dev_password@mongodb:27017/
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=redis://crewai-redis:6379/0
+      - CELERY_BROKER_URL=redis://crewai-redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://crewai-redis:6379/1
       - ENCRYPTION_KEY=QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=
       - ALLOWED_ORIGINS=http://localhost:3001,http://localhost:3000,http://frontend:3000,http://192.168.1.178:3001
       - ALLOWED_ORIGIN_REGEX=${ALLOWED_ORIGIN_REGEX:-^https?://(localhost|127\.0\.0\.1|frontend|192\.168\.[0-9]+\.[0-9]+)(:[0-9]+)?$}
@@ -136,6 +139,63 @@ services:
     depends_on:
       - backend
     command: sh -lc 'npm run dev -- -H 0.0.0.0'
+
+  # Celery Worker - Processes async tasks (flows, crews, agents, tools)
+  celery-worker:
+    build:
+      context: .
+      dockerfile: infra/docker/worker.Dockerfile
+    container_name: crewai-celery-worker
+    environment:
+      - ENABLE_WORKER_ARCHITECTURE=true
+      - DATABASE_URL=postgresql://crewai:dev_password@postgres:5432/crewai_platform
+      - MONGODB_URL=mongodb://crewai:dev_password@mongodb:27017/
+      - REDIS_URL=redis://crewai-redis:6379/0
+      - CELERY_BROKER_URL=redis://crewai-redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://crewai-redis:6379/1
+      - CLICKHOUSE_HOST=clickhouse
+      - CLICKHOUSE_PORT=9000
+      - CLICKHOUSE_USER=crewai
+      - CLICKHOUSE_PASSWORD=dev_password
+      - CLICKHOUSE_DATABASE=crewai_analytics
+      - ENCRYPTION_KEY=QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=
+      - CREWAI_TELEMETRY_OPT_OUT=true
+      - OTEL_SDK_DISABLED=true
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    command: celery -A src.workers.celery_app worker --loglevel=info --pool=gevent --concurrency=4
+    restart: unless-stopped
+
+  # Celery Beat - Periodic task scheduler for health checks
+  celery-beat:
+    build:
+      context: .
+      dockerfile: infra/docker/worker.Dockerfile
+    container_name: crewai-celery-beat
+    environment:
+      - ENABLE_WORKER_ARCHITECTURE=${ENABLE_WORKER_ARCHITECTURE:-false}
+      - DATABASE_URL=postgresql://crewai:dev_password@postgres:5432/crewai_platform
+      - REDIS_URL=redis://crewai-redis:6379/0
+      - CELERY_BROKER_URL=redis://crewai-redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://crewai-redis:6379/1
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A src.workers.celery_app beat --loglevel=info
+    restart: unless-stopped
 
 volumes:
   postgres_data:

@@ -21,6 +21,7 @@ class UserProfileResponse(BaseModel):
     roles: List[RoleInfo] = []  # New field - all assigned roles
     tenant_id: UUID
     is_active: bool
+    is_super_admin: bool = False
 
 
 class UserProfileUpdate(BaseModel):
@@ -34,6 +35,7 @@ class UserAdminResponse(BaseModel):
     role: str  # Legacy field - primary role slug
     roles: List[RoleInfo] = []  # New field - all assigned roles
     is_active: bool
+    is_super_admin: bool = False
     created_at: str
 
 

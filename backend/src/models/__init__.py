@@ -8,6 +8,7 @@ from .task import Task
 from .flow import Flow
 from .tool import Tool
 from .execution import Execution
+from .execution_queue import ExecutionQueue
 from .chat_session import ChatSession
 from .chat_folder import ChatFolder
 from .llm_provider import LLMProvider
@@ -28,6 +29,8 @@ from .user_role import user_roles
 from .policy import Policy
 from .authorization_audit_log import AuthorizationAuditLog
 from .tenant_registration import TenantRegistration
+from .execution_artifact import ExecutionArtifact
+from .worker_instance import WorkerInstance
 
 __all__ = [
     "Tenant",
@@ -38,6 +41,7 @@ __all__ = [
     "Flow",
     "Tool",
     "Execution",
+    "ExecutionQueue",
     "ChatSession",
     "LLMProvider",
     "AgentVersion",
@@ -57,4 +61,6 @@ __all__ = [
     "Policy",
     "AuthorizationAuditLog",
     "TenantRegistration",
+    "ExecutionArtifact",
+    "WorkerInstance",
 ]

@@ -1,0 +1,135 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crewai-worker
+  labels:
+    app: crewai-worker
+    component: worker
+spec:
+  replicas: 2  # Start with 2 workers, HPA will scale
+  selector:
+    matchLabels:
+      app: crewai-worker
+  template:
+    metadata:
+      labels:
+        app: crewai-worker
+        component: worker
+    spec:
+      containers:
+      - name: worker
+        image: crewai-worker:latest
+        imagePullPolicy: IfNotPresent
+
+        env:
+        - name: ENABLE_WORKER_ARCHITECTURE
+          value: "true"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: crewai-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: crewai-config
+              key: redis-url
+        - name: CELERY_BROKER_URL
+          valueFrom:
+            configMapKeyRef:
+              name: crewai-config
+              key: celery-broker-url
+        - name: CELERY_RESULT_BACKEND
+          valueFrom:
+            configMapKeyRef:
+              name: crewai-config
+              key: celery-result-backend
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: access-key-id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: secret-access-key
+        - name: S3_BUCKET
+          valueFrom:
+            configMapKeyRef:
+              name: crewai-config
+              key: s3-bucket
+        - name: S3_REGION
+          valueFrom:
+            configMapKeyRef:
+              name: crewai-config
+              key: s3-region
+        - name: WORKER_HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+
+        resources:
+          requests:
+            cpu: "2000m"      # 2 CPU cores
+            memory: "4Gi"     # 4 GB RAM
+          limits:
+            cpu: "2000m"      # Hard limit at 2 cores
+            memory: "4Gi"     # Hard limit at 4 GB
+
+        # Readiness probe - check worker heartbeat
+        readinessProbe:
+          exec:
+            command:
+            - celery
+            - -A
+            - src.workers.celery_app
+            - inspect
+            - ping
+          initialDelaySeconds: 40
+          periodSeconds: 30
+          timeoutSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+
+        # Liveness probe - ensure worker is responsive
+        livenessProbe:
+          exec:
+            command:
+            - celery
+            - -A
+            - src.workers.celery_app
+            - inspect
+            - ping
+          initialDelaySeconds: 60
+          periodSeconds: 60
+          timeoutSeconds: 10
+          successThreshold: 1
+          failureThreshold: 5
+
+        # Volume mounts for logs
+        volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+
+      volumes:
+      - name: logs
+        emptyDir: {}
+
+      # Pod disruption budget for safe scaling
+      terminationGracePeriodSeconds: 300  # Allow 5 min for task completion
+
+      # Node affinity for performance
+      affinity:
+        podAntiAffinity:
+          # Prefer different nodes for worker pods
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - crewai-worker
+              topologyKey: kubernetes.io/hostname

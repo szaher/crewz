@@ -1,0 +1,63 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: crewai-worker-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: crewai-worker
+
+  minReplicas: 2      # Minimum 2 workers always running
+  maxReplicas: 500    # Maximum 500 workers for high load
+
+  metrics:
+  # Scale based on CPU utilization
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 80  # Scale up when CPU > 80%
+
+  # Scale based on Memory utilization
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80  # Scale up when Memory > 80%
+
+  # Custom metric: Queue depth (requires Prometheus adapter)
+  - type: Pods
+    pods:
+      metric:
+        name: celery_queue_depth
+      target:
+        type: AverageValue
+        averageValue: "10"  # Scale up when avg queue depth > 10 per worker
+
+  behavior:
+    scaleUp:
+      # Aggressive scale up for quick response to load
+      stabilizationWindowSeconds: 0  # No stabilization, scale immediately
+      policies:
+      - type: Percent
+        value: 100  # Double the number of pods
+        periodSeconds: 15  # Every 15 seconds
+      - type: Pods
+        value: 10  # Add at least 10 pods
+        periodSeconds: 15
+      selectPolicy: Max  # Choose the policy that scales faster
+
+    scaleDown:
+      # Conservative scale down to avoid thrashing
+      stabilizationWindowSeconds: 300  # Wait 5 minutes before scaling down
+      policies:
+      - type: Percent
+        value: 10  # Remove 10% of pods
+        periodSeconds: 60  # Every minute
+      - type: Pods
+        value: 2  # Remove at most 2 pods
+        periodSeconds: 60
+      selectPolicy: Min  # Choose the policy that scales slower

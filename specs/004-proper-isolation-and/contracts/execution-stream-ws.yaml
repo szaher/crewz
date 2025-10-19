@@ -1,0 +1,118 @@
+asyncapi: 2.6.0
+info:
+  title: Execution Stream WebSocket
+  version: 1.0.0
+  description: WebSocket API for live execution output streaming
+
+servers:
+  production:
+    url: wss://api.example.com/ws
+    protocol: wss
+
+channels:
+  /executions/{jobId}/stream:
+    description: Live execution output stream
+    parameters:
+      jobId:
+        description: Execution job UUID
+        schema:
+          type: string
+          format: uuid
+    subscribe:
+      summary: Receive execution events
+      message:
+        oneOf:
+          - $ref: '#/components/messages/ExecutionStarted'
+          - $ref: '#/components/messages/ExecutionOutput'
+          - $ref: '#/components/messages/ExecutionProgress'
+          - $ref: '#/components/messages/ExecutionCompleted'
+          - $ref: '#/components/messages/ExecutionError'
+
+components:
+  messages:
+    ExecutionStarted:
+      payload:
+        type: object
+        properties:
+          event:
+            type: string
+            const: execution.started
+          job_id:
+            type: string
+            format: uuid
+          worker_id:
+            type: string
+            format: uuid
+          started_at:
+            type: string
+            format: date-time
+
+    ExecutionOutput:
+      payload:
+        type: object
+        properties:
+          event:
+            type: string
+            const: execution.output
+          line:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          stream_type:
+            type: string
+            enum: [stdout, stderr]
+
+    ExecutionProgress:
+      payload:
+        type: object
+        properties:
+          event:
+            type: string
+            const: execution.progress
+          percent:
+            type: integer
+            minimum: 0
+            maximum: 100
+          current_step:
+            type: string
+          total_steps:
+            type: integer
+
+    ExecutionCompleted:
+      payload:
+        type: object
+        properties:
+          event:
+            type: string
+            const: execution.completed
+          status:
+            type: string
+            enum: [completed, failed, cancelled]
+          result_summary:
+            type: string
+          artifacts:
+            type: array
+            items:
+              type: object
+              properties:
+                artifact_id:
+                  type: string
+                  format: uuid
+                file_name:
+                  type: string
+
+    ExecutionError:
+      payload:
+        type: object
+        properties:
+          event:
+            type: string
+            const: execution.error
+          error_type:
+            type: string
+          message:
+            type: string
+          traceback:
+            type: string
+            nullable: true

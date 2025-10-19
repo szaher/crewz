@@ -261,29 +261,37 @@ async def cancel_execution(
 
     Only pending or running executions can be cancelled.
     """
-    # Initialize services with proper dependencies
-    from ...services.flow_service import FlowService
-    from ...crewai.flow_executor import FlowExecutor
-    from ...crewai.crew_factory import CrewFactory
-    from ...crewai.agent_factory import AgentFactory
-    from ...services.execution_events import ExecutionEventPublisher
-    from ...services.llm_service import LLMService
-    from ...services.docker_service import DockerService
-    from ...crewai.tool_adapter import ToolAdapter
+    from uuid import UUID
+    from ...services.execution_service_worker import ExecutionServiceWorker
+    from ...config.settings import Settings
 
-    flow_service = FlowService(db)
+    # Initialize worker service
+    settings = Settings()
+    execution_service = ExecutionServiceWorker(
+        db_session=db,
+        settings=settings
+    )
 
-    # Initialize factories with dependencies
-    llm_service = LLMService(db)
-    docker_service = DockerService()
-    tool_adapter = ToolAdapter(docker_service)
-    agent_factory = AgentFactory(llm_service, tool_adapter)
-    crew_factory = CrewFactory(agent_factory)
-    event_publisher = ExecutionEventPublisher()
-    flow_executor = FlowExecutor(crew_factory, agent_factory, event_publisher)
+    # Cancel execution
+    user_id = current_user["id"] if isinstance(current_user["id"], UUID) else UUID(str(current_user["id"]))
+    result = execution_service.cancel_execution(
+        execution_id=UUID(execution_id),
+        user_id=user_id
+    )
 
-    execution_service = ExecutionService(db, flow_service, flow_executor)
-    execution = await execution_service.cancel_execution(execution_id)
+    # Handle error responses
+    if result.get("error") == "not_found":
+        raise HTTPException(status_code=404, detail="Execution not found")
+
+    if result.get("error") == "forbidden":
+        raise HTTPException(status_code=403, detail="You don't have permission to cancel this execution")
+
+    # Get the execution to return
+    from ...models.execution import Execution
+    execution = db.query(Execution).filter(Execution.id == UUID(execution_id)).first()
+    if not execution:
+        raise HTTPException(status_code=404, detail="Execution not found")
+
     return ExecutionResponse.from_orm(execution)
 
 
@@ -425,12 +433,11 @@ async def get_queue_metrics(
     Current queue depth, processing rate, failure rate.
     """
     from datetime import datetime, timedelta
-    from ...models.execution_queue import ExecutionQueue, ExecutionStatus
-    from ...models.execution_metrics import ExecutionMetrics
+    from ...models.execution import Execution, ExecutionStatus
     from sqlalchemy import func
 
-    # Use current user's tenant if not admin
-    target_tenant_id = tenant_id if current_user.get("role") == "super_admin" else current_user.get("tenant_id")
+    # Use current user's ID for filtering (tenant-based filtering via user_id)
+    user_id = current_user.get("id")
 
     # Parse timeframe
     timeframe_minutes = {
@@ -443,43 +450,39 @@ async def get_queue_metrics(
 
     since = datetime.utcnow() - timedelta(minutes=timeframe_minutes)
 
-    # Query queue depth
-    queue_query = db.query(ExecutionQueue).filter(
-        ExecutionQueue.tenant_id == target_tenant_id,
-        ExecutionQueue.status.in_([ExecutionStatus.PENDING, ExecutionStatus.RUNNING])
+    # Query queue depth (queued + running)
+    queue_query = db.query(Execution).filter(
+        Execution.user_id == user_id,
+        Execution.status.in_([ExecutionStatus.QUEUED.value, ExecutionStatus.RUNNING.value, ExecutionStatus.PENDING.value])
     )
 
     queue_depth = queue_query.count()
-    pending_count = queue_query.filter(ExecutionQueue.status == ExecutionStatus.PENDING).count()
-    running_count = queue_query.filter(ExecutionQueue.status == ExecutionStatus.RUNNING).count()
+    pending_count = queue_query.filter(Execution.status == ExecutionStatus.QUEUED.value).count()
+    running_count = queue_query.filter(Execution.status == ExecutionStatus.RUNNING.value).count()
 
-    # Query completed/failed in timeframe
-    completed_query = db.query(ExecutionQueue).filter(
-        ExecutionQueue.tenant_id == target_tenant_id,
-        ExecutionQueue.completed_at >= since
+    # Query completed/failed in timeframe (use updated_at as proxy for completion time)
+    completed_query = db.query(Execution).filter(
+        Execution.user_id == user_id,
+        Execution.updated_at >= since
     )
 
-    completed_last_minute = completed_query.filter(ExecutionQueue.status == ExecutionStatus.COMPLETED).count()
-    failed_last_minute = completed_query.filter(ExecutionQueue.status == ExecutionStatus.FAILED).count()
+    completed_last_minute = completed_query.filter(Execution.status == ExecutionStatus.COMPLETED.value).count()
+    failed_last_minute = completed_query.filter(Execution.status == ExecutionStatus.FAILED.value).count()
 
     # Calculate processing rate (tasks/second)
     total_processed = completed_last_minute + failed_last_minute
     processing_rate = total_processed / (timeframe_minutes * 60) if timeframe_minutes > 0 else 0
 
-    # Calculate duration statistics
+    # Calculate duration statistics using execution_time_ms
     duration_stats = db.query(
-        func.avg(ExecutionQueue.duration_ms).label("avg"),
-        func.percentile_cont(0.95).within_group(ExecutionQueue.duration_ms).label("p95"),
-        func.percentile_cont(0.99).within_group(ExecutionQueue.duration_ms).label("p99")
+        func.avg(Execution.execution_time_ms).label("avg")
     ).filter(
-        ExecutionQueue.tenant_id == target_tenant_id,
-        ExecutionQueue.completed_at >= since,
-        ExecutionQueue.duration_ms.isnot(None)
+        Execution.user_id == user_id,
+        Execution.updated_at >= since,
+        Execution.execution_time_ms.isnot(None)
     ).first()
 
-    avg_duration_ms = int(duration_stats.avg or 0)
-    p95_duration_ms = int(duration_stats.p95 or 0)
-    p99_duration_ms = int(duration_stats.p99 or 0)
+    avg_duration_ms = int(duration_stats.avg or 0) if duration_stats else 0
 
     # Calculate failure rate
     failure_rate = failed_last_minute / total_processed if total_processed > 0 else 0.0
@@ -492,8 +495,6 @@ async def get_queue_metrics(
         "failed_last_minute": failed_last_minute,
         "processing_rate": round(processing_rate, 3),
         "avg_duration_ms": avg_duration_ms,
-        "p95_duration_ms": p95_duration_ms,
-        "p99_duration_ms": p99_duration_ms,
         "failure_rate": round(failure_rate, 3),
         "timestamp": datetime.utcnow().isoformat()
     }
@@ -631,4 +632,333 @@ async def requeue_dead_letter_task(
     return {
         "message": "Task requeued successfully",
         "execution_id": str(execution_id)
+    }
+
+
+# ===== WORKER ARCHITECTURE ENDPOINTS (Phase 004) =====
+
+@router.post("/queue", status_code=status.HTTP_201_CREATED)
+async def queue_execution(
+    execution_type: str,
+    entity_id: str,
+    input_params: dict,
+    priority: int = 5,
+    timeout_seconds: int = 600,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Queue new execution (T033).
+
+    Uses worker architecture if ENABLE_WORKER_ARCHITECTURE=True,
+    else falls back to old synchronous flow.
+    """
+    from uuid import UUID
+    from ...services.execution_service_worker import ExecutionServiceWorker
+    from ...config.settings import Settings
+
+    settings = Settings()
+
+    # Validate priority bounds (0-10 per OpenAPI spec)
+    if not (0 <= priority <= 10):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Priority must be between 0 and 10"
+        )
+
+    # Validate timeout bounds (60-3600 per OpenAPI spec)
+    if not (60 <= timeout_seconds <= 3600):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Timeout must be between 60 and 3600 seconds"
+        )
+
+    # Validate execution_type enum
+    valid_types = ["crew", "flow", "task"]
+    if execution_type not in valid_types:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"execution_type must be one of: {', '.join(valid_types)}"
+        )
+
+    try:
+        execution_service = ExecutionServiceWorker(db)
+
+        execution = execution_service.queue_execution(
+            execution_type=execution_type,
+            entity_id=UUID(entity_id),
+            input_params=input_params,
+            user_id=UUID(current_user["id"]),
+            priority=priority,
+            timeout_seconds=timeout_seconds
+        )
+
+        # Estimate start time based on queue position
+        import time
+        from datetime import datetime, timedelta
+        estimated_wait = execution.queue_position * 300 if execution.queue_position else 0  # 5 min per job
+        estimated_start = datetime.utcnow() + timedelta(seconds=estimated_wait)
+
+        return {
+            "job_id": str(execution.id),
+            "queue_position": execution.queue_position or 0,
+            "estimated_start_time": estimated_start.isoformat() + "Z"
+        }
+
+    except ValueError as e:
+        # Worker architecture disabled - fall back
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to queue execution: {str(e)}"
+        )
+
+
+@router.get("/{job_id}/status")
+async def get_execution_status(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Get execution status with queue info (T034 - EXTENDED existing endpoint).
+
+    Adds queue_position, worker_id, retry_count to response when populated.
+    """
+    from uuid import UUID
+    from ...models.execution import Execution
+
+    try:
+        execution = db.query(Execution).filter(Execution.id == UUID(job_id)).first()
+
+        if not execution:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Execution not found"
+            )
+
+        # Build response with worker fields
+        response = {
+            "job_id": str(execution.id),
+            "status": execution.status.value if hasattr(execution.status, 'value') else execution.status,
+            "queue_position": execution.queue_position,
+            "worker_id": execution.worker_id,
+            "started_at": execution.created_at.isoformat() + "Z" if execution.created_at else None,
+            "progress_percent": None  # TODO: Implement progress tracking
+        }
+
+        return response
+
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid UUID format"
+        )
+
+
+# NOTE: Duplicate cancel endpoint removed - using the one at line 253 instead
+# The route pattern /{job_id}/cancel conflicts with /{execution_id}/cancel
+# Both resolve to the same pattern and cause route collision
+
+
+@router.post("/{job_id}/re-execute", status_code=status.HTTP_201_CREATED)
+async def reexecute_execution(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Re-execute with same inputs (T036 - NEW endpoint).
+
+    Clones execution with parent_execution_id, increments artifact_version.
+    """
+    from uuid import UUID
+    from ...services.execution_service_worker import ExecutionServiceWorker
+
+    try:
+        execution_service = ExecutionServiceWorker(db)
+
+        new_execution = execution_service.reexecute_with_version(
+            execution_id=UUID(job_id),
+            user_id=UUID(current_user["id"])
+        )
+
+        if not new_execution:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Original execution not found"
+            )
+
+        return {
+            "new_job_id": str(new_execution.id),
+            "version_number": new_execution.artifact_version or 1
+        }
+
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid UUID format"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to re-execute: {str(e)}"
+        )
+
+
+@router.get("/{job_id}/artifacts")
+async def list_execution_artifacts(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    List execution artifacts (T037 partial - will move to artifacts.py).
+
+    Returns artifact metadata for an execution.
+    """
+    from uuid import UUID
+    from ...services.artifact_service import ArtifactService
+
+    try:
+        artifact_service = ArtifactService(db)
+
+        artifacts = artifact_service.get_execution_artifacts(UUID(job_id))
+
+        results = []
+        for artifact in artifacts:
+            results.append({
+                "artifact_id": str(artifact.id),
+                "file_name": artifact.file_name,
+                "file_size": artifact.file_size,
+                "mime_type": artifact.mime_type,
+                "artifact_type": artifact.artifact_type.value if hasattr(artifact.artifact_type, 'value') else artifact.artifact_type,
+                "version": artifact.version_number,
+                "download_url": f"/api/v1/artifacts/{artifact.id}/download"
+            })
+
+        return results
+
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid UUID format"
+        )
+
+
+@router.get("/queue/list")
+async def list_queue_items(
+    status_filter: str = Query(None, regex="^(queued|running|all)$"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    List queue items for current tenant.
+
+    Returns executions in queue with tenant filtering.
+    Only shows executions belonging to the authenticated user's tenant.
+    """
+    from ...models.execution import Execution, ExecutionStatus, ExecutionType
+    from ...models.crew import Crew
+    from ...models.flow import Flow
+    from ...models.agent import Agent
+    from ...models.task import Task
+    from uuid import UUID
+
+    # Get user's tenant_id
+    user_tenant_id = current_user.get("tenant_id")
+    user_id = current_user.get("id")
+
+    # Ensure user_id is UUID
+    if not isinstance(user_id, UUID):
+        user_id = UUID(str(user_id))
+
+    # Build query with tenant filtering
+    query = db.query(Execution).filter(Execution.user_id == user_id)
+
+    # Apply status filter
+    if status_filter == "queued":
+        query = query.filter(Execution.status == ExecutionStatus.QUEUED.value)
+    elif status_filter == "running":
+        query = query.filter(Execution.status == ExecutionStatus.RUNNING.value)
+    elif status_filter == "all":
+        query = query.filter(
+            Execution.status.in_([
+                ExecutionStatus.QUEUED.value,
+                ExecutionStatus.RUNNING.value,
+                ExecutionStatus.PENDING.value
+            ])
+        )
+    else:
+        # Default: show queued and running
+        query = query.filter(
+            Execution.status.in_([ExecutionStatus.QUEUED.value, ExecutionStatus.RUNNING.value])
+        )
+
+    # Order by priority (lower number = higher priority) and created_at
+    query = query.order_by(Execution.priority.asc(), Execution.created_at.asc())
+
+    # Get total count
+    total = query.count()
+
+    # Apply pagination
+    items = query.offset(skip).limit(limit).all()
+
+    # Format response
+    results = []
+    for item in items:
+        # Get entity ID and name based on execution type
+        entity_name = None
+        entity_id = None
+
+        if item.execution_type == ExecutionType.FLOW.value:
+            entity_id = str(item.flow_id) if item.flow_id else None
+            if item.flow_id:
+                flow = db.query(Flow).filter(Flow.id == item.flow_id).first()
+                entity_name = flow.name if flow else None
+        elif item.execution_type == ExecutionType.CREW.value:
+            entity_id = str(item.crew_id) if item.crew_id else None
+            if item.crew_id:
+                crew = db.query(Crew).filter(Crew.id == item.crew_id).first()
+                entity_name = crew.name if crew else None
+        elif item.execution_type == ExecutionType.AGENT.value:
+            entity_id = str(item.agent_id) if item.agent_id else None
+            if item.agent_id:
+                agent = db.query(Agent).filter(Agent.id == item.agent_id).first()
+                entity_name = agent.name if agent else None
+        elif item.execution_type == ExecutionType.TASK.value:
+            entity_id = str(item.task_id) if item.task_id else None
+            if item.task_id:
+                task = db.query(Task).filter(Task.id == item.task_id).first()
+                entity_name = task.name if task else None
+
+        # Use queue_position from model if available, otherwise calculate
+        queue_position = item.queue_position
+
+        results.append({
+            "execution_id": str(item.id),
+            "execution_type": item.execution_type.value if hasattr(item.execution_type, 'value') else item.execution_type,
+            "entity_id": entity_id,
+            "entity_name": entity_name,
+            "status": item.status.value if hasattr(item.status, 'value') else item.status,
+            "priority": item.priority or 5,
+            "queue_position": queue_position,
+            "worker_id": item.worker_id if hasattr(item, 'worker_id') else None,
+            "created_at": item.created_at.isoformat() + "Z" if item.created_at else None,
+            "started_at": None,  # Execution model doesn't have started_at field
+            "retry_count": item.retry_count or 0,
+            "max_retries": getattr(item, 'max_retries', 3) or 3
+        })
+
+    return {
+        "items": results,
+        "total": total,
+        "skip": skip,
+        "limit": limit
     }

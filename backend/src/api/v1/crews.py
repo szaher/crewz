@@ -200,15 +200,27 @@ async def execute_crew(
     """
     Queue a crew execution and return an execution record.
 
-    Execution runs asynchronously. Track status via /api/v1/executions.
+    Execution runs asynchronously on workers. Track status via /api/v1/executions.
     """
-    from ...services.execution_service import ExecutionService
+    from uuid import UUID
+    from ...services.execution_service_worker import ExecutionServiceWorker
+    from ...config.settings import Settings
 
-    # Create execution record and schedule async run
-    execution_service = ExecutionService(db, None, None)
-    execution = await execution_service.create_execution_async(
-        ExecutionCreate(execution_type="crew", crew_id=crew_id, input_data=input_data),
-        user_id=current_user["id"],
+    # Initialize worker service which handles both worker and legacy execution paths
+    settings = Settings()
+    execution_service_worker = ExecutionServiceWorker(
+        db_session=db,
+        settings=settings
+    )
+
+    # Queue the execution (will use workers if enabled, otherwise falls back to legacy)
+    execution = execution_service_worker.queue_execution(
+        execution_type="crew",
+        entity_id=UUID(crew_id),
+        input_params=input_data,
+        user_id=current_user["id"] if isinstance(current_user["id"], UUID) else UUID(current_user["id"]),
+        priority=5,
+        timeout_seconds=600
     )
 
     return ExecutionResponse.from_orm(execution)

@@ -111,23 +111,35 @@ async def execute_tool(
     """
     Execute a tool asynchronously.
 
-    Returns immediately with execution ID and status "pending".
-    The execution happens in the background.
+    Returns immediately with execution ID and status "queued".
+    The execution happens on workers in the background.
 
     Supports custom Python tools and Docker tools.
     """
-    from ...services.execution_service import ExecutionService
+    from uuid import UUID
+    from ...services.execution_service_worker import ExecutionServiceWorker
+    from ...config.settings import Settings
 
     # Get tool for name
     tool_service = ToolService(db)
     tool = await tool_service.get_tool(tool_id)
 
-    # Create execution and start it asynchronously
-    execution_service = ExecutionService(db, None, None)
-    execution = await execution_service.execute_tool_async(
-        tool_id=tool_id,
-        user_id=current_user.get("id"),
-        input_data=input_data,
+    # Initialize worker service which handles both worker and legacy execution paths
+    settings = Settings()
+    execution_service_worker = ExecutionServiceWorker(
+        db_session=db,
+        settings=settings
+    )
+
+    # Queue the execution (will use workers if enabled, otherwise falls back to legacy)
+    user_id = current_user.get("id")
+    execution = execution_service_worker.queue_execution(
+        execution_type="tool",
+        entity_id=UUID(tool_id),
+        input_params=input_data,
+        user_id=user_id if isinstance(user_id, UUID) else UUID(user_id),
+        priority=5,
+        timeout_seconds=600
     )
 
     return {
@@ -136,6 +148,6 @@ async def execute_tool(
         "tool_name": tool.name,
         "tool_type": tool.tool_type,
         "input_data": input_data,
-        "status": execution.status,
-        "message": "Execution started in background. Check execution status for results."
+        "status": execution.status.value,
+        "message": "Execution queued on workers. Check execution status for results."
     }
