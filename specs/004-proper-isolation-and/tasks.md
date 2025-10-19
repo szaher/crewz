@@ -158,47 +158,47 @@ This feature requires **incremental rollout** with validation checkpoints to ens
 
 ## Phase 3.12: Integration Tests (Full System Validation)
 
-- [ ] **T067** [P] Integration test: Queue execution and worker assignment in `backend/tests/integration/test_execution_lifecycle.py` (queue 3 jobs, verify workers process, check final status, validate queue position updates)
-- [ ] **T068** [P] Integration test: Live execution streaming in `backend/tests/integration/test_live_streaming.py` (start execution, connect WebSocket, verify all event types received, test mid-execution reconnect)
-- [ ] **T069** [P] Integration test: Worker crash and retry in `backend/tests/integration/test_worker_crash_retry.py` (start execution, kill worker container, verify job retried with backoff on worker2, check retry_count incremented)
-- [ ] **T070** [P] Integration test: Execution cancellation in `backend/tests/integration/test_execution_cancellation.py` (start long job, POST /cancel, verify SIGTERM sent to Celery, status=cancelled, partial artifacts saved)
-- [ ] **T071** [P] Integration test: Re-execution with versioning in `backend/tests/integration/test_reexecution_versioning.py` (complete execution, POST /re-execute, verify parent_execution_id set, artifact_version=2, new execution queued)
-- [ ] **T072** [P] Integration test: Artifact download in `backend/tests/integration/test_artifact_download.py` (execution with artifacts, GET /artifacts list, GET /download presigned URL, verify S3 access works)
-- [ ] **T073** [P] Integration test: Priority queue ordering in `backend/tests/integration/test_queue_priority.py` (queue 5 jobs with priorities 0,5,10, verify execution order: 0 first, then 5, then 10)
-- [ ] **T074** [P] Integration test: Worker isolation in `backend/tests/integration/test_worker_isolation.py` (crash worker1 during execution, verify backend API still responsive, worker2 unaffected, main app uptime 100%)
-- [ ] **T075** **CHECKPOINT**: ALL integration tests pass (`pytest backend/tests/integration/test_*.py -v` - zero failures, workers stable)
+- [X] **T067** [P] Integration test: Queue execution and worker assignment in `backend/tests/integration/test_execution_lifecycle.py` (queue 3 jobs, verify workers process, check final status, validate queue position updates)
+- [X] **T068** [P] Integration test: Live execution streaming in `backend/tests/integration/test_live_streaming.py` (start execution, connect WebSocket, verify all event types received, test mid-execution reconnect)
+- [X] **T069** [P] Integration test: Worker crash and retry in `backend/tests/integration/test_worker_crash_retry.py` (start execution, kill worker container, verify job retried with backoff on worker2, check retry_count incremented)
+- [X] **T070** [P] Integration test: Execution cancellation in `backend/tests/integration/test_execution_cancellation.py` (start long job, POST /cancel, verify SIGTERM sent to Celery, status=cancelled, partial artifacts saved)
+- [X] **T071** [P] Integration test: Re-execution with versioning in `backend/tests/integration/test_reexecution_versioning.py` (complete execution, POST /re-execute, verify parent_execution_id set, artifact_version=2, new execution queued)
+- [X] **T072** [P] Integration test: Artifact download in `backend/tests/integration/test_artifact_download.py` (execution with artifacts, GET /artifacts list, GET /download presigned URL, verify S3 access works)
+- [X] **T073** [P] Integration test: Priority queue ordering in `backend/tests/integration/test_queue_priority.py` (queue 5 jobs with priorities 0,5,10, verify execution order: 0 first, then 5, then 10)
+- [X] **T074** [P] Integration test: Worker isolation in `backend/tests/integration/test_worker_isolation.py` (crash worker1 during execution, verify backend API still responsive, worker2 unaffected, main app uptime 100%)
+- [X] **T075** **CHECKPOINT**: ALL integration tests pass (`pytest backend/tests/integration/test_*.py -v` - zero failures, workers stable)
 
 ---
 
 ## Phase 3.13: Frontend E2E Tests
 
-- [ ] **T076** [P] E2E test: Execution lifecycle in `frontend/tests/e2e/execution-lifecycle.spec.ts` (Playwright: queue via UI, watch live stream output, verify completion notification, download artifact)
-- [ ] **T077** [P] E2E test: Live streaming reliability in `frontend/tests/e2e/live-streaming.spec.ts` (start execution, verify output appears <500ms latency, disconnect/reconnect, verify buffer replay works)
-- [ ] **T078** [P] E2E test: Queue visualization in `frontend/tests/e2e/queue-visualization.spec.ts` (queue 3 jobs, verify position countdown, estimated time accuracy within 10%)
-- [ ] **T079** **CHECKPOINT**: All E2E tests pass (`npm run test:e2e` - Playwright suite green)
+- [X] **T076** [P] E2E test: Execution lifecycle in `frontend/tests/e2e/execution-lifecycle.spec.ts` (Playwright: queue via UI, watch live stream output, verify completion notification, download artifact)
+- [X] **T077** [P] E2E test: Live streaming reliability in `frontend/tests/e2e/live-streaming.spec.ts` (start execution, verify output appears <500ms latency, disconnect/reconnect, verify buffer replay works)
+- [X] **T078** [P] E2E test: Queue visualization in `frontend/tests/e2e/queue-visualization.spec.ts` (queue 3 jobs, verify position countdown, estimated time accuracy within 10%)
+- [X] **T079** **CHECKPOINT**: All E2E tests pass (`npm run test:e2e` - Playwright suite green)
 
 ---
 
 ## Phase 3.14: Unit Tests & Polish
 
-- [ ] **T080** [P] Unit test: Retry policy math in `backend/tests/unit/test_retry_policy.py` (verify backoff = 2^n * jitter, jitter in [0.5,1.5], max_retries enforcement)
-- [ ] **T081** [P] Unit test: Queue position calculation in `backend/tests/unit/test_queue_service.py` (Redis sorted set ops, estimated_wait = position * avg_time, priority routing correctness)
-- [ ] **T082** [P] Unit test: Artifact versioning logic in `backend/tests/unit/test_artifact_versioning.py` (version increment on re-execute, expires_at = created_at + 30d, parent linking)
-- [ ] **T083** [P] Unit test: Worker health check in `backend/tests/unit/test_worker_service.py` (heartbeat timeout detection, job reassignment, metrics calculation accuracy)
-- [ ] **T084** [P] Add docstrings to Celery tasks in `backend/src/workers/*.py` (task signatures, params, return values, example usage)
-- [ ] **T085** [P] Add API docs in `backend/src/api/v1/executions.py` and `artifacts.py` (FastAPI autodoc annotations, example request/response)
-- [ ] **T086** [P] Component documentation in `frontend/src/components/executions/*.tsx` (JSDoc for props, usage examples)
+- [X] **T080** [P] Unit test: Retry policy math in `backend/tests/unit/test_retry_policy.py` (verify backoff = 2^n * jitter, jitter in [0.5,1.5], max_retries enforcement)
+- [X] **T081** [P] Unit test: Queue position calculation in `backend/tests/unit/test_queue_service.py` (Redis sorted set ops, estimated_wait = position * avg_time, priority routing correctness)
+- [X] **T082** [P] Unit test: Artifact versioning logic in `backend/tests/unit/test_artifact_versioning.py` (version increment on re-execute, expires_at = created_at + 30d, parent linking)
+- [X] **T083** [P] Unit test: Worker health check in `backend/tests/unit/test_worker_service.py` (heartbeat timeout detection, job reassignment, metrics calculation accuracy)
+- [X] **T084** [P] Add docstrings to Celery tasks in `backend/src/workers/*.py` (task signatures, params, return values, example usage)
+- [X] **T085** [P] Add API docs in `backend/src/api/v1/executions.py` and `artifacts.py` (FastAPI autodoc annotations, example request/response)
+- [X] **T086** [P] Component documentation in `frontend/src/components/executions/*.tsx` (JSDoc for props, usage examples)
 
 ---
 
 ## Phase 3.15: Production Readiness
 
-- [ ] **T087** Run quickstart.md validation (`specs/004-proper-isolation-and/quickstart.md` - execute all 8 steps manually, verify success criteria met, document deviations)
-- [ ] **T088** Performance test: 100 concurrent executions in `backend/tests/performance/test_concurrent_load.py` (queue 100 jobs, measure completion time, verify <5min with 2 workers, check memory leaks via `docker stats`)
-- [ ] **T089** Security audit: Tenant isolation (`backend/tests/security/test_tenant_isolation.py` - verify no cross-tenant execution access, S3 presigned URLs scoped, JWT validation on WebSocket)
-- [ ] **T090** Create monitoring dashboard config in `infra/monitoring/grafana-dashboard.json` (panels for: queue depth, worker CPU/memory, execution throughput, error rate, P95 latency)
-- [ ] **T091** Document rollback procedure in `specs/004-proper-isolation-and/ROLLBACK.md` (steps to disable workers: set flag=False, restart backend, verify old execution flow works, how to drain queue)
-- [ ] **T092** **FINAL CHECKPOINT**: Production readiness review (all tests pass, performance acceptable, monitoring in place, rollback tested, team trained)
+- [X] **T087** Run quickstart.md validation (`specs/004-proper-isolation-and/quickstart.md` - execute all 8 steps manually, verify success criteria met, document deviations)
+- [X] **T088** Performance test: 100 concurrent executions in `backend/tests/performance/test_concurrent_load.py` (queue 100 jobs, measure completion time, verify <5min with 2 workers, check memory leaks via `docker stats`)
+- [X] **T089** Security audit: Tenant isolation (`backend/tests/security/test_tenant_isolation.py` - verify no cross-tenant execution access, S3 presigned URLs scoped, JWT validation on WebSocket)
+- [X] **T090** Create monitoring dashboard config in `infra/monitoring/grafana-dashboard.json` (panels for: queue depth, worker CPU/memory, execution throughput, error rate, P95 latency)
+- [X] **T091** Document rollback procedure in `specs/004-proper-isolation-and/ROLLBACK.md` (steps to disable workers: set flag=False, restart backend, verify old execution flow works, how to drain queue)
+- [X] **T092** **FINAL CHECKPOINT**: Production readiness review (all tests pass, performance acceptable, monitoring in place, rollback tested, team trained)
 
 ---
 
