@@ -1,13 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { apiClient } from '@/lib/api-client';
 
 interface ExecuteFlowModalProps {
   isOpen: boolean;
   onClose: () => void;
   onExecute: (inputs: Record<string, any>) => void;
-  inputVariables: Array<{ name: string; type: string; required?: boolean }>;
+  inputVariables: Array<{ name: string; type: string; required?: boolean; agentId?: string; options?: Array<{value: string; label: string}> }>;
   flowName?: string;
+  firstNodeIsAgent?: boolean;
+  firstAgentId?: string;
 }
 
 export default function ExecuteFlowModal({
@@ -16,19 +19,57 @@ export default function ExecuteFlowModal({
   onExecute,
   inputVariables,
   flowName,
+  firstNodeIsAgent,
+  firstAgentId,
 }: ExecuteFlowModalProps) {
   const [inputs, setInputs] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [availableTasks, setAvailableTasks] = useState<Array<{id: string; description: string}>>([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+
+  // Load tasks if first node is an agent
+  useEffect(() => {
+    if (isOpen && firstNodeIsAgent && firstAgentId) {
+      loadAgentTasks(firstAgentId);
+    }
+  }, [isOpen, firstNodeIsAgent, firstAgentId]);
+
+  const loadAgentTasks = async (agentId: string) => {
+    setLoadingTasks(true);
+    try {
+      const response = await apiClient.get(`/api/v1/agents/${agentId}`);
+      if (response.data) {
+        // Get tasks for this agent
+        const tasksResponse = await apiClient.get(`/api/v1/tasks?agent_id=${agentId}`);
+        if (tasksResponse.data && Array.isArray(tasksResponse.data)) {
+          setAvailableTasks(tasksResponse.data.map((task: any) => ({
+            id: task.id,
+            description: task.description,
+          })));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load agent tasks:', error);
+    } finally {
+      setLoadingTasks(false);
+    }
+  };
 
   useEffect(() => {
     // Initialize inputs with empty values
     const initialInputs: Record<string, any> = {};
+
+    // If first node is agent, add task_id field
+    if (firstNodeIsAgent) {
+      initialInputs['task_id'] = '';
+    }
+
     inputVariables.forEach((input) => {
       initialInputs[input.name] = '';
     });
     setInputs(initialInputs);
     setErrors({});
-  }, [inputVariables, isOpen]);
+  }, [inputVariables, isOpen, firstNodeIsAgent]);
 
   const handleInputChange = (name: string, value: string, type: string) => {
     let parsedValue: any = value;
@@ -63,6 +104,11 @@ export default function ExecuteFlowModal({
 
   const validateInputs = () => {
     const newErrors: Record<string, string> = {};
+
+    // Validate task selection for agent flows
+    if (firstNodeIsAgent && (!inputs['task_id'] || inputs['task_id'] === '')) {
+      newErrors['task_id'] = 'Please select a task for the agent';
+    }
 
     inputVariables.forEach((input) => {
       if (input.required) {
@@ -121,6 +167,57 @@ export default function ExecuteFlowModal({
           </div>
 
           <form onSubmit={handleSubmit}>
+            {/* Task Selection for Agent Flows */}
+            {firstNodeIsAgent && (
+              <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h3 className="text-sm font-semibold text-blue-900 mb-3">Agent Task Selection</h3>
+                <p className="text-xs text-blue-700 mb-3">
+                  This flow starts with an agent. Select a task for the agent to execute:
+                </p>
+                {loadingTasks ? (
+                  <div className="flex items-center justify-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                    <span className="ml-2 text-sm text-gray-600">Loading tasks...</span>
+                  </div>
+                ) : availableTasks.length > 0 ? (
+                  <div>
+                    <label htmlFor="task-select" className="block text-sm font-medium text-gray-700 mb-1">
+                      Select Task <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      id="task-select"
+                      value={inputs['task_id'] || ''}
+                      onChange={(e) => {
+                        setInputs(prev => ({ ...prev, task_id: e.target.value }));
+                        setErrors(prev => {
+                          const newErrors = { ...prev };
+                          delete newErrors['task_id'];
+                          return newErrors;
+                        });
+                      }}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        errors['task_id'] ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                      }`}
+                    >
+                      <option value="">-- Select a task --</option>
+                      {availableTasks.map((task) => (
+                        <option key={task.id} value={task.id}>
+                          {task.description}
+                        </option>
+                      ))}
+                    </select>
+                    {errors['task_id'] && (
+                      <p className="mt-1 text-sm text-red-600">{errors['task_id']}</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-600 bg-white p-3 rounded border border-gray-200">
+                    No tasks available for this agent. Please create tasks for the agent first.
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Input Fields */}
             {inputVariables.length > 0 && (
               <div className="space-y-4 mb-6 max-h-96 overflow-y-auto">
