@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { useToolStore, useUIStore } from '@/lib/store';
 import { apiClient } from '@/lib/api-client';
-import type { ToolCreate } from '@/types/api';
+import type { Tool, ToolCreate } from '@/types/api';
 
 // Dynamically import CodeMirror to avoid SSR issues
 const CodeMirror = dynamic(
@@ -13,15 +13,19 @@ const CodeMirror = dynamic(
 );
 
 interface ToolFormProps {
-  toolId?: number;
-  onSave?: (toolId: number) => void;
+  toolId?: string;
+  initialData?: Tool; // Tool data from API (for edit mode)
+  onSave?: (toolId: string) => void;
+  onSuccess?: () => void; // Alternative callback name
   onCancel?: () => void;
 }
 
-export default function ToolForm({ toolId, onSave, onCancel }: ToolFormProps) {
+export default function ToolForm({ toolId, initialData, onSave, onSuccess, onCancel }: ToolFormProps) {
   const { tools, addTool, updateTool } = useToolStore();
   const { theme } = useUIStore();
-  const existingTool = toolId ? tools.find((t) => t.id === toolId) : null;
+
+  // Use initialData if provided, otherwise fall back to store lookup
+  const existingTool = initialData || (toolId ? tools.find((t) => t.id === toolId) : null);
 
   const [formData, setFormData] = useState<ToolCreate>({
     name: existingTool?.name || '',
@@ -172,6 +176,7 @@ def perform_search(query: str, limit: int) -> list:
         } else if (response.data) {
           updateTool(toolId, response.data);
           onSave?.(toolId);
+          onSuccess?.();
         }
       } else {
         const response = await apiClient.post('/api/v1/tools', formData);
@@ -180,6 +185,7 @@ def perform_search(query: str, limit: int) -> list:
         } else if (response.data) {
           addTool(response.data);
           onSave?.(response.data.id);
+          onSuccess?.();
         }
       }
     } catch (err) {

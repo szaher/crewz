@@ -32,6 +32,10 @@ class Flow(BaseModel):
     nodes = Column(JSON, nullable=False, default=list)
     edges = Column(JSON, nullable=False, default=list)
 
+    # Flow variables and configuration
+    variables = Column(JSON, nullable=True, default=dict)
+    config = Column(JSON, nullable=True, default=dict)
+
     # Flow metadata
     version = Column(Integer, nullable=False, default=1)
     tags = Column(JSON, nullable=False, default=list)

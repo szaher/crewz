@@ -5,6 +5,8 @@ import asyncio
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from typing import Dict, Any, Optional
 import redis.asyncio as aioredis
 
 from ...db.postgres import get_db
@@ -14,6 +16,97 @@ from ...api.middleware.auth import require_auth, get_optional_user
 from ...utils.jwt import verify_token
 
 router = APIRouter()
+
+
+class CreateExecutionRequest(BaseModel):
+    """Request schema for creating an execution."""
+    execution_type: str  # "flow", "crew", "task"
+    flow_id: Optional[str] = None
+    crew_id: Optional[str] = None
+    task_id: Optional[str] = None
+    input_data: Dict[str, Any] = {}
+    priority: int = 5
+    timeout_seconds: int = 600
+
+
+@router.post("", status_code=status.HTTP_201_CREATED)
+async def create_execution(
+    request: CreateExecutionRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Create and queue a new execution.
+
+    This is a simplified endpoint that accepts JSON body instead of query params.
+    """
+    from uuid import UUID
+    from ...services.execution_service_worker import ExecutionServiceWorker
+
+    # Determine entity_id based on execution type
+    entity_id = None
+    if request.execution_type == "flow":
+        entity_id = request.flow_id
+    elif request.execution_type == "crew":
+        entity_id = request.crew_id
+    elif request.execution_type == "task":
+        entity_id = request.task_id
+
+    if not entity_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{request.execution_type}_id is required for execution_type={request.execution_type}"
+        )
+
+    # Validate priority
+    if not (0 <= request.priority <= 10):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Priority must be between 0 and 10"
+        )
+
+    # Validate timeout
+    if not (60 <= request.timeout_seconds <= 3600):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Timeout must be between 60 and 3600 seconds"
+        )
+
+    try:
+        execution_service = ExecutionServiceWorker(db)
+
+        # Convert string UUIDs to UUID objects
+        entity_uuid = UUID(entity_id) if isinstance(entity_id, str) else entity_id
+        user_uuid = UUID(current_user["id"]) if isinstance(current_user["id"], str) else current_user["id"]
+
+        execution = execution_service.queue_execution(
+            execution_type=request.execution_type,
+            entity_id=entity_uuid,
+            input_params=request.input_data,
+            user_id=user_uuid,
+            priority=request.priority,
+            timeout_seconds=request.timeout_seconds
+        )
+
+        from datetime import datetime, timedelta
+        estimated_wait = execution.queue_position * 300 if execution.queue_position else 0
+        estimated_start = datetime.utcnow() + timedelta(seconds=estimated_wait)
+
+        return {
+            "id": str(execution.id),
+            "job_id": str(execution.id),
+            "execution_type": request.execution_type,
+            "status": execution.status.value if hasattr(execution.status, 'value') else str(execution.status),
+            "queue_position": execution.queue_position or 0,
+            "estimated_start_time": estimated_start.isoformat() + "Z",
+            "created_at": execution.created_at.isoformat() if execution.created_at else None,
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create execution: {str(e)}"
+        )
 
 
 @router.get("", response_model=dict)

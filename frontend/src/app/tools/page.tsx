@@ -1,57 +1,23 @@
 'use client';
 
-import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Navigation from '@/components/shared/Navigation';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import ToolRegistry from '@/components/tools/ToolRegistry';
-import ToolForm from '@/components/tools/ToolForm';
 import { useTools } from '@/lib/hooks/useTools';
 
 export default function ToolsPage() {
+  const router = useRouter();
   const { tools, loading, error, refetch } = useTools();
-  const [showForm, setShowForm] = useState(false);
-  const [editingToolId, setEditingToolId] = useState<number | undefined>();
 
   const handleCreateTool = () => {
-    setEditingToolId(undefined);
-    setShowForm(true);
+    router.push('/tools/new');
   };
 
-  const handleEditTool = (toolId: number) => {
-    setEditingToolId(toolId);
-    setShowForm(true);
+  const handleEditTool = (toolId: string) => {
+    router.push(`/tools/${toolId}`);
   };
-
-  const handleSaveTool = () => {
-    setShowForm(false);
-    refetch();
-  };
-
-  if (showForm) {
-    return (
-      <ProtectedRoute>
-        <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
-          <Navigation />
-          <div className="flex-1 overflow-auto">
-            <div className="max-w-4xl mx-auto p-6">
-              <div className="mb-4">
-                <Breadcrumbs />
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                {editingToolId ? 'Edit Tool' : 'Create New Tool'}
-              </h2>
-              <ToolForm
-                toolId={editingToolId}
-                onSave={handleSaveTool}
-                onCancel={() => setShowForm(false)}
-              />
-            </div>
-          </div>
-        </div>
-      </ProtectedRoute>
-    );
-  }
 
   return (
     <ProtectedRoute>

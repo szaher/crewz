@@ -6,7 +6,7 @@ import ToolExecuteModal from './ToolExecuteModal';
 
 interface ToolRegistryProps {
   tools: Tool[];
-  onEditTool: (toolId: number) => void;
+  onEditTool: (toolId: string) => void;
   onCreateTool: () => void;
 }
 

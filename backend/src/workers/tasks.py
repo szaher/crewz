@@ -233,6 +233,11 @@ def execute_flow(self, execution_id: str, flow_id: str, payload: Dict[str, Any])
         from fastapi import HTTPException
 
         with next(get_db()) as db:
+            # Get execution record
+            execution = db.query(Execution).filter(Execution.id == execution_uuid).first()
+            if not execution:
+                raise ValueError(f"Execution not found: {execution_id}")
+
             # Initialize execution dependencies
             llm_service = LLMService(db)
             docker_service = DockerService()
