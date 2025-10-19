@@ -7,14 +7,19 @@ import Navigation from '@/components/shared/Navigation';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import { PermissionGate } from '@/components/PermissionGate';
 import { apiClient } from '@/lib/api-client';
+import FlowExecutionModal from '@/components/flows/FlowExecutionModal';
 
 interface Flow {
-  id: number;
+  id: string; // UUID string, not number
   name: string;
   description: string;
   status: string;
   created_at: string;
   updated_at: string;
+  config?: {
+    created_with?: 'form' | 'canvas';
+    [key: string]: any;
+  };
 }
 
 export default function FlowsPage() {
@@ -24,6 +29,8 @@ export default function FlowsPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [showCreateMenu, setShowCreateMenu] = useState(false);
+  const [executingFlowId, setExecutingFlowId] = useState<string | null>(null);
 
   useEffect(() => {
     loadFlows();
@@ -32,7 +39,8 @@ export default function FlowsPage() {
   const loadFlows = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get('/api/v1/flows');
+      // Request all flows with max page size
+      const response = await apiClient.get('/api/v1/flows?page=1&page_size=100');
       if (response.data) {
         setFlows(response.data.flows || []);
       }
@@ -44,7 +52,13 @@ export default function FlowsPage() {
     }
   };
 
-  const handleCreateFlow = async () => {
+  const handleCreateWithForm = () => {
+    setShowCreateMenu(false);
+    router.push('/flows/new');
+  };
+
+  const handleCreateWithCanvas = async () => {
+    setShowCreateMenu(false);
     try {
       const response = await apiClient.post('/api/v1/flows', {
         name: 'New Flow',
@@ -57,6 +71,8 @@ export default function FlowsPage() {
       const flowId = response.data?.id;
 
       if (flowId) {
+        // Reload the flows list before navigating
+        await loadFlows();
         router.push(`/flows/${flowId}`);
       } else {
         alert('Flow created but no ID returned');
@@ -67,7 +83,7 @@ export default function FlowsPage() {
     }
   };
 
-  const handleDeleteFlow = async (flowId: number) => {
+  const handleDeleteFlow = async (flowId: string) => {
     if (!confirm('Are you sure you want to delete this flow?')) return;
 
     try {
@@ -111,12 +127,52 @@ export default function FlowsPage() {
                 </p>
               </div>
               <PermissionGate resourceType="flow" action="write">
-                <button
-                  onClick={handleCreateFlow}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-                >
-                  + Create Flow
-                </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setShowCreateMenu(!showCreateMenu)}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 flex items-center gap-2"
+                  >
+                    + Create Flow
+                    <span className="text-xs">▼</span>
+                  </button>
+
+                  {showCreateMenu && (
+                    <>
+                      {/* Backdrop to close menu */}
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={() => setShowCreateMenu(false)}
+                      />
+
+                      {/* Dropdown menu */}
+                      <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg border border-gray-200 z-20">
+                        <div className="py-1">
+                          <button
+                            onClick={handleCreateWithForm}
+                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-start gap-3"
+                          >
+                            <span className="text-lg">📝</span>
+                            <div>
+                              <div className="font-medium">Use Form</div>
+                              <div className="text-xs text-gray-500">Simple step-by-step builder</div>
+                            </div>
+                          </button>
+
+                          <button
+                            onClick={handleCreateWithCanvas}
+                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-start gap-3"
+                          >
+                            <span className="text-lg">🎨</span>
+                            <div>
+                              <div className="font-medium">Use Canvas</div>
+                              <div className="text-xs text-gray-500">Visual node editor (advanced)</div>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
               </PermissionGate>
             </div>
 
@@ -200,7 +256,7 @@ export default function FlowsPage() {
                 {!hasActiveFilters && (
                   <PermissionGate resourceType="flow" action="write">
                     <button
-                      onClick={handleCreateFlow}
+                      onClick={() => setShowCreateMenu(true)}
                       className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
                     >
                       Create Flow
@@ -214,7 +270,16 @@ export default function FlowsPage() {
                   <FlowCard
                     key={flow.id}
                     flow={flow}
-                    onEdit={() => router.push(`/flows/${flow.id}`)}
+                    router={router}
+                    onEdit={() => {
+                      // Route to form editor if created with form, canvas otherwise
+                      if (flow.config?.created_with === 'form') {
+                        router.push(`/flows/${flow.id}/edit`);
+                      } else {
+                        router.push(`/flows/${flow.id}`);
+                      }
+                    }}
+                    onExecute={() => setExecutingFlowId(flow.id)}
                     onDelete={() => handleDeleteFlow(flow.id)}
                   />
                 ))}
@@ -223,6 +288,15 @@ export default function FlowsPage() {
           </div>
         </div>
       </div>
+
+      {/* Execution Modal */}
+      {executingFlowId && (
+        <FlowExecutionModal
+          flowId={executingFlowId}
+          isOpen={!!executingFlowId}
+          onClose={() => setExecutingFlowId(null)}
+        />
+      )}
     </ProtectedRoute>
   );
 }
@@ -231,12 +305,24 @@ export default function FlowsPage() {
 function FlowCard({
   flow,
   onEdit,
-  onDelete
+  onExecute,
+  onDelete,
+  router
 }: {
   flow: Flow;
   onEdit: () => void;
+  onExecute: () => void;
   onDelete: () => void;
+  router: any;
 }) {
+  const handleEdit = () => {
+    // Route to form editor if created with form, canvas otherwise
+    if (flow.config?.created_with === 'form') {
+      router.push(`/flows/${flow.id}/edit`);
+    } else {
+      router.push(`/flows/${flow.id}`);
+    }
+  };
   return (
     <div className="bg-white p-6 rounded-lg border border-gray-200 hover:shadow-lg transition-shadow">
       <div className="flex items-start justify-between mb-2">
@@ -266,23 +352,31 @@ function FlowCard({
       </div>
 
       {/* Actions */}
-      <div className="mt-4 flex gap-2">
-        <PermissionGate resourceType="flow" action="write" resourceId={flow.id.toString()}>
-          <button
-            onClick={onEdit}
-            className="flex-1 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
-          >
-            Edit
-          </button>
-        </PermissionGate>
-        <PermissionGate resourceType="flow" action="delete" resourceId={flow.id.toString()}>
-          <button
-            onClick={onDelete}
-            className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-md hover:bg-red-100"
-          >
-            Delete
-          </button>
-        </PermissionGate>
+      <div className="mt-4 flex flex-col gap-2">
+        <button
+          onClick={onExecute}
+          className="w-full px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
+        >
+          ▶ Execute
+        </button>
+        <div className="flex gap-2">
+          <PermissionGate resourceType="flow" action="write" resourceId={flow.id.toString()}>
+            <button
+              onClick={handleEdit}
+              className="flex-1 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
+            >
+              Edit
+            </button>
+          </PermissionGate>
+          <PermissionGate resourceType="flow" action="delete" resourceId={flow.id.toString()}>
+            <button
+              onClick={onDelete}
+              className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-md hover:bg-red-100"
+            >
+              Delete
+            </button>
+          </PermissionGate>
+        </div>
       </div>
     </div>
   );

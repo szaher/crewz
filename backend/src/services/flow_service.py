@@ -51,6 +51,8 @@ class FlowService:
             status="draft",
             nodes=nodes_dict,
             edges=edges_dict,
+            variables=data.variables,
+            config=data.config,
             version=1,
             tags=data.tags,
         )
@@ -161,6 +163,12 @@ class FlowService:
 
         if data.tags is not None:
             flow.tags = data.tags
+
+        if data.variables is not None:
+            flow.variables = data.variables
+
+        if data.config is not None:
+            flow.config = data.config
 
         # Update nodes and edges if provided
         if data.nodes is not None and data.edges is not None:

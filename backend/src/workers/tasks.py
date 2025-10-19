@@ -233,6 +233,11 @@ def execute_flow(self, execution_id: str, flow_id: str, payload: Dict[str, Any])
         from fastapi import HTTPException
 
         with next(get_db()) as db:
+            # Get execution record
+            execution = db.query(Execution).filter(Execution.id == execution_uuid).first()
+            if not execution:
+                raise ValueError(f"Execution not found: {execution_id}")
+
             # Initialize execution dependencies
             llm_service = LLMService(db)
             docker_service = DockerService()
@@ -244,11 +249,17 @@ def execute_flow(self, execution_id: str, flow_id: str, payload: Dict[str, Any])
 
             # Get flow
             flow_service = FlowService(db)
-            flow = flow_service.get_flow(str(flow_uuid))
+
+            # Execute flow - note: get_flow and execute_flow are both async but celery tasks are sync
+            # We need to run them in an event loop
+            input_data = payload.get("input_data", {})
+            import asyncio
+
+            # Get flow using asyncio.run since it's async
+            flow = asyncio.run(flow_service.get_flow(str(flow_uuid)))
 
             # Execute flow
-            input_data = payload.get("input_data", {})
-            result = flow_executor.execute(flow, input_data)
+            result = asyncio.run(flow_executor.execute_flow(flow, execution, input_data))
 
         return {
             "status": "success",

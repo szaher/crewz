@@ -42,6 +42,8 @@ class FlowCreate(BaseModel):
     description: Optional[str] = None
     nodes: List[NodeData] = Field(default_factory=list)
     edges: List[EdgeData] = Field(default_factory=list)
+    variables: Optional[Dict[str, Any]] = None
+    config: Optional[Dict[str, Any]] = None
     tags: List[str] = Field(default_factory=list)
 
 
@@ -53,6 +55,8 @@ class FlowUpdate(BaseModel):
     status: Optional[FlowStatus] = None
     nodes: Optional[List[NodeData]] = None
     edges: Optional[List[EdgeData]] = None
+    variables: Optional[Dict[str, Any]] = None
+    config: Optional[Dict[str, Any]] = None
     tags: Optional[List[str]] = None
 
 
@@ -65,6 +69,8 @@ class FlowResponse(BaseModel):
     status: FlowStatus
     nodes: List[NodeData]
     edges: List[EdgeData]
+    variables: Optional[Dict[str, Any]] = None
+    config: Optional[Dict[str, Any]] = None
     version: int
     tags: List[str]
     created_at: datetime

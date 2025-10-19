@@ -73,13 +73,24 @@ export interface Tenant {
 
 export interface FlowNode {
   id: string;
-  type: 'agent' | 'crew' | 'tool' | 'input' | 'output' | 'decision';
+  type: 'agent' | 'crew' | 'tool' | 'flow' | 'router' | 'input' | 'output' | 'decision';
   position: { x: number; y: number };
   data: {
     label: string;
+    description?: string;
+    // Agent node
     agent_id?: string; // UUID
+    task_description?: string;
+    // Crew node
     crew_id?: string; // UUID
+    // Tool node
     tool_id?: string; // UUID
+    // Flow node (hierarchical)
+    flow_id?: string; // UUID
+    // Router node (conditional)
+    condition?: string;
+    router_paths?: Array<{ condition: string; next_step_id?: string }>;
+    // Common
     config?: Record<string, any>;
   };
 }
