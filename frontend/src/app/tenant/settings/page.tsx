@@ -5,6 +5,7 @@ import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Navigation from '@/components/shared/Navigation';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import { useAuthStore, useTenantStore } from '@/lib/store';
+import { getApiBaseUrl } from '@/lib/api-url';
 
 export default function TenantSettingsPage() {
   const { token } = useAuthStore();
@@ -32,7 +33,7 @@ export default function TenantSettingsPage() {
       setError(null);
       setSuccess(null);
 
-      const response = await fetch(`http://localhost:8000/api/v1/tenants/${currentTenant.id}`, {
+      const response = await fetch(`${getApiBaseUrl()}/api/v1/tenants/${currentTenant.id}`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,

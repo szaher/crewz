@@ -13,6 +13,7 @@ interface User {
   full_name: string;
   tenant_id: number;
   role: 'admin' | 'member' | 'viewer';
+  is_super_admin?: boolean;
 }
 
 interface AuthState {

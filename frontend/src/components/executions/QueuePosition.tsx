@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { getApiBaseUrl } from '@/lib/api-url';
 
 interface QueuePositionProps {
   executionId: string;
@@ -63,7 +64,7 @@ export default function QueuePosition({
     const pollInterval = setInterval(async () => {
       try {
         const token = localStorage.getItem('token') || '';
-        const response = await fetch(`http://localhost:8000/api/v1/executions/${executionId}/status`, {
+        const response = await fetch(`${getApiBaseUrl()}/api/v1/executions/${executionId}/status`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

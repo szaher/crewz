@@ -1,6 +1,6 @@
 """Prompt registry schemas."""
 
-from pydantic import BaseModel, Field, validator, field_validator
+from pydantic import BaseModel, Field, validator, field_validator, model_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from uuid import UUID
@@ -23,6 +23,7 @@ class ModelParameters(BaseModel):
 class PromptVariableSchema(BaseModel):
     """Schema for prompt variable metadata."""
 
+    name: str = Field(..., description="Variable name")
     type: str = Field(default="string", description="Variable type: string, number, boolean, json, array")
     description: Optional[str] = Field(None, description="Variable description")
     default: Optional[Any] = Field(None, description="Default value")
@@ -146,6 +147,43 @@ class PromptTemplateResponse(PromptTemplateBase):
     created_at: datetime
     updated_at: datetime
 
+    @model_validator(mode='wrap')
+    @classmethod
+    def transform_variables(cls, data: Any, handler):
+        """Transform variables dict to inject name field from dict key."""
+        # First, get the data in the right format
+        # When using from_orm, data will be the ORM object
+        # We need to extract and transform variables before validation
+
+        if hasattr(data, 'variables'):
+            # It's an ORM object, extract variables
+            variables = data.variables
+            if variables and isinstance(variables, dict):
+                transformed_vars = {}
+                for var_name, var_meta in variables.items():
+                    if isinstance(var_meta, dict) and 'name' not in var_meta:
+                        # Add name field from dict key
+                        transformed_vars[var_name] = {**var_meta, 'name': var_name}
+                    else:
+                        transformed_vars[var_name] = var_meta
+                # Replace variables with transformed version
+                data.variables = transformed_vars
+        elif isinstance(data, dict) and 'variables' in data:
+            # It's a dict input
+            variables = data['variables']
+            if variables and isinstance(variables, dict):
+                transformed_vars = {}
+                for var_name, var_meta in variables.items():
+                    if isinstance(var_meta, dict) and 'name' not in var_meta:
+                        # Add name field from dict key
+                        transformed_vars[var_name] = {**var_meta, 'name': var_name}
+                    else:
+                        transformed_vars[var_name] = var_meta
+                data['variables'] = transformed_vars
+
+        # Now let Pydantic validate
+        return handler(data)
+
     class Config:
         from_attributes = True
 
@@ -245,6 +283,7 @@ class PromptCommandInfo(BaseModel):
     required_variables: List[str]
     optional_variables: List[str]
     example: str
+    variables: List[PromptVariableSchema] = []  # Full variable metadata for UI
 
 
 class PromptCommandListResponse(BaseModel):

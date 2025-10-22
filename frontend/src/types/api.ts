@@ -28,9 +28,11 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   access_token: string;
-  refresh_token: string;
   token_type: string;
-  user: User;
+  user_id: string; // UUID
+  tenant_id: string; // UUID
+  role: string;
+  is_super_admin: boolean;
 }
 
 export interface RefreshRequest {
@@ -53,6 +55,7 @@ export interface User {
   tenant_id: string; // UUID
   role: 'admin' | 'member' | 'viewer';
   is_active: boolean;
+  is_super_admin?: boolean;
   created_at: string;
   updated_at: string;
 }

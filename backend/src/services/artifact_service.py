@@ -263,3 +263,69 @@ class ArtifactService:
             ExecutionArtifact.execution_id == execution_id,
             ExecutionArtifact.file_name == file_name
         ).order_by(ExecutionArtifact.version_number.desc()).all()
+
+    def save_output_artifact(
+        self,
+        execution_id: UUID,
+        tenant_id: UUID,
+        output_data: any,
+        artifact_type: ArtifactType = ArtifactType.RESULT_JSON,
+        version_number: int = 1
+    ) -> ExecutionArtifact:
+        """
+        Save execution output as an artifact (in-memory, no S3 upload).
+
+        Stores the output in the file_path field as a local path for now.
+        In production, this would upload to S3/MinIO.
+
+        Args:
+            execution_id: Execution UUID
+            tenant_id: Tenant UUID
+            output_data: Output data to save (dict, str, etc.)
+            artifact_type: Type of artifact
+            version_number: Version number
+
+        Returns:
+            Created ExecutionArtifact
+        """
+        import json
+        import tempfile
+        import os
+
+        # Convert output to JSON string
+        if isinstance(output_data, dict):
+            output_str = json.dumps(output_data, indent=2)
+            mime_type = "application/json"
+            file_name = "output.json"
+        else:
+            output_str = str(output_data)
+            mime_type = "text/plain"
+            file_name = "output.txt"
+
+        # For now, save to a temp location (in production, upload to S3)
+        # This allows the system to work without S3 configuration
+        temp_dir = tempfile.gettempdir()
+        file_path = os.path.join(temp_dir, f"artifacts/{tenant_id}/{execution_id}")
+        os.makedirs(file_path, exist_ok=True)
+
+        full_path = os.path.join(file_path, f"v{version_number}_{file_name}")
+
+        # Write output to file
+        with open(full_path, 'w', encoding='utf-8') as f:
+            f.write(output_str)
+
+        file_size = len(output_str.encode('utf-8'))
+
+        # Create artifact record
+        artifact = self.create_artifact_record(
+            execution_id=execution_id,
+            tenant_id=tenant_id,
+            file_name=file_name,
+            file_size=file_size,
+            file_path=full_path,
+            artifact_type=artifact_type,
+            mime_type=mime_type,
+            version_number=version_number
+        )
+
+        return artifact

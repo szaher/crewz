@@ -3,6 +3,8 @@
  * Handles real-time updates from backend execution events
  */
 
+import { getApiBaseUrl } from './api-url';
+
 export interface ExecutionEvent {
   type: 'connected' | 'execution_started' | 'node_started' | 'node_completed' | 'node_failed' | 'execution_completed' | 'execution_failed' | 'execution_cancelled' | 'error';
   execution_id?: number;
@@ -18,17 +20,16 @@ export type EventCallback = (event: ExecutionEvent) => void;
 
 class SSEClient {
   private eventSource: EventSource | null = null;
-  private baseUrl: string;
 
-  constructor(baseUrl: string = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000') {
-    this.baseUrl = baseUrl;
+  constructor() {
+    // No baseUrl stored - get it dynamically on connect
   }
 
   /**
    * Connect to execution event stream
    */
   connect(executionId: number, token: string, onEvent: EventCallback, onError?: (error: Event) => void) {
-    const url = `${this.baseUrl}/api/v1/executions/${executionId}/stream?token=${encodeURIComponent(token)}`;
+    const url = `${getApiBaseUrl()}/api/v1/executions/${executionId}/stream?token=${encodeURIComponent(token)}`;
 
     // Create EventSource with authorization header (not supported natively, so we append as query param alternative)
     // Note: For production, consider using a library that supports custom headers or implement token via query param

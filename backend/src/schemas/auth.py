@@ -29,6 +29,7 @@ class TokenPayload(BaseModel):
     tenant_id: str  # tenant_id as string (UUID)
     tenant_schema: str
     role: str
+    is_super_admin: bool = False
     exp: datetime
 
 
@@ -40,6 +41,7 @@ class LoginResponse(BaseModel):
     user_id: UUID
     tenant_id: UUID
     role: str
+    is_super_admin: bool = False
 
 
 class RegisterResponse(BaseModel):

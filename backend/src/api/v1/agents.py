@@ -10,6 +10,7 @@ from ...schemas.agents import (
     AgentResponse,
     AgentListResponse,
 )
+from ...schemas.executions import ExecutionResponse
 from ...services.agent_service import AgentService
 from ...services.versioning_service import VersioningService
 from ...api.middleware.auth import require_auth
@@ -201,7 +202,7 @@ async def get_agent_tasks(
     }
 
 
-@router.post("/{agent_id}/execute")
+@router.post("/{agent_id}/execute", response_model=ExecutionResponse, status_code=status.HTTP_201_CREATED)
 async def execute_agent(
     agent_id: str,
     input_data: dict,
@@ -223,39 +224,14 @@ async def execute_agent(
     - provider_id: Optional LLM provider ID to use instead of agent's default provider
     """
     from uuid import UUID
-    from ...services.execution_service_worker import ExecutionServiceWorker
+    from ...services.execution_orchestrator import ExecutionOrchestrator
     from ...config.settings import Settings
 
-    # Initialize worker service which handles both worker and legacy execution paths
-    settings = Settings()
-    execution_service_worker = ExecutionServiceWorker(
-        db_session=db,
-        settings=settings
-    )
+    # Use ExecutionOrchestrator for unified execution handling
+    orchestrator = ExecutionOrchestrator(db, Settings(), current_user)
+    execution = await orchestrator.execute_agent(UUID(agent_id), input_data)
 
-    # Queue the execution (will use workers if enabled, otherwise falls back to legacy)
-    user_id = current_user.get("id")
-    execution = execution_service_worker.queue_execution(
-        execution_type="agent",
-        entity_id=UUID(agent_id),
-        input_params=input_data,
-        user_id=user_id if isinstance(user_id, UUID) else UUID(user_id),
-        priority=5,
-        timeout_seconds=600
-    )
-
-    # Get agent name for response
-    agent_service = AgentService(db)
-    agent = await agent_service.get_agent(UUID(agent_id))
-
-    return {
-        "execution_id": str(execution.id),
-        "agent_id": agent_id,
-        "agent_name": agent.name,
-        "input_data": input_data,
-        "status": execution.status.value,
-        "message": "Execution queued on workers. Check execution status for results."
-    }
+    return ExecutionResponse.from_orm(execution)
 
 
 # Note: Crew endpoints live in backend/src/api/v1/crews.py

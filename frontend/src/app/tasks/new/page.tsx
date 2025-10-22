@@ -7,13 +7,14 @@ import Navigation from '@/components/shared/Navigation';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import TaskForm from '@/components/tasks/TaskForm';
 import { TaskCreate } from '@/types/task';
+import { getApiBaseUrl } from '@/lib/api-url';
 
 export default function NewTaskPage() {
   const router = useRouter();
   const { token } = useAuthStore();
 
   const handleSave = async (taskData: TaskCreate) => {
-    const response = await fetch('http://localhost:8000/api/v1/tasks', {
+    const response = await fetch(`${getApiBaseUrl()}/api/v1/tasks`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,

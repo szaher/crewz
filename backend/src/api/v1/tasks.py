@@ -270,3 +270,33 @@ async def create_tasks_from_workflow(
         created_tasks.append(TaskResponse.from_orm(task))
 
     return created_tasks
+
+
+@router.post("/{task_id}/execute", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
+async def execute_task(
+    task_id: str,
+    input_data: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Execute a task asynchronously.
+
+    Returns immediately with execution ID and status "queued".
+    The execution happens on workers in the background.
+
+    Input can contain:
+    - variables: Dict of variable values to substitute in task description
+    - context: Optional context or additional information
+    - agent_id: Optional agent ID to execute the task (overrides task's default agent)
+    """
+    from uuid import UUID
+    from ...services.execution_orchestrator import ExecutionOrchestrator
+    from ...config.settings import Settings
+    from ...schemas.executions import ExecutionResponse
+
+    # Use ExecutionOrchestrator for unified execution handling
+    orchestrator = ExecutionOrchestrator(db, Settings(), current_user)
+    execution = await orchestrator.execute_task(UUID(task_id), input_data)
+
+    return ExecutionResponse.from_orm(execution)

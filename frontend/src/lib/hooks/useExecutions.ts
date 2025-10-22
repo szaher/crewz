@@ -37,18 +37,30 @@ export interface ExecutionMetrics {
   memory_peak_mb?: number;
 }
 
-export function useExecutions() {
+export interface UseExecutionsOptions {
+  skip?: number;
+  limit?: number;
+}
+
+export function useExecutions(options: UseExecutionsOptions = {}) {
+  const { skip = 0, limit = 20 } = options;
   const [executions, setExecutions] = useState<Execution[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchExecutions = useCallback(async () => {
+  const fetchExecutions = useCallback(async (customSkip?: number, customLimit?: number) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await apiClient.get('/api/v1/executions');
+      const params = new URLSearchParams({
+        skip: String(customSkip ?? skip),
+        limit: String(customLimit ?? limit),
+      });
+      const response = await apiClient.get(`/api/v1/executions?${params}`);
       if (response.error) throw new Error(response.error);
       setExecutions(response.data?.executions || []);
+      setTotal(response.data?.total || 0);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch executions';
       setError(message);
@@ -56,7 +68,7 @@ export function useExecutions() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [skip, limit]);
 
   const getExecution = async (id: string): Promise<Execution> => {
     const response = await apiClient.get(`/api/v1/executions/${id}`);
@@ -99,7 +111,7 @@ export function useExecutions() {
   useEffect(() => {
     fetchExecutions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only fetch on mount
+  }, [skip, limit]); // Refetch when pagination changes
 
   // SSE streaming for live logs
   const streamExecutionLogs = (
@@ -134,6 +146,7 @@ export function useExecutions() {
 
   return {
     executions,
+    total,
     loading,
     error,
     getExecution,

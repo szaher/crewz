@@ -28,6 +28,7 @@ export default function Navigation() {
     { name: 'Artifacts', path: '/artifacts', icon: '📦' },
     { name: 'Observability', path: '/observability', icon: '📈' },
     { name: 'Chat', path: '/chat', icon: '💬' },
+    { name: 'Conversation', path: '/conversation', icon: '💭' },
   ];
 
   const adminItems = (user?.role === 'admin' || user?.is_super_admin) ? [

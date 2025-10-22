@@ -117,14 +117,30 @@ async def list_executions(
     current_user: dict = Depends(require_auth),
 ):
     """
-    List all executions for the current tenant.
+    List all executions for the current user.
 
-    Returns a list of execution records with pagination.
+    Returns a list of execution records with pagination, ordered by created time (newest first).
     """
     from ...models.execution import Execution
+    from sqlalchemy import desc
+    from uuid import UUID
 
+    # Get user_id from current_user
+    user_id = current_user.get("id")
+    if isinstance(user_id, str):
+        user_id = UUID(user_id)
+
+    # Build base query filtering by user
+    base_query = db.query(Execution).filter(Execution.user_id == user_id)
+
+    # Get total count
+    total = base_query.count()
+
+    # Order by created_at DESC (newest first)
+    # Note: started_at field doesn't exist in model yet, using created_at as proxy
     executions = (
-        db.query(Execution)
+        base_query
+        .order_by(desc(Execution.created_at))
         .offset(skip)
         .limit(limit)
         .all()
@@ -165,7 +181,7 @@ async def list_executions(
                 "execution_time_ms": getattr(e, "execution_time_ms", None),
             }
         )
-    return {"executions": results, "total": len(results), "skip": skip, "limit": limit}
+    return {"executions": results, "total": total, "skip": skip, "limit": limit}
 
 
 @router.get("/{execution_id}", response_model=ExecutionResponse)
@@ -871,13 +887,36 @@ async def reexecute_execution(
     """
     from uuid import UUID
     from ...services.execution_service_worker import ExecutionServiceWorker
+    from ...models.execution import Execution
 
     try:
+        # First, check if the original execution exists and user has permission
+        original_execution = db.query(Execution).filter(
+            Execution.id == UUID(job_id)
+        ).first()
+
+        if not original_execution:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Original execution not found"
+            )
+
+        # Check authorization: user must own the execution OR be a super admin
+        is_super_admin = current_user.get("is_super_admin", False)
+        user_id = UUID(current_user["id"])
+
+        if not is_super_admin and original_execution.user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to re-execute this execution"
+            )
+
+        # User is authorized, proceed with re-execution
         execution_service = ExecutionServiceWorker(db)
 
         new_execution = execution_service.reexecute_with_version(
             execution_id=UUID(job_id),
-            user_id=UUID(current_user["id"])
+            user_id=user_id
         )
 
         if not new_execution:
@@ -891,6 +930,9 @@ async def reexecute_execution(
             "version_number": new_execution.artifact_version or 1
         }
 
+    except HTTPException:
+        # Re-raise HTTPExceptions as-is
+        raise
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

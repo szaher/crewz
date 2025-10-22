@@ -11,6 +11,7 @@ from ...schemas.tools import (
     ToolResponse,
     ToolListResponse,
 )
+from ...schemas.executions import ExecutionResponse
 from ...services.tool_service import ToolService
 from ...api.middleware.auth import require_auth
 
@@ -101,7 +102,7 @@ async def delete_tool(
     await tool_service.delete_tool(tool_id)
 
 
-@router.post("/{tool_id}/execute")
+@router.post("/{tool_id}/execute", response_model=ExecutionResponse, status_code=status.HTTP_201_CREATED)
 async def execute_tool(
     tool_id: str,
     input_data: dict,
@@ -117,37 +118,11 @@ async def execute_tool(
     Supports custom Python tools and Docker tools.
     """
     from uuid import UUID
-    from ...services.execution_service_worker import ExecutionServiceWorker
+    from ...services.execution_orchestrator import ExecutionOrchestrator
     from ...config.settings import Settings
 
-    # Get tool for name
-    tool_service = ToolService(db)
-    tool = await tool_service.get_tool(tool_id)
+    # Use ExecutionOrchestrator for unified execution handling
+    orchestrator = ExecutionOrchestrator(db, Settings(), current_user)
+    execution = await orchestrator.execute_tool(UUID(tool_id), input_data)
 
-    # Initialize worker service which handles both worker and legacy execution paths
-    settings = Settings()
-    execution_service_worker = ExecutionServiceWorker(
-        db_session=db,
-        settings=settings
-    )
-
-    # Queue the execution (will use workers if enabled, otherwise falls back to legacy)
-    user_id = current_user.get("id")
-    execution = execution_service_worker.queue_execution(
-        execution_type="tool",
-        entity_id=UUID(tool_id),
-        input_params=input_data,
-        user_id=user_id if isinstance(user_id, UUID) else UUID(user_id),
-        priority=5,
-        timeout_seconds=600
-    )
-
-    return {
-        "execution_id": str(execution.id),
-        "tool_id": tool_id,
-        "tool_name": tool.name,
-        "tool_type": tool.tool_type,
-        "input_data": input_data,
-        "status": execution.status.value,
-        "message": "Execution queued on workers. Check execution status for results."
-    }
+    return ExecutionResponse.from_orm(execution)

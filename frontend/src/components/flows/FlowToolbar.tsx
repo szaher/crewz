@@ -70,6 +70,19 @@ export default function FlowToolbar({ flowId, onSave, onExecute, onDiscard, onOp
     return allInputs;
   };
 
+  const getFirstNode = () => {
+    if (!currentFlow || !currentFlow.nodes || currentFlow.nodes.length === 0) {
+      return null;
+    }
+
+    // Find nodes with no incoming edges (start nodes)
+    const nodeIds = new Set(currentFlow.nodes.map(n => n.id));
+    const targetIds = new Set(currentFlow.edges?.map(e => e.target) || []);
+    const startNodes = currentFlow.nodes.filter(n => !targetIds.has(n.id));
+
+    return startNodes.length > 0 ? startNodes[0] : currentFlow.nodes[0];
+  };
+
   const handleExecuteWithInputs = async (inputs: Record<string, any>) => {
     if (!currentFlow) return;
 
@@ -200,13 +213,23 @@ export default function FlowToolbar({ flowId, onSave, onExecute, onDiscard, onOp
       </div>
 
       {/* Execute Flow Modal */}
-      <ExecuteFlowModal
-        isOpen={showExecuteModal}
-        onClose={() => setShowExecuteModal(false)}
-        onExecute={handleExecuteWithInputs}
-        inputVariables={getInputVariables()}
-        flowName={currentFlow?.name}
-      />
+      {currentFlow && (() => {
+        const firstNode = getFirstNode();
+        const isAgentNode = firstNode?.type === 'agent';
+        const agentId = isAgentNode ? firstNode?.data?.agent_id || firstNode?.data?.agentId : undefined;
+
+        return (
+          <ExecuteFlowModal
+            isOpen={showExecuteModal}
+            onClose={() => setShowExecuteModal(false)}
+            onExecute={handleExecuteWithInputs}
+            inputVariables={getInputVariables()}
+            flowName={currentFlow?.name}
+            firstNodeIsAgent={isAgentNode}
+            firstAgentId={agentId}
+          />
+        );
+      })()}
     </div>
   );
 }

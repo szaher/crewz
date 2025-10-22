@@ -36,7 +36,9 @@ export default function LoginForm() {
           id: response.data.user_id,
           tenant_id: response.data.tenant_id,
           email: formData.email,
+          full_name: formData.email.split('@')[0], // Extract name from email as fallback
           role: response.data.role,
+          is_super_admin: response.data.is_super_admin || false,
         };
 
         // Store auth data

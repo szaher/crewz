@@ -18,6 +18,7 @@ def create_access_token(
     tenant_id: Union[int, UUID],
     tenant_schema: str,
     role: str,
+    is_super_admin: bool = False,
     expires_delta: Optional[timedelta] = None,
 ) -> str:
     """
@@ -28,6 +29,7 @@ def create_access_token(
         tenant_id: Tenant ID (int or UUID)
         tenant_schema: PostgreSQL schema name for the tenant
         role: User role (admin, member, viewer)
+        is_super_admin: Whether user is a super admin
         expires_delta: Token expiration time
 
     Returns:
@@ -43,6 +45,7 @@ def create_access_token(
         "tenant_id": str(tenant_id),  # Convert UUID to string for JSON serialization
         "tenant_schema": tenant_schema,
         "role": role,
+        "is_super_admin": is_super_admin,
         "exp": expire,
         "iat": datetime.utcnow(),
     }

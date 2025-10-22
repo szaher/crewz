@@ -2,6 +2,8 @@
  * SSE client for user notifications
  */
 
+import { getApiBaseUrl } from './api-url';
+
 export interface IncomingNotificationEvent {
   type: 'success' | 'error' | 'info' | 'warning' | 'connected' | 'error';
   title?: string;
@@ -12,14 +14,13 @@ export interface IncomingNotificationEvent {
 
 class NotificationsClient {
   private eventSource: EventSource | null = null;
-  private baseUrl: string;
 
-  constructor(baseUrl: string = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000') {
-    this.baseUrl = baseUrl;
+  constructor() {
+    // No baseUrl stored - get it dynamically on connect
   }
 
   connect(token: string, onEvent: (e: IncomingNotificationEvent) => void, onError?: (error: Event) => void) {
-    const url = `${this.baseUrl}/api/v1/notifications/stream?token=${encodeURIComponent(token)}`;
+    const url = `${getApiBaseUrl()}/api/v1/notifications/stream?token=${encodeURIComponent(token)}`;
     this.eventSource = new EventSource(url);
 
     this.eventSource.onmessage = (ev) => {
