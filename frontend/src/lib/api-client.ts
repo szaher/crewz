@@ -3,20 +3,7 @@
  * Handles JWT authentication, tenant context, and error handling
  */
 
-// Prefer dynamic browser host for LAN access unless an explicit non-localhost env is provided
-let API_BASE_URL = 'http://localhost:8000';
-const ENV_URL = process.env.NEXT_PUBLIC_API_URL;
-if (typeof window !== 'undefined') {
-  const dyn = `${window.location.protocol}//${window.location.hostname}:8000`;
-  // If env is set to a non-localhost URL, use it; otherwise use dynamic host
-  if (ENV_URL && !/^(https?:\/\/)?(localhost|127\.0\.0\.1)(:|$)/i.test(ENV_URL)) {
-    API_BASE_URL = ENV_URL;
-  } else {
-    API_BASE_URL = dyn;
-  }
-} else if (ENV_URL) {
-  API_BASE_URL = ENV_URL;
-}
+import { getApiBaseUrl } from './api-url';
 
 interface ApiClientOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
@@ -33,12 +20,11 @@ interface ApiResponse<T = any> {
 }
 
 class ApiClient {
-  private baseUrl: string;
   private token: string | null = null;
   private onUnauthorized: (() => void) | null = null;
 
-  constructor(baseUrl: string = API_BASE_URL) {
-    this.baseUrl = baseUrl;
+  constructor() {
+    // Remove baseUrl from constructor - get it dynamically on each request
 
     // Load token from localStorage on initialization
     if (typeof window !== 'undefined') {
@@ -89,7 +75,9 @@ class ApiClient {
   ): Promise<ApiResponse<T>> {
     const { method = 'GET', body, headers = {}, skipAuth = false, timeout } = options;
 
-    const url = `${this.baseUrl}${endpoint}`;
+    // Get base URL dynamically on each request (browser-aware)
+    const baseUrl = getApiBaseUrl();
+    const url = `${baseUrl}${endpoint}`;
 
     const requestHeaders: Record<string, string> = {
       'Content-Type': 'application/json',

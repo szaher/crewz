@@ -1,6 +1,7 @@
 'use client';
 
 import { io, Socket } from 'socket.io-client';
+import { getApiBaseUrl } from '@/lib/api-url';
 
 /**
  * WebSocket Client Service
@@ -71,7 +72,7 @@ class WebSocketClient {
     this.connecting = true;
 
     const {
-      url = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:8000',
+      url = process.env.NEXT_PUBLIC_WS_URL || getApiBaseUrl(),
       path = '/ws/socket.io',
       query = {}
     } = options;

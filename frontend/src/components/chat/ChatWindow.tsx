@@ -6,6 +6,7 @@ import { promptApi } from '@/lib/api/prompts';
 import MessageList from './MessageList';
 import type { ChatMessage } from '@/types/api';
 import type { PromptTemplate, PromptVariable } from '@/lib/store';
+import { getApiBaseUrl } from '@/lib/api-url';
 
 interface ChatWindowProps {
   sessionId: string;
@@ -106,19 +107,8 @@ export default function ChatWindow({ sessionId, sessionTitle, crewId, onManageTo
       return;
     }
 
-    // Compute base URL similar to api-client dynamic logic
-    const ENV_URL = process.env.NEXT_PUBLIC_API_URL as string | undefined;
-    let baseUrl = 'http://localhost:8000';
-    if (typeof window !== 'undefined') {
-      const dyn = `${window.location.protocol}//${window.location.hostname}:8000`;
-      if (ENV_URL && !/^(https?:\/\/)?(localhost|127\.0\.0\.1)(:|$)/i.test(ENV_URL)) {
-        baseUrl = ENV_URL;
-      } else {
-        baseUrl = dyn;
-      }
-    } else if (ENV_URL) {
-      baseUrl = ENV_URL;
-    }
+    // Use centralized API base URL
+    const baseUrl = getApiBaseUrl();
 
     // Build request URL with query params
     const params = new URLSearchParams({ user_message: userText, store_user: String(!!storeUser) });

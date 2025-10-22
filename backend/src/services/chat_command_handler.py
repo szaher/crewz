@@ -98,6 +98,21 @@ class ChatCommandHandler:
                 var for var, meta in variables.items() if not meta.get("required", True)
             ]
 
+            # Convert variables dict to list of PromptVariableSchema
+            from ..schemas.prompt import PromptVariableSchema
+            variable_list = []
+            for var_name, var_meta in variables.items():
+                variable_list.append(
+                    PromptVariableSchema(
+                        name=var_name,
+                        type=var_meta.get("type", "string"),
+                        description=var_meta.get("description"),
+                        default=var_meta.get("default"),
+                        required=var_meta.get("required", True),
+                        validation_regex=var_meta.get("validation_regex"),
+                    )
+                )
+
             # Generate example command
             example_parts = [f"/{prompt.slug}"]
             for var in required_vars[:2]:  # Show first 2 required vars in example
@@ -112,6 +127,7 @@ class ChatCommandHandler:
                     required_variables=required_vars,
                     optional_variables=optional_vars,
                     example=example,
+                    variables=variable_list,
                 )
             )
 

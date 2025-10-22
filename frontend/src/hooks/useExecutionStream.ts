@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { getWsBaseUrl } from '@/lib/api-url';
 
 export interface ExecutionStreamEvent {
   type: 'execution.started' | 'execution.output' | 'execution.progress' | 'execution.completed' | 'execution.error';
@@ -81,7 +82,7 @@ export function useExecutionStream(options: UseExecutionStreamOptions): UseExecu
       }
 
       // Create Socket.IO connection
-      const socket = io(`${process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:8000'}`, {
+      const socket = io(getWsBaseUrl(), {
         path: '/ws/socket.io',
         query: {
           token,

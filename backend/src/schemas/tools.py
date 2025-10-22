@@ -24,7 +24,7 @@ class ToolCreate(BaseModel):
     code: Optional[str] = None
     docker_image: Optional[str] = Field(None, max_length=255)
     docker_command: Optional[str] = Field(None, max_length=255)
-    schema: Dict[str, Any] = Field(default_factory=dict)
+    tool_schema: Dict[str, Any] = Field(default_factory=dict, alias='schema')
 
 
 class ToolUpdate(BaseModel):
@@ -36,7 +36,7 @@ class ToolUpdate(BaseModel):
     code: Optional[str] = None
     docker_image: Optional[str] = Field(None, max_length=255)
     docker_command: Optional[str] = Field(None, max_length=255)
-    schema: Optional[Dict[str, Any]] = None
+    tool_schema: Optional[Dict[str, Any]] = Field(None, alias='schema')
 
 
 class ToolResponse(BaseModel):
@@ -49,12 +49,13 @@ class ToolResponse(BaseModel):
     code: Optional[str]
     docker_image: Optional[str]
     docker_command: Optional[str]
-    schema: Dict[str, Any]
+    tool_schema: Dict[str, Any] = Field(..., alias='schema')
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
+        populate_by_name = True  # Allow both 'tool_schema' and 'schema'
 
 
 class ToolListResponse(BaseModel):

@@ -9,7 +9,12 @@ import { useExecutions } from '@/lib/hooks/useExecutions';
 
 export default function ExecutionsPage() {
   const router = useRouter();
-  const { executions, loading, error, refetch } = useExecutions();
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(20);
+  const { executions, total, loading, error, refetch } = useExecutions({
+    skip: (page - 1) * pageSize,
+    limit: pageSize,
+  });
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
 
@@ -72,9 +77,12 @@ export default function ExecutionsPage() {
     if (filterStatus !== 'all' && execution.status !== filterStatus) return false;
     if (filterType !== 'all' && getNormalizedType(execution) !== filterType) return false;
     return true;
-  })
-  // Sort by id descending (newest first)
-  .sort((a: any, b: any) => b.id - a.id);
+  });
+
+  // Calculate pagination info
+  const totalPages = Math.ceil(total / pageSize);
+  const startIndex = (page - 1) * pageSize + 1;
+  const endIndex = Math.min(page * pageSize, total);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -222,7 +230,11 @@ export default function ExecutionsPage() {
 
                 <div className="flex-1 flex items-end">
                   <div className="text-sm text-gray-600">
-                    Showing {filteredExecutions.length} of {executions.length} executions
+                    {filterStatus !== 'all' || filterType !== 'all' ? (
+                      <>Showing {filteredExecutions.length} filtered results (Total: {total})</>
+                    ) : (
+                      <>Total: {total} executions</>
+                    )}
                   </div>
                 </div>
               </div>
@@ -324,7 +336,8 @@ export default function ExecutionsPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {(() => {
-                            const d = safeDate(execution.created_at);
+                            // Prefer started_at over created_at
+                            const d = safeDate(execution.started_at || execution.created_at);
                             return d ? d.toLocaleString() : '-';
                           })()}
                         </td>
@@ -343,6 +356,36 @@ export default function ExecutionsPage() {
                     ))}
                   </tbody>
                 </table>
+
+                {/* Pagination Controls */}
+                <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-gray-700">
+                      Showing <span className="font-medium">{startIndex}</span> to{' '}
+                      <span className="font-medium">{endIndex}</span> of{' '}
+                      <span className="font-medium">{total}</span> results
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setPage(Math.max(1, page - 1))}
+                        disabled={page === 1}
+                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        ← Previous
+                      </button>
+                      <div className="flex items-center px-4 py-2 text-sm font-medium text-gray-700">
+                        Page {page} of {totalPages}
+                      </div>
+                      <button
+                        onClick={() => setPage(Math.min(totalPages, page + 1))}
+                        disabled={page === totalPages}
+                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Next →
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </div>

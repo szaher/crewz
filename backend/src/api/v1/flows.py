@@ -125,24 +125,11 @@ async def execute_flow(
     Returns execution record. Monitor progress via GET /executions/{execution_id}/stream
     """
     from uuid import UUID
-    from ...services.execution_service_worker import ExecutionServiceWorker
+    from ...services.execution_orchestrator import ExecutionOrchestrator
     from ...config.settings import Settings
 
-    # Initialize worker service which handles both worker and legacy execution paths
-    settings = Settings()
-    execution_service_worker = ExecutionServiceWorker(
-        db_session=db,
-        settings=settings
-    )
-
-    # Queue the execution (will use workers if enabled, otherwise falls back to legacy)
-    execution = execution_service_worker.queue_execution(
-        execution_type="flow",
-        entity_id=UUID(flow_id),
-        input_params=input_data,
-        user_id=current_user["id"] if isinstance(current_user["id"], UUID) else UUID(current_user["id"]),
-        priority=5,
-        timeout_seconds=600
-    )
+    # Use ExecutionOrchestrator for unified execution handling
+    orchestrator = ExecutionOrchestrator(db, Settings(), current_user)
+    execution = await orchestrator.execute_flow(UUID(flow_id), input_data)
 
     return ExecutionResponse.from_orm(execution)

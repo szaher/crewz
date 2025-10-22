@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { getApiBaseUrl } from '@/lib/api-url';
 
 interface ExecutionActionsProps {
   executionId: string;
@@ -37,7 +38,7 @@ export default function ExecutionActions({
 
       const token = localStorage.getItem('token') || '';
       const response = await fetch(
-        `http://localhost:8000/api/v1/executions/${executionId}/cancel`,
+        `${getApiBaseUrl()}/api/v1/executions/${executionId}/cancel`,
         {
           method: 'POST',
           headers: {
@@ -79,7 +80,7 @@ export default function ExecutionActions({
 
       const token = localStorage.getItem('token') || '';
       const response = await fetch(
-        `http://localhost:8000/api/v1/executions/${executionId}/re-execute`,
+        `${getApiBaseUrl()}/api/v1/executions/${executionId}/re-execute`,
         {
           method: 'POST',
           headers: {

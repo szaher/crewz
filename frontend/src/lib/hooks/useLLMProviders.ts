@@ -4,7 +4,7 @@ import { apiClient } from '../api-client';
 export type ProviderType = 'openai' | 'anthropic' | 'ollama' | 'vllm' | 'custom';
 
 export interface LLMProvider {
-  id: number;
+  id: string; // UUID
   name: string;
   provider_type: ProviderType;
   model_name: string;
@@ -69,7 +69,7 @@ export function useLLMProviders() {
     return newProvider;
   };
 
-  const updateProvider = async (id: number, data: UpdateLLMProviderData): Promise<LLMProvider> => {
+  const updateProvider = async (id: string, data: UpdateLLMProviderData): Promise<LLMProvider> => {
     const response = await apiClient.put(`/api/v1/llm-providers/${id}`, data);
     if (response.error) throw new Error(response.error);
     const updated = response.data?.provider || response.data;
@@ -77,7 +77,7 @@ export function useLLMProviders() {
     return updated;
   };
 
-  const deleteProvider = async (id: number): Promise<void> => {
+  const deleteProvider = async (id: string): Promise<void> => {
     const response = await apiClient.delete(`/api/v1/llm-providers/${id}`);
     if (response.error) {
       const err: any = new Error(response.error);
@@ -87,19 +87,19 @@ export function useLLMProviders() {
     setProviders(prev => prev.filter(p => p.id !== id));
   };
 
-  const getProvider = async (id: number): Promise<LLMProvider> => {
+  const getProvider = async (id: string): Promise<LLMProvider> => {
     const response = await apiClient.get(`/api/v1/llm-providers/${id}`);
     if (response.error) throw new Error(response.error);
     return response.data?.provider || response.data;
   };
 
-  const testConnection = async (id: number): Promise<{ success: boolean; message?: string }> => {
+  const testConnection = async (id: string): Promise<{ success: boolean; message?: string }> => {
     const response = await apiClient.post(`/api/v1/llm-providers/${id}/test`, {});
     if (response.error) throw new Error(response.error);
     return response.data;
   };
 
-  const setDefault = async (id: number): Promise<LLMProvider> => {
+  const setDefault = async (id: string): Promise<LLMProvider> => {
     const response = await apiClient.post(`/api/v1/llm-providers/${id}/set-default`, {});
     if (response.error) throw new Error(response.error);
     const updated = response.data?.provider || response.data;
@@ -108,8 +108,8 @@ export function useLLMProviders() {
   };
 
   const reassignDependents = async (
-    sourceId: number,
-    targetId: number,
+    sourceId: string,
+    targetId: string,
     scope: 'agents' | 'crews' | 'all' = 'all'
   ): Promise<{ agents_reassigned: number; crews_reassigned: number }> => {
     const response = await apiClient.post(`/api/v1/llm-providers/${sourceId}/reassign`, {

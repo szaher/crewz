@@ -42,11 +42,17 @@ class ExecutionTask(Task):
         """Called when task succeeds"""
         execution_id = kwargs.get("execution_id") or (args[0] if args else None)
         if execution_id:
-            self._update_execution_status(
-                execution_id,
-                ExecutionStatus.COMPLETED,
-                result=retval
-            )
+            # Only mark as COMPLETED if the return value indicates success
+            # If retval has status='failed', the execution was already marked FAILED in the exception handler
+            if isinstance(retval, dict) and retval.get('status') == 'failed':
+                # Don't override FAILED status - it was already set correctly
+                pass
+            else:
+                self._update_execution_status(
+                    execution_id,
+                    ExecutionStatus.COMPLETED,
+                    result=retval
+                )
 
     def _update_execution_status(
         self,
@@ -73,7 +79,8 @@ class ExecutionTask(Task):
                             execution.calculate_duration()
 
                     if result:
-                        execution.result = result
+                        # Save result to output_data field (not 'result' which doesn't exist)
+                        execution.output_data = result
                     if error:
                         execution.error = error
 
@@ -140,10 +147,44 @@ def execute_crew(self, execution_id: str, crew_id: str, payload: Dict[str, Any])
                 stream_handler=stream_handler
             )
 
+            # Get execution record for tenant_id (with user relationship loaded)
+            from sqlalchemy.orm import joinedload
+            execution = db.query(Execution).options(joinedload(Execution.user)).filter(Execution.id == execution_uuid).first()
+
+            # Save output as artifact
+            from src.services.artifact_service import ArtifactService
+            from src.models.execution_artifact import ArtifactType
+
+            artifact_service = ArtifactService(db)
+            artifact = artifact_service.save_output_artifact(
+                execution_id=execution_uuid,
+                tenant_id=execution.user.tenant_id,
+                output_data=result,
+                artifact_type=ArtifactType.RESULT_JSON,
+                version_number=1
+            )
+
+            # Emit artifact info to stream
+            stream_handler.emit_completed(
+                status="success",
+                result_summary=f"Crew execution completed successfully",
+                artifacts=[{
+                    "id": str(artifact.id),
+                    "file_name": artifact.file_name,
+                    "file_size": artifact.file_size,
+                    "artifact_type": artifact.artifact_type.value if hasattr(artifact.artifact_type, 'value') else artifact.artifact_type
+                }]
+            )
+
         return {
             "status": "success",
             "result": result,
-            "execution_id": execution_id
+            "execution_id": execution_id,
+            "artifacts": [{
+                "id": str(artifact.id),
+                "file_name": artifact.file_name,
+                "file_path": artifact.file_path
+            }]
         }
 
     except SoftTimeLimitExceeded:
@@ -220,6 +261,10 @@ def execute_flow(self, execution_id: str, flow_id: str, payload: Dict[str, Any])
     # Update status to running
     self._update_execution_status(execution_uuid, ExecutionStatus.RUNNING)
 
+    # Initialize stream handler for live output
+    from src.workers.stream_handler import StreamHandler
+    stream_handler = StreamHandler(execution_id)
+
     try:
         # Import flow execution dependencies
         from src.services.flow_service import FlowService
@@ -261,13 +306,60 @@ def execute_flow(self, execution_id: str, flow_id: str, payload: Dict[str, Any])
             # Execute flow
             result = asyncio.run(flow_executor.execute_flow(flow, execution, input_data))
 
+            # Save output as artifact
+            from src.services.artifact_service import ArtifactService
+            from src.models.execution_artifact import ArtifactType
+
+            artifact_service = ArtifactService(db)
+            artifact = artifact_service.save_output_artifact(
+                execution_id=execution_uuid,
+                tenant_id=execution.user.tenant_id,
+                output_data=result,
+                artifact_type=ArtifactType.RESULT_JSON,
+                version_number=1
+            )
+
+            # Save output to execution record
+            execution.output_data = result
+            execution.status = ExecutionStatus.COMPLETED
+            db.commit()
+
+        # Emit completion event with result
+        import json
+        result_str = json.dumps(result, indent=2) if isinstance(result, dict) else str(result)
+        stream_handler.emit_completed(
+            status="success",
+            result_summary=f"Flow execution completed successfully. Output: {result_str[:500]}{'...' if len(result_str) > 500 else ''}",
+            artifacts=[{
+                "id": str(artifact.id),
+                "file_name": artifact.file_name,
+                "file_size": artifact.file_size,
+                "artifact_type": artifact.artifact_type.value if hasattr(artifact.artifact_type, 'value') else artifact.artifact_type
+            }]
+        )
+
         return {
             "status": "success",
             "result": result,
-            "execution_id": execution_id
+            "execution_id": execution_id,
+            "artifacts": [{
+                "id": str(artifact.id),
+                "file_name": artifact.file_name,
+                "file_path": artifact.file_path
+            }]
         }
 
     except SoftTimeLimitExceeded:
+        # Soft timeout - gracefully handle
+        stream_handler.emit_error(
+            error_type="TimeoutError",
+            message="Flow execution exceeded time limit"
+        )
+        stream_handler.emit_completed(
+            status="failed",
+            result_summary="Flow execution exceeded time limit",
+            artifacts=[]
+        )
         self._update_execution_status(execution_uuid, ExecutionStatus.FAILED,
                                      error="Flow execution exceeded time limit (timeout)")
         raise
@@ -275,6 +367,15 @@ def execute_flow(self, execution_id: str, flow_id: str, payload: Dict[str, Any])
     except HTTPException as e:
         # Handle validation and business logic errors (don't retry)
         error_msg = e.detail if hasattr(e, 'detail') else str(e)
+        stream_handler.emit_error(
+            error_type="ValidationError" if e.status_code == 400 else "ExecutionError",
+            message=error_msg
+        )
+        stream_handler.emit_completed(
+            status="failed",
+            result_summary=f"Flow execution failed: {error_msg}",
+            artifacts=[]
+        )
         self._update_execution_status(execution_uuid, ExecutionStatus.FAILED,
                                      error=error_msg)
         return {
@@ -284,6 +385,16 @@ def execute_flow(self, execution_id: str, flow_id: str, payload: Dict[str, Any])
         }
 
     except Exception as e:
+        # Emit error event
+        stream_handler.emit_error(
+            error_type=type(e).__name__,
+            message=str(e)
+        )
+        stream_handler.emit_completed(
+            status="failed",
+            result_summary=f"Flow execution failed: {str(e)}",
+            artifacts=[]
+        )
         self._update_execution_status(execution_uuid, ExecutionStatus.FAILED,
                                      error=str(e))
         raise
@@ -308,22 +419,57 @@ def execute_agent(self, execution_id: str, agent_id: str, payload: Dict[str, Any
     # Update status to running
     self._update_execution_status(execution_uuid, ExecutionStatus.RUNNING)
 
+    # Initialize stream handler for live output
+    from src.workers.stream_handler import StreamHandler
+    stream_handler = StreamHandler(execution_id)
+
     try:
         # Import agent execution logic
-        from services.agent_service import AgentService
+        from src.services.agent_service import AgentService
         from fastapi import HTTPException
 
         with next(get_db()) as db:
             agent_service = AgentService(db)
             result = agent_service.execute_agent(agent_uuid, payload)
 
+            # Get execution record for tenant_id (with user relationship loaded)
+            from sqlalchemy.orm import joinedload
+            execution = db.query(Execution).options(joinedload(Execution.user)).filter(Execution.id == execution_uuid).first()
+
+            # Save output as artifact
+            from src.services.artifact_service import ArtifactService
+            from src.models.execution_artifact import ArtifactType
+
+            artifact_service = ArtifactService(db)
+            artifact = artifact_service.save_output_artifact(
+                execution_id=execution_uuid,
+                tenant_id=execution.user.tenant_id,
+                output_data=result,
+                artifact_type=ArtifactType.RESULT_JSON,
+                version_number=1
+            )
+
+            # Update execution with output
+            execution.output_data = result
+            execution.status = ExecutionStatus.COMPLETED
+            db.commit()
+
         return {
             "status": "success",
             "result": result,
-            "execution_id": execution_id
+            "execution_id": execution_id,
+            "artifacts": [{
+                "id": str(artifact.id),
+                "file_name": artifact.file_name,
+                "file_path": artifact.file_path
+            }]
         }
 
     except SoftTimeLimitExceeded:
+        stream_handler.emit_error(
+            error_type="TimeoutError",
+            message="Agent execution exceeded time limit"
+        )
         self._update_execution_status(execution_uuid, ExecutionStatus.FAILED,
                                      error="Agent execution exceeded time limit (timeout)")
         raise
@@ -331,6 +477,10 @@ def execute_agent(self, execution_id: str, agent_id: str, payload: Dict[str, Any
     except HTTPException as e:
         # Handle validation and business logic errors (don't retry)
         error_msg = e.detail if hasattr(e, 'detail') else str(e)
+        stream_handler.emit_error(
+            error_type="ValidationError" if e.status_code == 400 else "ExecutionError",
+            message=error_msg
+        )
         self._update_execution_status(execution_uuid, ExecutionStatus.FAILED,
                                      error=error_msg)
         return {
@@ -340,6 +490,10 @@ def execute_agent(self, execution_id: str, agent_id: str, payload: Dict[str, Any
         }
 
     except Exception as e:
+        stream_handler.emit_error(
+            error_type=type(e).__name__,
+            message=str(e)
+        )
         self._update_execution_status(execution_uuid, ExecutionStatus.FAILED,
                                      error=str(e))
         raise
@@ -422,12 +576,24 @@ def execute_tool(self, execution_id: str, tool_id: str, payload: Dict[str, Any])
 
     try:
         # Import tool execution logic
-        from services.tool_service import ToolService
+        from ..services.tool_service import ToolService
         from fastapi import HTTPException
+        import asyncio
 
         with next(get_db()) as db:
             tool_service = ToolService(db)
-            result = tool_service.execute_tool(tool_uuid, payload)
+
+            # Run async execute_tool in sync context using asyncio.run()
+            # This properly handles event loop lifecycle and subprocess cleanup
+            result = asyncio.run(tool_service.execute_tool(tool_uuid, payload))
+
+            # Update execution with output
+            execution = db.query(Execution).filter(Execution.id == execution_uuid).first()
+            if execution and result:
+                # Save output to execution
+                execution.output_data = result
+                execution.status = ExecutionStatus.COMPLETED
+                db.commit()
 
         return {
             "status": "success",

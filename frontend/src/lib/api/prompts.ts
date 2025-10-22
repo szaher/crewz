@@ -201,7 +201,7 @@ export const promptApi = {
    * Get available chat commands
    */
   async listCommands() {
-    return apiClient.get<CommandInfo[]>('/api/v1/prompts/commands/list');
+    return apiClient.get<{ commands: CommandInfo[]; total: number }>('/api/v1/prompts/commands/list');
   },
 };
 

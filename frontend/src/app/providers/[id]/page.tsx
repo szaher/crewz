@@ -10,7 +10,7 @@ import { useLLMProviders, type LLMProvider, type UpdateLLMProviderData, type Pro
 export default function ProviderEditPage() {
   const params = useParams();
   const router = useRouter();
-  const providerId = parseInt(params.id as string);
+  const providerId = params.id as string;
   const { getProvider, updateProvider } = useLLMProviders();
 
   const [provider, setProvider] = useState<LLMProvider | null>(null);
@@ -35,7 +35,7 @@ export default function ProviderEditPage() {
 
   useEffect(() => {
     const fetchProvider = async () => {
-      if (!providerId || isNaN(providerId)) {
+      if (!providerId) {
         setError('Invalid provider ID');
         setLoading(false);
         return;

@@ -146,7 +146,7 @@ class ChatService:
         self,
         user_id: int,
         q: str | None = None,
-        folder_id: int | None = None,
+        folder_id: str | None = None,
     ) -> List[ChatSession]:
         """List sessions for a user with optional search and folder filter."""
         query = (
@@ -155,7 +155,7 @@ class ChatService:
             .filter(ChatSession.is_active == True)
         )
         if folder_id is not None:
-            query = query.filter(ChatSession.folder_id == folder_id)
+            query = query.filter(ChatSession.folder_id == str(folder_id))
         if q:
             like = f"%{q}%"
             from sqlalchemy import or_

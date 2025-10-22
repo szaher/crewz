@@ -67,6 +67,7 @@ class CustomToolRunner:
             # Execute subprocess with stdin as tool_input
             proc = await asyncio.create_subprocess_exec(
                 "python", wrapper_path,
+                stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=tmpdir,

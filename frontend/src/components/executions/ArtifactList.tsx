@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { getApiBaseUrl } from '@/lib/api-url';
 
 interface Artifact {
   artifact_id: string;
@@ -65,7 +66,7 @@ export default function ArtifactList({ executionId, artifacts = [] }: ArtifactLi
 
       // Get presigned download URL from API
       const response = await fetch(
-        `http://localhost:8000/api/v1/artifacts/${artifact.artifact_id}/download`,
+        `${getApiBaseUrl()}/api/v1/artifacts/${artifact.artifact_id}/download`,
         {
           headers: {
             'Authorization': `Bearer ${token}`

@@ -313,8 +313,9 @@ class CrewService:
             saved_artifacts = []
             if stream_handler and execution_id:
                 stream_handler.emit_output("Saving execution artifacts...", "stdout")
-                # Get execution to retrieve tenant_id
-                execution = self.db.query(Execution).filter(Execution.id == execution_id).first()
+                # Get execution to retrieve tenant_id (with user relationship)
+                from sqlalchemy.orm import joinedload
+                execution = self.db.query(Execution).options(joinedload(Execution.user)).filter(Execution.id == execution_id).first()
                 if execution:
                     saved_artifacts = self._save_execution_artifacts(
                         execution_id=execution_id,
@@ -322,7 +323,7 @@ class CrewService:
                         stream_handler=stream_handler,
                         crew_name=crew.name,
                         user_id=execution.user_id,
-                        tenant_id=execution.tenant_id
+                        tenant_id=execution.user.tenant_id
                     )
 
             if stream_handler:

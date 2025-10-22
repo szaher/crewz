@@ -152,12 +152,19 @@ class AuthService:
                 detail=f"Tenant is {tenant.status}",
             )
 
+        # Check if user is super admin (check both column and roles relationship)
+        is_super_admin = (
+            (user.is_super_admin if hasattr(user, 'is_super_admin') else False) or
+            (user.check_super_admin_role() if hasattr(user, 'check_super_admin_role') else False)
+        )
+
         # Create access token
         access_token = create_access_token(
             user_id=user.id,
             tenant_id=tenant.id,
             tenant_schema=tenant.schema_name,
             role=user.role,
+            is_super_admin=is_super_admin,
         )
 
         return LoginResponse(
@@ -166,6 +173,7 @@ class AuthService:
             user_id=user.id,
             tenant_id=tenant.id,
             role=user.role,
+            is_super_admin=is_super_admin,
         )
 
     @staticmethod

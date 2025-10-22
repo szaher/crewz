@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import type { ChatMessage } from '@/types/api';
+import { getWsBaseUrl } from '../api-url';
 
 interface UseChatWebSocketProps {
   sessionId: string;
@@ -31,18 +32,9 @@ export function useChatWebSocket({
 
     setIsConnecting(true);
 
-    // Determine WebSocket URL based on environment
-    let wsUrl: string;
-    if (typeof window !== 'undefined') {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      // Extract host from API URL
-      const apiHost = apiUrl.replace(/^https?:\/\//, '');
-      // Determine protocol based on current page protocol
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      wsUrl = `${protocol}//${apiHost}/api/v1/chat/sessions/${sessionId}/ws?token=${encodeURIComponent(token)}`;
-    } else {
-      wsUrl = `ws://localhost:8000/api/v1/chat/sessions/${sessionId}/ws?token=${encodeURIComponent(token)}`;
-    }
+    // Construct WebSocket URL using centralized utility
+    const wsBaseUrl = getWsBaseUrl();
+    const wsUrl = `${wsBaseUrl}/api/v1/chat/sessions/${sessionId}/ws?token=${encodeURIComponent(token)}`;
 
     console.log('[WS] Connecting to:', wsUrl);
 

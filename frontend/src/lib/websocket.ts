@@ -4,6 +4,7 @@
  */
 
 import { io, Socket } from 'socket.io-client';
+import { getWsBaseUrl } from './api-url';
 
 export interface ChatMessage {
   id: string;
@@ -23,12 +24,9 @@ export type MessageCallback = (event: ChatEvent) => void;
 
 class WebSocketClient {
   private socket: Socket | null = null;
-  private baseUrl: string;
 
-  constructor(baseUrl: string = process.env.NEXT_PUBLIC_WS_URL || (typeof window !== 'undefined'
-    ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.hostname}:8000`
-    : 'ws://localhost:8000')) {
-    this.baseUrl = baseUrl;
+  constructor() {
+    // No baseUrl stored - get it dynamically on connect
   }
 
   /**
@@ -39,7 +37,8 @@ class WebSocketClient {
     onDisconnect?: () => void;
     onError?: (error: Error) => void;
   }) {
-    this.socket = io(this.baseUrl, {
+    const baseUrl = process.env.NEXT_PUBLIC_WS_URL || getWsBaseUrl();
+    this.socket = io(baseUrl, {
       auth: {
         token,
       },

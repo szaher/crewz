@@ -6,6 +6,7 @@ import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Navigation from '@/components/shared/Navigation';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import { useAuthStore } from '@/lib/store';
+import { getApiBaseUrl } from '@/lib/api-url';
 
 interface Artifact {
   id: string;
@@ -30,7 +31,7 @@ export default function ArtifactsPage() {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('http://localhost:8000/api/v1/artifacts', {
+      const response = await fetch(`${getApiBaseUrl()}/api/v1/artifacts`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -59,7 +60,7 @@ export default function ArtifactsPage() {
 
   const handleDownload = async (artifactId: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/artifacts/${artifactId}/download`, {
+      const response = await fetch(`${getApiBaseUrl()}/api/v1/artifacts/${artifactId}/download`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

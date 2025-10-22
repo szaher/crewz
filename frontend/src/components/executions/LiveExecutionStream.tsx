@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '@/lib/store';
+import { getWsBaseUrl } from '@/lib/api-url';
 
 interface ExecutionStreamEvent {
   event: string;
@@ -76,8 +77,7 @@ export default function LiveExecutionStream({ executionId, enabled = false }: Li
         }
 
         // WebSocket URL with token
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        const wsUrl = apiUrl.replace('http://', 'ws://').replace('https://', 'wss://');
+        const wsUrl = getWsBaseUrl();
         const ws = new WebSocket(`${wsUrl}/ws/executions/${executionId}/stream?token=${token}`);
 
         ws.onopen = () => {

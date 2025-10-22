@@ -1,5 +1,6 @@
 """Chat API endpoints."""
 
+import asyncio
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import StreamingResponse
@@ -31,7 +32,7 @@ async def list_sessions(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
     q: Optional[str] = None,
-    folder_id: Optional[int] = None,
+    folder_id: Optional[str] = None,
 ):
     """
     List all chat sessions for the current user.
@@ -502,17 +503,10 @@ async def generate_response(
     }
 
 
-@router.get("/sessions/{session_id}/generate/stream")
+@router.post("/sessions/{session_id}/generate/stream")
 async def generate_response_stream(
     session_id: str,
-    user_message: str,
-    store_user: bool = True,
-    # Optional model hyperparameters
-    temperature: float = 0.7,
-    max_tokens: Optional[int] = None,
-    top_p: Optional[float] = None,
-    frequency_penalty: Optional[float] = None,
-    presence_penalty: Optional[float] = None,
+    body: dict,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -523,6 +517,17 @@ async def generate_response_stream(
     containing token chunks, and a final `done` event. Stores both user and assistant
     messages in the session.
     """
+    # Extract parameters from body
+    user_message = body.get("user_message", "").strip()
+    if not user_message:
+        raise HTTPException(status_code=400, detail="user_message is required")
+
+    store_user = body.get("store_user", True)
+    temperature = body.get("temperature", 0.7)
+    max_tokens = body.get("max_tokens")
+    top_p = body.get("top_p")
+    frequency_penalty = body.get("frequency_penalty")
+    presence_penalty = body.get("presence_penalty")
     llm_service = LLMService(db)
     chat_service = ChatService(db, llm_service)
 
@@ -579,6 +584,13 @@ async def generate_response_stream(
                 extra_kwargs["presence_penalty"] = pres
             temp_val = temperature if temperature is not None else saved_hp.get("temperature", 0.7)
             max_toks_val = max_tokens if max_tokens is not None else saved_hp.get("max_tokens")
+
+            print(f"[STREAM DEBUG] Starting stream for session {session_id}")
+            chunk_count = 0
+
+            # Send periodic keepalive comments to prevent buffering
+            last_keepalive = asyncio.get_event_loop().time()
+
             async for chunk in llm_service.chat_completion_stream(
                 provider_id=session.llm_provider_id,  # type: ignore[arg-type]
                 messages=llm_messages,
@@ -586,8 +598,22 @@ async def generate_response_stream(
                 max_tokens=int(max_toks_val) if max_toks_val is not None else None,
                 **extra_kwargs,
             ):
+                chunk_count += 1
                 assembled.append(chunk)
-                yield f"event: delta\ndata: {json.dumps({'token': chunk})}\n\n"
+
+                # Send the token event
+                event_data = f"event: delta\ndata: {json.dumps({'token': chunk})}\n\n"
+                print(f"[STREAM DEBUG] Chunk {chunk_count}: {chunk[:50]}")
+                yield event_data
+
+                # Send padding to help with proxy buffering
+                # Most proxies buffer 4-8KB, this helps reduce buffering delay
+                # Note: Docker still buffers ~128KB, but typewriter animation smooths this out
+                padding = ": " + ("." * 8000) + "\n\n"
+                yield padding
+
+                # Force flush by yielding control
+                await asyncio.sleep(0)
         except Exception as e:
             yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
             return
@@ -630,7 +656,77 @@ async def generate_response_stream(
 
         yield f"event: done\ndata: {json.dumps({'length': len(full_text)})}\n\n"
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        }
+    )
+
+
+@router.post("/sessions/{session_id}/generate-title", response_model=dict)
+async def generate_session_title(
+    session_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Generate a title for the session based on the conversation content.
+
+    Uses the first few messages to generate a concise, descriptive title.
+    """
+    llm_service = LLMService(db)
+    chat_service = ChatService(db, llm_service)
+
+    # Get the session and verify ownership
+    session = await chat_service.get_session(session_id)
+    if session.user_id != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Get messages to analyze
+    messages = await chat_service.get_messages(session_id, limit=10)
+
+    if len(messages) < 2:
+        raise HTTPException(status_code=400, detail="Need at least 2 messages to generate a title")
+
+    # Build conversation summary for title generation
+    conversation_text = "\n".join([
+        f"{m.role}: {m.content[:200]}" for m in messages[:6]  # Use first 6 messages, truncate long ones
+    ])
+
+    # Use LLM to generate title
+    try:
+        result = await llm_service.chat_completion(
+            provider_id=session.llm_provider_id,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant that creates concise, descriptive titles for conversations. Generate a title that is 3-6 words, captures the main topic, and doesn't use quotes or special formatting. Just return the title text, nothing else."
+                },
+                {
+                    "role": "user",
+                    "content": f"Based on this conversation, generate a short, descriptive title:\n\n{conversation_text}"
+                }
+            ],
+            temperature=0.7,
+            max_tokens=50,
+        )
+
+        generated_title = result.choices[0].message.content.strip()
+        # Clean up any quotes or extra formatting
+        generated_title = generated_title.strip('"\'').strip()
+
+        # Update session title
+        session.title = generated_title
+        db.commit()
+        db.refresh(session)
+
+        return {"title": generated_title}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate title: {str(e)}")
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
