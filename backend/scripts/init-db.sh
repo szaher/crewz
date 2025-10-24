@@ -12,6 +12,10 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     CREATE SCHEMA IF NOT EXISTS tenant_template;
 
     GRANT ALL ON SCHEMA tenant_template TO crewai;
+
+    -- Create Langfuse database for LLM observability
+    CREATE DATABASE langfuse;
+    GRANT ALL PRIVILEGES ON DATABASE langfuse TO crewai;
 EOSQL
 
 echo "Database initialization complete"

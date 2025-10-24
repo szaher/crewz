@@ -71,6 +71,13 @@ opentelemetry-api>=1.21.0
 opentelemetry-sdk>=1.21.0
 opentelemetry-instrumentation-fastapi>=0.42b0
 prometheus-client>=0.19.0
+langfuse>=2.0.0  # LLM execution tracing
+
+# Artifact Preview Generation
+Pillow>=10.0.0  # Image preview
+pygments>=2.16.0  # Code syntax highlighting
+PyMuPDF>=1.23.0  # PDF preview
+pandas>=2.0.0  # CSV preview and data processing
 
 # Logging
 structlog==23.2.0

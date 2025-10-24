@@ -1,0 +1,491 @@
+openapi: 3.0.3
+info:
+  title: CrewAI Monitoring - Traces API
+  version: 1.0.0
+  description: API for querying and streaming LLM execution traces
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development
+  - url: ${API_BASE_URL}/v1
+    description: Production (configured via API_BASE_URL environment variable)
+
+security:
+  - BearerAuth: []
+
+paths:
+  /traces:
+    get:
+      summary: List traces with filtering
+      description: Query traces for monitoring dashboard and debugging
+      operationId: listTraces
+      tags: [Traces]
+      parameters:
+        - name: execution_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by execution ID
+        - name: tenant_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by tenant (admin only)
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Filter traces after this timestamp
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Filter traces before this timestamp
+        - name: provider
+          in: query
+          schema:
+            type: string
+            enum: [openai, anthropic, cohere, local]
+          description: Filter by LLM provider
+        - name: model_name
+          in: query
+          schema:
+            type: string
+          description: Filter by model name (e.g., gpt-4, claude-3)
+        - name: min_cost
+          in: query
+          schema:
+            type: number
+            format: double
+          description: Filter traces with cost >= this value
+        - name: max_cost
+          in: query
+          schema:
+            type: number
+            format: double
+          description: Filter traces with cost <= this value
+        - name: has_error
+          in: query
+          schema:
+            type: boolean
+          description: Filter only traces with errors (true) or without (false)
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+          description: Max number of traces to return
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: Pagination offset
+      responses:
+        '200':
+          description: Traces retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  traces:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Trace'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /traces/{trace_id}:
+    get:
+      summary: Get trace by ID
+      description: Retrieve detailed information about a specific trace
+      operationId: getTrace
+      tags: [Traces]
+      parameters:
+        - name: trace_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Trace retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trace'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /traces/export:
+    post:
+      summary: Export traces to file
+      description: Export filtered traces as JSON or CSV
+      operationId: exportTraces
+      tags: [Traces]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                format:
+                  type: string
+                  enum: [json, csv]
+                  default: json
+                filters:
+                  $ref: '#/components/schemas/TraceFilters'
+              required: [format]
+      responses:
+        '200':
+          description: Export file generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  download_url:
+                    type: string
+                    format: uri
+                    description: Pre-signed URL for downloading export file
+                  expires_at:
+                    type: string
+                    format: date-time
+                    description: URL expiration timestamp
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /executions/{execution_id}/traces/stream:
+    get:
+      summary: Stream traces in real-time
+      description: Server-Sent Events stream for live trace data during execution
+      operationId: streamTraces
+      tags: [Traces, Streaming]
+      parameters:
+        - name: execution_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Auth token (SSE doesn't support headers)
+      responses:
+        '200':
+          description: SSE stream opened
+          content:
+            text/event-stream:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    enum: [connected, trace_started, trace_completed, trace_failed, stream_closed]
+                  data:
+                    $ref: '#/components/schemas/Trace'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /monitoring/metrics:
+    get:
+      summary: Get dashboard metrics
+      description: Aggregated metrics for monitoring dashboard
+      operationId: getMetrics
+      tags: [Monitoring]
+      parameters:
+        - name: period_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [hour, day, week, month]
+        - name: start_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: end_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: entity_type
+          in: query
+          schema:
+            type: string
+            enum: [crew, agent, tool, flow, all]
+            default: all
+      responses:
+        '200':
+          description: Metrics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  metrics:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TraceMetrics'
+                  summary:
+                    $ref: '#/components/schemas/MetricsSummary'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Trace:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        execution_id:
+          type: string
+          format: uuid
+        agent_id:
+          type: string
+          format: uuid
+          nullable: true
+        tool_id:
+          type: string
+          format: uuid
+          nullable: true
+        prompt:
+          type: string
+          description: Input text sent to LLM
+        response:
+          type: string
+          description: Output text from LLM
+        model_name:
+          type: string
+          example: gpt-4
+        provider:
+          type: string
+          enum: [openai, anthropic, cohere, local]
+        prompt_tokens:
+          type: integer
+          minimum: 0
+        completion_tokens:
+          type: integer
+          minimum: 0
+        total_tokens:
+          type: integer
+          minimum: 0
+        latency_ms:
+          type: integer
+          minimum: 0
+          description: Time from request to response in milliseconds
+        cost_usd:
+          type: number
+          format: double
+          minimum: 0
+        created_at:
+          type: string
+          format: date-time
+        langfuse_trace_id:
+          type: string
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+      required:
+        - id
+        - tenant_id
+        - execution_id
+        - prompt
+        - response
+        - model_name
+        - provider
+        - total_tokens
+        - latency_ms
+        - created_at
+
+    TraceMetrics:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        period_type:
+          type: string
+          enum: [hour, day, week, month]
+        period_start:
+          type: string
+          format: date-time
+        period_end:
+          type: string
+          format: date-time
+        total_executions:
+          type: integer
+          minimum: 0
+        total_traces:
+          type: integer
+          minimum: 0
+        total_tokens:
+          type: integer
+          minimum: 0
+        total_cost_usd:
+          type: number
+          format: double
+          minimum: 0
+        avg_latency_ms:
+          type: integer
+          minimum: 0
+        p50_latency_ms:
+          type: integer
+        p95_latency_ms:
+          type: integer
+        p99_latency_ms:
+          type: integer
+        error_count:
+          type: integer
+          minimum: 0
+        error_rate:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 100
+        metrics_by_type:
+          type: object
+          properties:
+            crew:
+              $ref: '#/components/schemas/EntityMetrics'
+            agent:
+              $ref: '#/components/schemas/EntityMetrics'
+            tool:
+              $ref: '#/components/schemas/EntityMetrics'
+            flow:
+              $ref: '#/components/schemas/EntityMetrics'
+
+    EntityMetrics:
+      type: object
+      properties:
+        count:
+          type: integer
+        tokens:
+          type: integer
+        cost_usd:
+          type: number
+          format: double
+        avg_latency_ms:
+          type: integer
+
+    MetricsSummary:
+      type: object
+      properties:
+        total_cost_usd:
+          type: number
+          format: double
+        total_tokens:
+          type: integer
+        avg_cost_per_execution:
+          type: number
+          format: double
+        trend:
+          type: string
+          enum: [increasing, decreasing, stable]
+          description: Cost trend compared to previous period
+
+    TraceFilters:
+      type: object
+      properties:
+        execution_id:
+          type: string
+          format: uuid
+        start_date:
+          type: string
+          format: date-time
+        end_date:
+          type: string
+          format: date-time
+        provider:
+          type: string
+        model_name:
+          type: string
+        min_cost:
+          type: number
+        max_cost:
+          type: number
+        has_error:
+          type: boolean
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              details:
+                type: object
+
+    Unauthorized:
+      description: Missing or invalid authentication token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: Unauthorized
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: Trace not found

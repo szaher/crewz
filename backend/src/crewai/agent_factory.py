@@ -1,6 +1,6 @@
 """Factory for creating CrewAI agents from database models."""
 
-from typing import List, Optional
+from typing import List, Optional, Any
 from crewai import Agent as CrewAIAgent
 from crewai import LLM
 import os
@@ -17,13 +17,19 @@ class AgentFactory:
         self.llm_service = llm_service
         self.tool_adapter = tool_adapter
 
-    async def from_db_model(self, agent: Agent, provider_id_override: Optional[int] = None) -> CrewAIAgent:
+    async def from_db_model(
+        self,
+        agent: Agent,
+        provider_id_override: Optional[int] = None,
+        langfuse_handler: Optional[Any] = None
+    ) -> CrewAIAgent:
         """
         Create a CrewAI Agent from database model.
 
         Args:
             agent: Database Agent model
             provider_id_override: Optional LLM provider ID to use instead of agent's default
+            langfuse_handler: Optional Langfuse callback handler for LLM tracing
 
         Returns:
             CrewAI Agent instance configured from database
@@ -47,11 +53,19 @@ class AgentFactory:
             except Exception:
                 pass
 
-        llm = LLM(
-            model=llm_params["model"],
-            api_key=api_key,
-            base_url=llm_params.get("api_base"),
-        )
+        # Create LLM with callbacks if handler provided
+        llm_kwargs = {
+            "model": llm_params["model"],
+            "api_key": api_key,
+            "base_url": llm_params.get("api_base"),
+        }
+
+        # Add Langfuse callback if handler provided
+        # Note: CrewAI LLM supports callbacks parameter for tracing
+        if langfuse_handler:
+            llm_kwargs["callbacks"] = [langfuse_handler]
+
+        llm = LLM(**llm_kwargs)
 
         # Convert tools
         crewai_tools = []
@@ -69,5 +83,10 @@ class AgentFactory:
             allow_delegation=agent.allow_delegation,
             llm=llm,
         )
+
+        # Store handler reference on agent for access during execution
+        if langfuse_handler:
+            crewai_agent._langfuse_handler = langfuse_handler
+            crewai_agent._agent_id = agent.id
 
         return crewai_agent

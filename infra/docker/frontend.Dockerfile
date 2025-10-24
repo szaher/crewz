@@ -11,7 +11,8 @@ FROM base AS deps
 COPY frontend/package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production && \
+# Use --legacy-peer-deps to resolve peer dependency conflicts
+RUN npm ci --only=production --legacy-peer-deps && \
     npm cache clean --force
 
 # Development stage
@@ -21,7 +22,8 @@ FROM base AS development
 COPY frontend/package*.json ./
 
 # Install all dependencies (including dev)
-RUN npm install
+# Use --legacy-peer-deps to resolve peer dependency conflicts
+RUN npm install --legacy-peer-deps
 
 # Copy application code
 COPY frontend/ .

@@ -6,6 +6,7 @@ Auto-generated from all feature plans. Last updated: 2025-10-12
 - Python 3.11 + FastAPI (async), SQLAlchemy, Alembic, Celery, Redis 7, PostgreSQL 15, MongoDB 6.0, ClickHouse 23.8 (003-we-need-to)
 - Python 3.11 (backend), TypeScript/React (frontend) (004-proper-isolation-and)
 - PostgreSQL (job metadata, execution results), MongoDB (execution logs), Redis (task queue, pub/sub), S3/local filesystem (artifacts) (004-proper-isolation-and)
+- Python 3.11 (backend), TypeScript/React/Next.js (frontend) (005-implement-comprehensive-monitoring)
 
 ## Project Structure
 ```
@@ -20,6 +21,7 @@ cd src [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNOLO
 Python 3.11: Follow standard conventions
 
 ## Recent Changes
+- 005-implement-comprehensive-monitoring: Added Python 3.11 (backend), TypeScript/React/Next.js (frontend)
 - 004-proper-isolation-and: Added Python 3.11 (backend), TypeScript/React (frontend)
 - 003-we-need-to: Added Python 3.11 + FastAPI (async), SQLAlchemy, Alembic, Celery, Redis 7, PostgreSQL 15, MongoDB 6.0, ClickHouse 23.8
 

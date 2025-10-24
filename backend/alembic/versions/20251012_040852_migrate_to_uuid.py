@@ -91,6 +91,29 @@ NULLABLE_FK_MAPPINGS = {
 
 
 # ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def _table_exists(table_name):
+    """Check if a table exists in the database."""
+    from sqlalchemy import inspect
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    return table_name in inspector.get_table_names()
+
+
+def _get_existing_tables():
+    """Filter CORE_TABLES to only include tables that actually exist."""
+    existing = [table for table in CORE_TABLES if _table_exists(table)]
+    missing = [table for table in CORE_TABLES if not _table_exists(table)]
+
+    if missing:
+        print(f"\n⚠️  Skipping non-existent tables: {', '.join(missing)}")
+
+    return existing
+
+
+# ============================================================================
 # MAIN MIGRATION FUNCTION
 # ============================================================================
 
@@ -152,21 +175,24 @@ def _phase_a_preparation():
     print("\n[A1] Enabling uuid-ossp extension...")
     op.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"')
 
+    # Get only tables that exist in the current database
+    existing_tables = _get_existing_tables()
+
     # Step 2: Add UUID columns to all core tables
     print("\n[A2] Adding UUID columns to core tables...")
-    for table in CORE_TABLES:
+    for table in existing_tables:
         print(f"  - {table}")
         op.add_column(table, sa.Column('uuid', postgresql.UUID(as_uuid=True), nullable=True))
 
     # Step 3: Generate UUIDs for existing rows
     print("\n[A3] Generating UUIDs for existing rows...")
-    for table in CORE_TABLES:
+    for table in existing_tables:
         print(f"  - {table}")
         op.execute(f"UPDATE {table} SET uuid = uuid_generate_v4() WHERE uuid IS NULL")
 
     # Step 4: Create temporary mapping tables
     print("\n[A4] Creating temporary ID mapping tables...")
-    for table in CORE_TABLES:
+    for table in existing_tables:
         print(f"  - {table}_id_mapping")
         op.execute(f"""
             CREATE TEMP TABLE {table}_id_mapping AS
@@ -188,7 +214,7 @@ def _add_uuid_fk_columns():
     # Required FKs
     print("  [Required FKs]")
     for table, fks in FK_MAPPINGS.items():
-        if fks:
+        if fks and _table_exists(table):
             for fk_col, ref_table in fks:
                 print(f"    - {table}.{fk_col}_uuid")
                 op.add_column(table, sa.Column(f'{fk_col}_uuid', postgresql.UUID(as_uuid=True), nullable=True))
@@ -196,9 +222,10 @@ def _add_uuid_fk_columns():
     # Nullable FKs
     print("  [Nullable FKs]")
     for table, fks in NULLABLE_FK_MAPPINGS.items():
-        for fk_col, ref_table in fks:
-            print(f"    - {table}.{fk_col}_uuid")
-            op.add_column(table, sa.Column(f'{fk_col}_uuid', postgresql.UUID(as_uuid=True), nullable=True))
+        if _table_exists(table):
+            for fk_col, ref_table in fks:
+                print(f"    - {table}.{fk_col}_uuid")
+                op.add_column(table, sa.Column(f'{fk_col}_uuid', postgresql.UUID(as_uuid=True), nullable=True))
 
 
 def _populate_uuid_fk_columns():
@@ -275,39 +302,43 @@ def _populate_uuid_fk_columns():
             folder_id_uuid = (SELECT new_uuid FROM chat_folders_id_mapping WHERE old_id = cs.folder_id)
     """)
 
-    # notifications
-    print("  - notifications.tenant_id_uuid, user_id_uuid")
-    op.execute("""
-        UPDATE notifications n
-        SET tenant_id_uuid = (SELECT new_uuid FROM tenants_id_mapping WHERE old_id = n.tenant_id),
-            user_id_uuid = (SELECT new_uuid FROM users_id_mapping WHERE old_id = n.user_id)
-    """)
+    # notifications (skip if table doesn't exist)
+    if _table_exists('notifications'):
+        print("  - notifications.tenant_id_uuid, user_id_uuid")
+        op.execute("""
+            UPDATE notifications n
+            SET tenant_id_uuid = (SELECT new_uuid FROM tenants_id_mapping WHERE old_id = n.tenant_id),
+                user_id_uuid = (SELECT new_uuid FROM users_id_mapping WHERE old_id = n.user_id)
+        """)
 
-    # feedback (2 required, 2 nullable)
-    print("  - feedback (4 FKs)")
-    op.execute("""
-        UPDATE feedback f
-        SET tenant_id_uuid = (SELECT new_uuid FROM tenants_id_mapping WHERE old_id = f.tenant_id),
-            user_id_uuid = (SELECT new_uuid FROM users_id_mapping WHERE old_id = f.user_id),
-            execution_id_uuid = (SELECT new_uuid FROM executions_id_mapping WHERE old_id = f.execution_id),
-            agent_id_uuid = (SELECT new_uuid FROM agents_id_mapping WHERE old_id = f.agent_id)
-    """)
+    # feedback (2 required, 2 nullable) - skip if table doesn't exist
+    if _table_exists('feedback'):
+        print("  - feedback (4 FKs)")
+        op.execute("""
+            UPDATE feedback f
+            SET tenant_id_uuid = (SELECT new_uuid FROM tenants_id_mapping WHERE old_id = f.tenant_id),
+                user_id_uuid = (SELECT new_uuid FROM users_id_mapping WHERE old_id = f.user_id),
+                execution_id_uuid = (SELECT new_uuid FROM executions_id_mapping WHERE old_id = f.execution_id),
+                agent_id_uuid = (SELECT new_uuid FROM agents_id_mapping WHERE old_id = f.agent_id)
+        """)
 
-    # agent_versions (1 required, 1 nullable)
-    print("  - agent_versions.agent_id_uuid, changed_by_user_id_uuid")
-    op.execute("""
-        UPDATE agent_versions av
-        SET agent_id_uuid = (SELECT new_uuid FROM agents_id_mapping WHERE old_id = av.agent_id),
-            changed_by_user_id_uuid = (SELECT new_uuid FROM users_id_mapping WHERE old_id = av.changed_by_user_id)
-    """)
+    # agent_versions (1 required, 1 nullable) - skip if table doesn't exist
+    if _table_exists('agent_versions'):
+        print("  - agent_versions.agent_id_uuid, changed_by_user_id_uuid")
+        op.execute("""
+            UPDATE agent_versions av
+            SET agent_id_uuid = (SELECT new_uuid FROM agents_id_mapping WHERE old_id = av.agent_id),
+                changed_by_user_id_uuid = (SELECT new_uuid FROM users_id_mapping WHERE old_id = av.changed_by_user_id)
+        """)
 
-    # provider_versions (1 required, 1 nullable)
-    print("  - provider_versions.provider_id_uuid, changed_by_user_id_uuid")
-    op.execute("""
-        UPDATE provider_versions pv
-        SET provider_id_uuid = (SELECT new_uuid FROM llm_providers_id_mapping WHERE old_id = pv.provider_id),
-            changed_by_user_id_uuid = (SELECT new_uuid FROM users_id_mapping WHERE old_id = pv.changed_by_user_id)
-    """)
+    # provider_versions (1 required, 1 nullable) - skip if table doesn't exist
+    if _table_exists('provider_versions'):
+        print("  - provider_versions.provider_id_uuid, changed_by_user_id_uuid")
+        op.execute("""
+            UPDATE provider_versions pv
+            SET provider_id_uuid = (SELECT new_uuid FROM llm_providers_id_mapping WHERE old_id = pv.provider_id),
+                changed_by_user_id_uuid = (SELECT new_uuid FROM users_id_mapping WHERE old_id = pv.changed_by_user_id)
+        """)
 
 
 # ============================================================================
@@ -349,7 +380,10 @@ def _phase_b_drop_all_fks():
 def _phase_c_migrate_primary_keys():
     """Migrate primary keys from Integer to UUID for all core tables."""
 
-    for table in CORE_TABLES:
+    # Only migrate tables that exist
+    existing_tables = _get_existing_tables()
+
+    for table in existing_tables:
         print(f"  - {table}")
         _migrate_table_pk(table)
 
@@ -543,7 +577,7 @@ def _recreate_core_table_fks():
 
     # Required FKs
     for table, fks in FK_MAPPINGS.items():
-        if fks:
+        if fks and _table_exists(table):
             for fk_col, ref_table in fks:
                 constraint_name = f'{table}_{fk_col}_fkey'
                 print(f"    - {constraint_name}")
@@ -558,17 +592,18 @@ def _recreate_core_table_fks():
 
     # Nullable FKs
     for table, fks in NULLABLE_FK_MAPPINGS.items():
-        for fk_col, ref_table in fks:
-            constraint_name = f'{table}_{fk_col}_fkey'
-            print(f"    - {constraint_name}")
-            op.create_foreign_key(
-                constraint_name,
-                table,
-                ref_table,
-                [fk_col],
-                ['id'],
-                ondelete='SET NULL'
-            )
+        if _table_exists(table):
+            for fk_col, ref_table in fks:
+                constraint_name = f'{table}_{fk_col}_fkey'
+                print(f"    - {constraint_name}")
+                op.create_foreign_key(
+                    constraint_name,
+                    table,
+                    ref_table,
+                    [fk_col],
+                    ['id'],
+                    ondelete='SET NULL'
+                )
 
 
 def _recreate_association_table_fks():

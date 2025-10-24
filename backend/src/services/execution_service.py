@@ -10,6 +10,7 @@ from ..models.execution import ExecutionType, ExecutionStatus
 from ..schemas.executions import ExecutionCreate, ExecutionResponse
 from ..services.flow_service import FlowService
 from ..crewai.flow_executor import FlowExecutor
+from ..integrations.langfuse import CrewAILangfuseHandler
 
 
 class ExecutionService:
@@ -203,7 +204,26 @@ class ExecutionService:
 
             if execution.execution_type == "flow":
                 import time
+                from uuid import UUID
+                from ..models.user import User
+
                 start_time = time.time()
+
+                # Get tenant_id for Langfuse handler
+                user = db.query(User).filter(User.id == execution.user_id).first()
+                tenant_id = UUID(str(user.tenant_id)) if user and user.tenant_id else None
+
+                # Initialize Langfuse handler for tracing (graceful degradation if disabled)
+                langfuse_handler = None
+                if tenant_id:
+                    try:
+                        langfuse_handler = CrewAILangfuseHandler(
+                            execution_id=UUID(str(execution.id)),
+                            tenant_id=tenant_id,
+                            enable_async=True
+                        )
+                    except Exception as e:
+                        print(f"Warning: Failed to initialize Langfuse handler: {e}")
 
                 # Build services tied to this DB session
                 from ..services.flow_service import FlowService
@@ -226,12 +246,23 @@ class ExecutionService:
                     flow=flow,
                     execution=execution,
                     input_data=execution.input_data,
+                    langfuse_handler=langfuse_handler,
                 )
 
                 execution.output_data = output
                 execution.execution_time_ms = int((time.time() - start_time) * 1000)
                 execution.status = "completed"
                 db.commit()
+
+                # Flush Langfuse traces and verify overhead requirement (FR-021: <2%)
+                if langfuse_handler:
+                    try:
+                        await langfuse_handler.flush()
+                        overhead_pct = langfuse_handler.get_overhead_percentage(execution.execution_time_ms)
+                        if overhead_pct >= 2.0:
+                            print(f"Warning: Langfuse overhead {overhead_pct:.2f}% exceeds 2% requirement (FR-021)")
+                    except Exception as e:
+                        print(f"Warning: Failed to flush Langfuse traces: {e}")
 
                 if event_publisher:
                     try:
@@ -270,6 +301,7 @@ class ExecutionService:
 
             elif execution.execution_type == "crew":
                 import time, json
+                from uuid import UUID
                 from ..services.llm_service import LLMService
                 from ..services.docker_service import DockerService
                 from ..services.task_service import TaskService
@@ -278,17 +310,34 @@ class ExecutionService:
                 from ..crewai.agent_factory import AgentFactory
                 from ..crewai.crew_factory import CrewFactory
                 from ..models.agent import Agent
+                from ..models.user import User
 
                 start_time = time.time()
                 crew_service = CrewService(db)
                 crew_model = await crew_service.get_crew(execution.crew_id)
+
+                # Get tenant_id for Langfuse handler
+                user = db.query(User).filter(User.id == execution.user_id).first()
+                tenant_id = UUID(str(user.tenant_id)) if user and user.tenant_id else None
+
+                # Initialize Langfuse handler for tracing (graceful degradation if disabled)
+                langfuse_handler = None
+                if tenant_id:
+                    try:
+                        langfuse_handler = CrewAILangfuseHandler(
+                            execution_id=UUID(str(execution.id)),
+                            tenant_id=tenant_id,
+                            enable_async=True
+                        )
+                    except Exception as e:
+                        print(f"Warning: Failed to initialize Langfuse handler: {e}")
 
                 llm_service = LLMService(db)
                 docker_service = DockerService()
                 tool_adapter = ToolAdapter(docker_service)
                 agent_factory = AgentFactory(llm_service, tool_adapter)
                 crew_factory = CrewFactory(agent_factory)
-                crewai_crew = await crew_factory.from_db_model(crew_model)
+                crewai_crew = await crew_factory.from_db_model(crew_model, langfuse_handler=langfuse_handler)
 
                 task_service = TaskService(db)
                 stored_tasks = await task_service.get_crew_tasks(execution.crew_id)
@@ -380,6 +429,16 @@ class ExecutionService:
                 execution.execution_time_ms = int((time.time() - start_time) * 1000)
                 execution.status = "completed"
                 db.commit()
+
+                # Flush Langfuse traces and verify overhead requirement (FR-021: <2%)
+                if langfuse_handler:
+                    try:
+                        await langfuse_handler.flush()
+                        overhead_pct = langfuse_handler.get_overhead_percentage(execution.execution_time_ms)
+                        if overhead_pct >= 2.0:
+                            print(f"Warning: Langfuse overhead {overhead_pct:.2f}% exceeds 2% requirement (FR-021)")
+                    except Exception as e:
+                        print(f"Warning: Failed to flush Langfuse traces: {e}")
 
                 if event_publisher:
                     try:
@@ -504,6 +563,7 @@ class ExecutionService:
     async def _execute_agent_async(self, execution_id: int, agent_id, input_data: Dict[str, Any]) -> None:
         """Execute agent in background."""
         import time
+        from uuid import UUID
         from ..services.llm_service import LLMService
         from ..services.docker_service import DockerService
         from ..services.agent_service import AgentService
@@ -511,6 +571,7 @@ class ExecutionService:
         from ..crewai.agent_factory import AgentFactory
         from crewai import Crew, Task
         from ..db.postgres import SessionLocal
+        from ..models.user import User
 
         # Create a new database session for this background task
         db = SessionLocal()
@@ -530,6 +591,22 @@ class ExecutionService:
             agent_service = AgentService(db)
             agent = await agent_service.get_agent(agent_id)
 
+            # Get tenant_id for Langfuse handler
+            user = db.query(User).filter(User.id == execution.user_id).first()
+            tenant_id = UUID(str(user.tenant_id)) if user and user.tenant_id else None
+
+            # Initialize Langfuse handler for tracing (graceful degradation if disabled)
+            langfuse_handler = None
+            if tenant_id:
+                try:
+                    langfuse_handler = CrewAILangfuseHandler(
+                        execution_id=UUID(str(execution.id)),
+                        tenant_id=tenant_id,
+                        enable_async=True
+                    )
+                except Exception as e:
+                    print(f"Warning: Failed to initialize Langfuse handler: {e}")
+
             # Initialize dependencies
             llm_service = LLMService(db)
             docker_service = DockerService()
@@ -539,8 +616,12 @@ class ExecutionService:
             # Get provider override if specified
             provider_id_override = input_data.get('provider_id')
 
-            # Create CrewAI agent
-            crewai_agent = await agent_factory.from_db_model(agent, provider_id_override)
+            # Create CrewAI agent with Langfuse handler
+            crewai_agent = await agent_factory.from_db_model(
+                agent,
+                provider_id_override,
+                langfuse_handler=langfuse_handler
+            )
 
             # Helper function to substitute variables
             def substitute_variables(text: str, vars: dict) -> str:
@@ -596,6 +677,16 @@ class ExecutionService:
             execution.output_data = {"output": str(result)}
             execution.execution_time_ms = execution_time_ms
             db.commit()
+
+            # Flush Langfuse traces and verify overhead requirement (FR-021: <2%)
+            if langfuse_handler:
+                try:
+                    await langfuse_handler.flush()
+                    overhead_pct = langfuse_handler.get_overhead_percentage(execution_time_ms)
+                    if overhead_pct >= 2.0:
+                        print(f"Warning: Langfuse overhead {overhead_pct:.2f}% exceeds 2% requirement (FR-021)")
+                except Exception as e:
+                    print(f"Warning: Failed to flush Langfuse traces: {e}")
 
             # Send success notification
             try:

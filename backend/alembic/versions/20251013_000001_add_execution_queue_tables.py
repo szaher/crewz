@@ -22,10 +22,31 @@ depends_on = None
 
 
 def upgrade():
-    # Create enum types for execution queue
-    op.execute("DO $$ BEGIN CREATE TYPE executionstatus AS ENUM ('pending', 'running', 'completed', 'failed', 'timeout', 'cancelled'); EXCEPTION WHEN duplicate_object THEN null; END $$;")
-    op.execute("DO $$ BEGIN CREATE TYPE executionpriority AS ENUM ('low', 'normal', 'high'); EXCEPTION WHEN duplicate_object THEN null; END $$;")
-    op.execute("DO $$ BEGIN CREATE TYPE executiontype AS ENUM ('crew', 'flow', 'agent', 'task', 'tool'); EXCEPTION WHEN duplicate_object THEN null; END $$;")
+    # Create enum types for execution queue (with duplicate check)
+    op.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'executionstatus') THEN
+                CREATE TYPE executionstatus AS ENUM ('pending', 'running', 'completed', 'failed', 'timeout', 'cancelled');
+            END IF;
+        END $$;
+    """)
+    op.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'executionpriority') THEN
+                CREATE TYPE executionpriority AS ENUM ('low', 'normal', 'high');
+            END IF;
+        END $$;
+    """)
+    op.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'executiontype') THEN
+                CREATE TYPE executiontype AS ENUM ('crew', 'flow', 'agent', 'task', 'tool');
+            END IF;
+        END $$;
+    """)
 
     # Create execution_queue table
     op.create_table(
@@ -35,13 +56,13 @@ def upgrade():
                  comment='Public execution ID returned to client'),
         sa.Column('tenant_id', postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('user_id', postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column('execution_type', sa.Enum('crew', 'flow', 'agent', 'task', 'tool', name='executiontype'), nullable=False,
+        sa.Column('execution_type', postgresql.ENUM('crew', 'flow', 'agent', 'task', 'tool', name='executiontype', create_type=False), nullable=False,
                  comment='Type of entity being executed'),
         sa.Column('entity_id', postgresql.UUID(as_uuid=True), nullable=False,
                  comment='ID of the crew/flow/agent/task/tool to execute'),
-        sa.Column('status', sa.Enum('pending', 'running', 'completed', 'failed', 'timeout', 'cancelled', name='executionstatus'),
+        sa.Column('status', postgresql.ENUM('pending', 'running', 'completed', 'failed', 'timeout', 'cancelled', name='executionstatus', create_type=False),
                  nullable=False, server_default='pending'),
-        sa.Column('priority', sa.Enum('low', 'normal', 'high', name='executionpriority'),
+        sa.Column('priority', postgresql.ENUM('low', 'normal', 'high', name='executionpriority', create_type=False),
                  nullable=False, server_default='normal'),
         sa.Column('retry_count', sa.Integer(), nullable=False, server_default='0',
                  comment='Current retry attempt (0 = first attempt)'),

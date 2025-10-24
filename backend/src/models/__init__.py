@@ -31,6 +31,11 @@ from .authorization_audit_log import AuthorizationAuditLog
 from .tenant_registration import TenantRegistration
 from .execution_artifact import ExecutionArtifact
 from .worker_instance import WorkerInstance
+from .trace import Trace
+from .trace_metrics import TraceMetrics, PeriodType
+from .artifact import Artifact, ArtifactType
+from .artifact_metadata import ArtifactMetadata
+from .tenant_config import TenantConfig, CleanupStrategy
 
 __all__ = [
     "Tenant",
@@ -63,4 +68,12 @@ __all__ = [
     "TenantRegistration",
     "ExecutionArtifact",
     "WorkerInstance",
+    "Trace",
+    "TraceMetrics",
+    "PeriodType",
+    "Artifact",
+    "ArtifactType",
+    "ArtifactMetadata",
+    "TenantConfig",
+    "CleanupStrategy",
 ]

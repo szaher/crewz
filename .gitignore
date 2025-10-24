@@ -2,3 +2,4 @@ backend/venv/*
 frontend/node_modules/
 frontend/.next/
 *.pyc
+backend/celerybeat-schedule

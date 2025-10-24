@@ -2,7 +2,11 @@
 
 from fastapi import APIRouter
 
-from . import auth, flows, executions, agents, tools, chat, crews, llm_providers, feedback, users, tenant, tenants, tasks, notifications, prompts, authz, tenant_registration, artifacts
+from . import (
+    auth, flows, executions, agents, tools, chat, crews, llm_providers, feedback,
+    users, tenant, tenants, tasks, notifications, prompts, authz, tenant_registration,
+    artifacts, traces, monitoring
+)
 
 # Create main API router
 api_router = APIRouter()
@@ -26,5 +30,7 @@ api_router.include_router(tenants.router, prefix="/tenants", tags=["Tenants Mana
 api_router.include_router(tenant_registration.router, tags=["Tenant Management"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["Notifications"])
 api_router.include_router(artifacts.router, prefix="/artifacts", tags=["Artifacts"])
+api_router.include_router(traces.router, prefix="/traces", tags=["LLM Traces"])
+api_router.include_router(monitoring.router, prefix="/monitoring", tags=["Monitoring & Metrics"])
 
 __all__ = ["api_router"]

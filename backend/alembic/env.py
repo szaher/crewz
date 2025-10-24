@@ -23,17 +23,8 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent / "src"))
 
 from src.models.base import Base
-from src.models import (
-    Tenant,
-    User,
-    Agent,
-    Crew,
-    Flow,
-    Tool,
-    Execution,
-    ChatSession,
-    LLMProvider,
-)
+# Import all models for autogenerate support
+import src.models  # This imports all models via __init__.py
 
 target_metadata = Base.metadata
 

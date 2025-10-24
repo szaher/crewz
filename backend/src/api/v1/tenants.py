@@ -318,3 +318,99 @@ async def delete_tenant(
     db.commit()
 
     return {"message": "Tenant deleted successfully", "tenant_id": str(tenant.id)}
+
+
+# ============================================================================
+# T049: GET /api/v1/tenants/{id}/storage/quota - Storage quota status
+# ============================================================================
+
+class StorageQuotaResponse(BaseModel):
+    """Storage quota status response."""
+    tenant_id: str
+    current_usage_bytes: int
+    total_quota_bytes: int
+    usage_percentage: float
+    is_over_warning: bool
+    is_over_alert: bool
+    is_over_quota: bool
+    warning_threshold: float
+    alert_threshold: float
+    cleanup_strategy: str
+    trace_retention_days: int
+    artifact_retention_days: int
+
+
+@router.get("/{tenant_id}/storage/quota", response_model=StorageQuotaResponse)
+async def get_storage_quota(
+    tenant_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """
+    Get storage quota status for a tenant.
+
+    Returns:
+    - current_usage_bytes: Current storage used
+    - total_quota_bytes: Total allowed storage
+    - usage_percentage: Percentage of quota used
+    - is_over_warning: True if over warning threshold (default 80%)
+    - is_over_alert: True if over alert threshold (default 95%)
+    - is_over_quota: True if quota exceeded
+    """
+    from ...models.tenant_config import TenantConfig
+    from ...models.artifact import Artifact
+    from sqlalchemy import and_
+
+    try:
+        tenant_uuid = UUID(tenant_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid tenant ID")
+
+    # Check if user belongs to this tenant (or is super admin)
+    if not current_user.get("is_super_admin", False):
+        if current_user.get("tenant_id") != tenant_uuid:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
+
+    # Get tenant config
+    tenant_config = db.query(TenantConfig).filter(
+        TenantConfig.tenant_id == tenant_uuid
+    ).first()
+
+    if not tenant_config:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tenant configuration not found"
+        )
+
+    # Calculate current storage usage (non-deleted artifacts)
+    current_usage = db.query(func.sum(Artifact.file_size_bytes)).filter(
+        and_(
+            Artifact.tenant_id == tenant_uuid,
+            Artifact.deleted_at.is_(None)
+        )
+    ).scalar() or 0
+
+    # Calculate percentage
+    usage_percentage = (current_usage / tenant_config.total_storage_quota_bytes) * 100 if tenant_config.total_storage_quota_bytes > 0 else 0
+
+    # Check thresholds
+    warning_threshold = float(tenant_config.quota_warning_threshold) * 100
+    alert_threshold = float(tenant_config.quota_alert_threshold) * 100
+
+    return StorageQuotaResponse(
+        tenant_id=str(tenant_uuid),
+        current_usage_bytes=current_usage,
+        total_quota_bytes=tenant_config.total_storage_quota_bytes,
+        usage_percentage=round(usage_percentage, 2),
+        is_over_warning=usage_percentage >= warning_threshold,
+        is_over_alert=usage_percentage >= alert_threshold,
+        is_over_quota=current_usage > tenant_config.total_storage_quota_bytes,
+        warning_threshold=warning_threshold,
+        alert_threshold=alert_threshold,
+        cleanup_strategy=tenant_config.cleanup_strategy.value,
+        trace_retention_days=tenant_config.trace_retention_days,
+        artifact_retention_days=tenant_config.artifact_retention_days
+    )

@@ -1,6 +1,6 @@
 """Flow execution engine for visual workflows."""
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import asyncio
 
 from ..models import Flow, Execution
@@ -27,12 +27,14 @@ class FlowExecutor:
         self.agent_factory = agent_factory
         self.event_publisher = event_publisher
         self.validator = FlowValidator()
+        self.langfuse_handler = None  # Set during execution
 
     async def execute_flow(
         self,
         flow: Flow,
         execution: Execution,
         input_data: Dict[str, Any],
+        langfuse_handler: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Execute a flow end-to-end.
@@ -41,6 +43,7 @@ class FlowExecutor:
             flow: Flow to execute
             execution: Execution record
             input_data: Input data for the flow
+            langfuse_handler: Optional Langfuse callback handler for LLM tracing
 
         Returns:
             Output data from the flow
@@ -48,6 +51,9 @@ class FlowExecutor:
         Raises:
             Exception: If execution fails
         """
+        # Store handler for use in node execution
+        self.langfuse_handler = langfuse_handler
+
         # Get execution order via topological sort
         execution_order = self.validator.topological_sort(flow.nodes, flow.edges)
 
@@ -182,8 +188,11 @@ class FlowExecutor:
                 if not db_agent:
                     raise ValueError(f"Agent not found: {agent_id}")
 
-                # Create CrewAI agent
-                crewai_agent = await self.agent_factory.from_db_model(db_agent)
+                # Create CrewAI agent with Langfuse handler
+                crewai_agent = await self.agent_factory.from_db_model(
+                    db_agent,
+                    langfuse_handler=self.langfuse_handler
+                )
 
                 # Variable substitution helper
                 def substitute_variables(text: str, vars: dict) -> str:
@@ -247,8 +256,8 @@ class FlowExecutor:
                 if not db_crew:
                     raise ValueError(f"Crew not found: {crew_id}")
 
-                # Create CrewAI crew
-                crewai_crew = await self.crew_factory.from_db_model(db_crew)
+                # Create CrewAI crew with Langfuse handler
+                crewai_crew = await self.crew_factory.from_db_model(db_crew, langfuse_handler=self.langfuse_handler)
 
                 # Build tasks from database
                 task_service = TaskService(db)
@@ -268,12 +277,15 @@ class FlowExecutor:
                 if stored_tasks:
                     # Use stored tasks from database
                     for db_task in stored_tasks:
-                        # Resolve agent
+                        # Resolve agent with Langfuse handler
                         agent_instance = None
                         if db_task.agent_id:
                             agent_model = db.query(Agent).filter(Agent.id == db_task.agent_id).first()
                             if agent_model:
-                                agent_instance = await self.agent_factory.from_db_model(agent_model)
+                                agent_instance = await self.agent_factory.from_db_model(
+                                    agent_model,
+                                    langfuse_handler=self.langfuse_handler
+                                )
                         else:
                             agents = getattr(crewai_crew, 'agents', [])
                             agent_instance = agents[0] if agents else None

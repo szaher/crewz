@@ -1,5 +1,6 @@
 """Factory for creating CrewAI crews from database models."""
 
+from typing import Optional, Any
 from crewai import Crew as CrewAICrew, Process
 
 from ..models import Crew
@@ -12,20 +13,25 @@ class CrewFactory:
     def __init__(self, agent_factory: AgentFactory):
         self.agent_factory = agent_factory
 
-    async def from_db_model(self, crew: Crew) -> CrewAICrew:
+    async def from_db_model(
+        self,
+        crew: Crew,
+        langfuse_handler: Optional[Any] = None
+    ) -> CrewAICrew:
         """
         Create a CrewAI Crew from database model.
 
         Args:
             crew: Database Crew model
+            langfuse_handler: Optional Langfuse callback handler for LLM tracing
 
         Returns:
             CrewAI Crew instance configured from database
         """
-        # Convert agents
+        # Convert agents with Langfuse handler
         crewai_agents = []
         for agent in crew.agents:
-            crewai_agent = await self.agent_factory.from_db_model(agent)
+            crewai_agent = await self.agent_factory.from_db_model(agent, langfuse_handler=langfuse_handler)
             crewai_agents.append(crewai_agent)
 
         # Map process type

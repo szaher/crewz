@@ -1,0 +1,728 @@
+openapi: 3.0.3
+info:
+  title: CrewAI Monitoring - Artifacts API
+  version: 1.0.0
+  description: API for artifact storage, search, preview, and management
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development
+  - url: ${API_BASE_URL}/v1
+    description: Production (configured via API_BASE_URL environment variable)
+
+security:
+  - BearerAuth: []
+
+paths:
+  /artifacts:
+    get:
+      summary: Search and list artifacts
+      description: Query artifacts with full-text search and filtering
+      operationId: listArtifacts
+      tags: [Artifacts]
+      parameters:
+        - name: execution_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: execution_version
+          in: query
+          schema:
+            type: integer
+        - name: artifact_type
+          in: query
+          schema:
+            type: string
+            enum: [document, image, data, code, other]
+        - name: search_query
+          in: query
+          schema:
+            type: string
+          description: Search in file names, tags, and descriptions
+        - name: tags
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: Filter by tags (OR logic)
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: min_size
+          in: query
+          schema:
+            type: integer
+          description: Minimum file size in bytes
+        - name: max_size
+          in: query
+          schema:
+            type: integer
+          description: Maximum file size in bytes
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+            enum: [created_at, file_size, file_name]
+            default: created_at
+        - name: sort_order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 500
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Artifacts retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  artifacts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Artifact'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      summary: Upload artifact
+      description: Upload a new artifact to an execution
+      operationId: createArtifact
+      tags: [Artifacts]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The file to upload
+                execution_id:
+                  type: string
+                  format: uuid
+                execution_version:
+                  type: integer
+                  default: 1
+                artifact_type:
+                  type: string
+                  enum: [document, image, data, code, other]
+                  default: other
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  maxItems: 20
+                description:
+                  type: string
+                  maxLength: 1000
+                category:
+                  type: string
+                  maxLength: 100
+              required: [file, execution_id]
+      responses:
+        '201':
+          description: Artifact uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Artifact'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: File size exceeds tenant quota
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: File size exceeds maximum allowed
+                  max_size_bytes:
+                    type: integer
+        '507':
+          description: Tenant storage quota exceeded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Storage quota exceeded
+                  current_usage_bytes:
+                    type: integer
+                  quota_bytes:
+                    type: integer
+
+  /artifacts/{artifact_id}:
+    get:
+      summary: Get artifact metadata
+      description: Retrieve detailed metadata for an artifact
+      operationId: getArtifact
+      tags: [Artifacts]
+      parameters:
+        - name: artifact_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Artifact retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Artifact'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    patch:
+      summary: Update artifact metadata
+      description: Update tags, description, or category
+      operationId: updateArtifact
+      tags: [Artifacts]
+      parameters:
+        - name: artifact_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  maxItems: 20
+                description:
+                  type: string
+                  maxLength: 1000
+                category:
+                  type: string
+                  maxLength: 100
+      responses:
+        '200':
+          description: Artifact updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Artifact'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    delete:
+      summary: Delete artifact
+      description: Soft delete an artifact (can be recovered within grace period)
+      operationId: deleteArtifact
+      tags: [Artifacts]
+      parameters:
+        - name: artifact_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Artifact deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /artifacts/{artifact_id}/download:
+    get:
+      summary: Download artifact file
+      description: Get pre-signed URL for direct S3 download
+      operationId: downloadArtifact
+      tags: [Artifacts]
+      parameters:
+        - name: artifact_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Download URL generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  download_url:
+                    type: string
+                    format: uri
+                    description: Pre-signed URL for download
+                  expires_at:
+                    type: string
+                    format: date-time
+                  file_name:
+                    type: string
+                  file_size_bytes:
+                    type: integer
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /artifacts/{artifact_id}/preview:
+    get:
+      summary: Get artifact preview
+      description: Generate and return inline preview for supported file types
+      operationId: previewArtifact
+      tags: [Artifacts]
+      parameters:
+        - name: artifact_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Preview generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  preview_type:
+                    type: string
+                    enum: [json, table, image, text, code, pdf_thumbnail, not_available]
+                  content:
+                    oneOf:
+                      - $ref: '#/components/schemas/JSONPreview'
+                      - $ref: '#/components/schemas/TablePreview'
+                      - $ref: '#/components/schemas/ImagePreview'
+                      - $ref: '#/components/schemas/TextPreview'
+                      - $ref: '#/components/schemas/CodePreview'
+                  cached:
+                    type: boolean
+                    description: Whether preview was served from cache
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          description: File type not supported for preview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Preview not available for this file type
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /artifacts/batch/download:
+    post:
+      summary: Batch download artifacts as ZIP
+      description: Create ZIP archive of multiple artifacts
+      operationId: batchDownloadArtifacts
+      tags: [Artifacts, Batch]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                artifact_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  minItems: 1
+                  maxItems: 100
+                include_metadata:
+                  type: boolean
+                  default: true
+                  description: Include metadata.json in ZIP
+              required: [artifact_ids]
+      responses:
+        '200':
+          description: ZIP archive created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  download_url:
+                    type: string
+                    format: uri
+                  expires_at:
+                    type: string
+                    format: date-time
+                  total_size_bytes:
+                    type: integer
+                  artifact_count:
+                    type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /artifacts/batch/update:
+    post:
+      summary: Batch update artifact metadata
+      description: Update tags or category for multiple artifacts
+      operationId: batchUpdateArtifacts
+      tags: [Artifacts, Batch]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                artifact_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  minItems: 1
+                  maxItems: 100
+                add_tags:
+                  type: array
+                  items:
+                    type: string
+                remove_tags:
+                  type: array
+                  items:
+                    type: string
+                category:
+                  type: string
+              required: [artifact_ids]
+      responses:
+        '200':
+          description: Artifacts updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated_count:
+                    type: integer
+                  failed_ids:
+                    type: array
+                    items:
+                      type: string
+                      format: uuid
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /artifacts/batch/delete:
+    post:
+      summary: Batch delete artifacts
+      description: Soft delete multiple artifacts
+      operationId: batchDeleteArtifacts
+      tags: [Artifacts, Batch]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                artifact_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  minItems: 1
+                  maxItems: 100
+              required: [artifact_ids]
+      responses:
+        '200':
+          description: Artifacts deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted_count:
+                    type: integer
+                  failed_ids:
+                    type: array
+                    items:
+                      type: string
+                      format: uuid
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /tenants/{tenant_id}/storage/quota:
+    get:
+      summary: Get tenant storage quota status
+      description: Current usage and quota limits
+      operationId: getStorageQuota
+      tags: [Tenants]
+      parameters:
+        - name: tenant_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Quota status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageQuota'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Artifact:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        execution_id:
+          type: string
+          format: uuid
+        execution_version:
+          type: integer
+        file_name:
+          type: string
+        file_extension:
+          type: string
+        file_size_bytes:
+          type: integer
+        mime_type:
+          type: string
+        storage_path:
+          type: string
+        artifact_type:
+          type: string
+          enum: [document, image, data, code, other]
+        has_preview:
+          type: boolean
+        preview_url:
+          type: string
+          format: uri
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        last_accessed_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        metadata:
+          $ref: '#/components/schemas/ArtifactMetadata'
+
+    ArtifactMetadata:
+      type: object
+      properties:
+        tags:
+          type: array
+          items:
+            type: string
+          maxItems: 20
+        description:
+          type: string
+        category:
+          type: string
+        checksum_sha256:
+          type: string
+        compression_type:
+          type: string
+          nullable: true
+        related_artifacts:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    JSONPreview:
+      type: object
+      properties:
+        formatted_json:
+          type: string
+          description: Syntax-highlighted JSON
+        size_bytes:
+          type: integer
+
+    TablePreview:
+      type: object
+      properties:
+        columns:
+          type: array
+          items:
+            type: string
+        rows:
+          type: array
+          items:
+            type: array
+            items:
+              type: string
+        total_rows:
+          type: integer
+        displayed_rows:
+          type: integer
+          description: First 100 rows shown
+
+    ImagePreview:
+      type: object
+      properties:
+        thumbnail_url:
+          type: string
+          format: uri
+        width:
+          type: integer
+        height:
+          type: integer
+        format:
+          type: string
+
+    TextPreview:
+      type: object
+      properties:
+        content:
+          type: string
+          description: First 1000 lines
+        total_lines:
+          type: integer
+        displayed_lines:
+          type: integer
+
+    CodePreview:
+      type: object
+      properties:
+        highlighted_code:
+          type: string
+          description: Syntax-highlighted code
+        language:
+          type: string
+        line_count:
+          type: integer
+
+    StorageQuota:
+      type: object
+      properties:
+        tenant_id:
+          type: string
+          format: uuid
+        total_quota_bytes:
+          type: integer
+        current_usage_bytes:
+          type: integer
+        available_bytes:
+          type: integer
+        usage_percentage:
+          type: number
+          format: double
+        max_artifact_size_bytes:
+          type: integer
+        warning_threshold_bytes:
+          type: integer
+        alert_threshold_bytes:
+          type: integer
+        is_over_warning:
+          type: boolean
+        is_over_alert:
+          type: boolean
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              details:
+                type: object
+
+    Unauthorized:
+      description: Missing or invalid authentication token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
